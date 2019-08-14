@@ -1,0 +1,25 @@
+{
+  "name": "three.js-ray-tracing-renderer",
+  "version": "1.0.0",
+  "description": "",
+  "main": "src/RayTracingRenderer.js",
+  "scripts": {
+    "build": "./node_modules/.bin/rollup -c",
+    "dev": "./node_modules/.bin/rollup -cw --environment DEV & ./node_modules/.bin/http-server",
+    "test": "jest"
+  },
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@babel/core": "^7.5.5",
+    "@babel/preset-env": "^7.5.5",
+    "babel-jest": "^24.8.0",
+    "http-server": "^0.11.1",
+    "jest": "^24.8.0",
+    "rollup": "^1.19.2",
+    "rollup-plugin-babel": "^4.3.3",
+    "rollup-plugin-node-resolve": "^5.2.0",
+    "stats.js": "^0.17.0",
+    "three": "^0.107.0"
+  }
+}
