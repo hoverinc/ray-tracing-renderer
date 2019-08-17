@@ -45,7 +45,6 @@ export function rotateEnvMap180(image) {
   const width = image.width;
   const height = image.height;
 
-  const texels = buffer.length / 4;
   const xTexels = (buffer.length / (3 * height));
   const yTexels = (buffer.length / (3 * width));
   const offsetFloatBuffer = new Float32Array(buffer.length);
