@@ -27,6 +27,9 @@ export function initializeEnvMap(environmentLights) {
       data: environmentLight.map.image.data,
     };
     envImage.data = rgbeToFloat(envImage.data);
+    if (environmentLight.rotate180) {
+      envImage.data = rotateEnvMap180(envImage);
+    }
     envImage.data.forEach((datum, index, arr) => {
       arr[index] = datum * environmentLight.intensity;
     }); 
@@ -35,6 +38,29 @@ export function initializeEnvMap(environmentLights) {
   }
 
   return envImage;
+}
+
+export function rotateEnvMap180(image) {
+  const buffer = image.data;
+  const width = image.width;
+  const height = image.height;
+
+  const texels = buffer.length / 4;
+  const xTexels = (buffer.length / (3 * height));
+  const yTexels = (buffer.length / (3 * width));
+  const offsetFloatBuffer = new Float32Array(buffer.length);
+
+  for (let i = 0; i < xTexels; i++) {
+    for (let j = 0; j < yTexels; j++) {
+      const offsetBufferIndex = j * width + i;
+      const offsetX = i < width / 2 ? i + (width / 2) : i + (width / 2) - width;
+      const bufferIndex = j * width + offsetX;
+      offsetFloatBuffer[offsetBufferIndex * 3] = buffer[bufferIndex * 3];
+      offsetFloatBuffer[offsetBufferIndex * 3 + 1] = buffer[bufferIndex * 3 + 1];
+      offsetFloatBuffer[offsetBufferIndex * 3 + 2] = buffer[bufferIndex * 3 + 1];
+    }
+  }
+  return offsetFloatBuffer;
 }
 
 export function generateBlankMap(width, height) {
