@@ -119,9 +119,8 @@ vec3 glassImportanceSampleMaterial(SurfaceInteraction si, vec3 viewDir, bool lig
      return li;
   }
 
-  float phi = mod(atan(lightDir.z, lightDir.x) * 0.5 * INVPI, 1.0);
-  float theta = acos(lightDir.y) * INVPI;
-  float lightPdf = envmapPdf(phi, theta);
+  vec2 uv = cartesianToEquirect(lightDir);
+  float lightPdf = envmapPdf(uv);
 
   vec3 irr = textureLinear(envmap, vec2(phi, theta)).rgb;
 
