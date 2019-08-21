@@ -8,3 +8,15 @@ export function unrollLoop(indexName, start, limit, step, code) {
 
   return unrolled;
 }
+
+export function addDefines(params) {
+  let defines = '';
+
+  for (let [name, value] of Object.entries(params)) {
+    if (value) {
+      defines += `#define ${name} ${value}\n`;
+    }
+  }
+
+  return defines;
+}
