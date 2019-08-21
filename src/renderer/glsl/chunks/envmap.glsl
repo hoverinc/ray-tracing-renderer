@@ -7,9 +7,9 @@ export default function(params) {
 uniform sampler2D envmap;
 uniform sampler2D envmapDistribution;
 
-vec2 cartesianToEquirect(vec3 d) {
-  float phi = mod(atan(-d.z, -d.x), TWOPI);
-  float theta = acos(d.y);
+vec2 cartesianToEquirect(vec3 pointOnSphere) {
+  float phi = mod(atan(-pointOnSphere.z, -pointOnSphere.x), TWOPI);
+  float theta = acos(pointOnSphere.y);
   return vec2(phi * 0.5 * INVPI, theta * INVPI);
 }
 
