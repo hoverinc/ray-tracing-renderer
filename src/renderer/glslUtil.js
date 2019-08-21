@@ -13,6 +13,8 @@ export function addDefines(params) {
   let defines = '';
 
   for (let [name, value] of Object.entries(params)) {
+    // don't define falsy values such as false, 0, and ''.
+    // this adds support for #ifdef on falsy values
     if (value) {
       defines += `#define ${name} ${value}\n`;
     }
