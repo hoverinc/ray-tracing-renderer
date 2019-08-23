@@ -22,8 +22,6 @@ uint xorshift(uint x) {
   return x;
 }
 
-#define STRATA_DIMENSIONS ${params.strataDimensions}
-
 uniform float seed; // Random number [0, 1)
 uniform float strataStart[STRATA_DIMENSIONS];
 uniform float strataSize;

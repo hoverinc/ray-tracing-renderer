@@ -147,19 +147,19 @@ export function makeRayTracingShader({
 
     const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragString({
       OES_texture_float_linear,
-      bvhColumnsLog: bvhDim.columnsLog,
-      indexColumnsLog: indexDim.columnsLog,
-      vertexColumnsLog: vertexDim.columnsLog,
-      maxBvhDepth: flattenedBvh.maxDepth,
-      numTris: numTris,
-      numMaterials: materials.length,
-      numDiffuseMaps: maps.map.textures.length,
-      numNormalMaps: maps.normalMap.textures.length,
-      numPbrMaps: pbrMap.textures.length,
-      bounces,
-      useGlass,
-      useShadowCatcher,
-      strataDimensions: strataDimensions.reduce((a, b) => a + b)
+      BVH_COLUMNS: bvhDim.columnsLog,
+      INDEX_COLUMNS: indexDim.columnsLog,
+      VERTEX_COLUMNS: vertexDim.columnsLog,
+      STACK_SIZE: flattenedBvh.maxDepth,
+      NUM_TRIS: numTris,
+      NUM_MATERIALS: materials.length,
+      NUM_DIFFUSE_MAPS: maps.map.textures.length,
+      NUM_NORMAL_MAPS: maps.normalMap.textures.length,
+      NUM_PBR_MAPS: pbrMap.textures.length,
+      BOUNCES: bounces,
+      USE_GLASS: useGlass,
+      USE_SHADOW_CATCHER: useShadowCatcher,
+      STRATA_DIMENSIONS: strataDimensions.reduce((a, b) => a + b)
     }));
 
     const program = createProgram(gl, fullscreenQuad.vertexShader, fragmentShader);

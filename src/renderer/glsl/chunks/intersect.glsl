@@ -1,16 +1,6 @@
 export default function(params) {
   return `
 
-#define BVH_COLUMNS ${params.bvhColumnsLog}
-#define INDEX_COLUMNS ${params.indexColumnsLog}
-#define VERTEX_COLUMNS ${params.vertexColumnsLog}
-#define STACK_SIZE ${params.maxBvhDepth}
-#define NUM_TRIS ${params.numTris}
-#define NUM_MATERIALS ${params.numMaterials}
-${params.numDiffuseMaps > 0 ? `#define NUM_DIFFUSE_MAPS ${params.numDiffuseMaps}` : ''}
-${params.numNormalMaps > 0 ? `#define NUM_NORMAL_MAPS ${params.numNormalMaps}` : ''}
-${params.numPbrMaps > 0 ? `#define NUM_PBR_MAPS ${params.numPbrMaps}` : ''}
-
 uniform highp isampler2D indices;
 uniform sampler2D positions;
 uniform sampler2D normals;
@@ -26,7 +16,7 @@ uniform Materials {
   #endif
 
   #if defined(NUM_DIFFUSE_MAPS) || defined(NUM_NORMAL_MAPS)
-    vec4 diffuseNormalMapSize[${Math.max(params.numDiffuseMaps, params.numNormalMaps)}];
+    vec4 diffuseNormalMapSize[${Math.max(params.NUM_DIFFUSE_MAPS, params.NUM_NORMAL_MAPS)}];
   #endif
 
   #if defined(NUM_PBR_MAPS)

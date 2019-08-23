@@ -3,8 +3,6 @@
 export default function(params) {
   return `
 
-  ${params.OES_texture_float_linear ? '#define OES_texture_float_linear' : ''}
-
   vec4 textureLinear(sampler2D map, vec2 uv) {
     #ifdef OES_texture_float_linear
       return texture(map, uv);

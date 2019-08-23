@@ -8,13 +8,15 @@ import sampleMaterial from './chunks/sampleMaterial.glsl';
 import sampleShadowCatcher from './chunks/sampleShadowCatcher.glsl';
 import sampleGlass from './chunks/sampleGlassSpecular.glsl';
 // import sampleGlass from './chunks/sampleGlassMicrofacet.glsl';
-import { unrollLoop } from '../glslUtil';
+import { unrollLoop, addDefines } from '../glslUtil';
 
 export default function(params) {
   return `#version 300 es
 
 precision mediump float;
 precision mediump int;
+
+${addDefines(params)}
 
 #define PI 3.14159265359
 #define TWOPI 6.28318530718
@@ -41,10 +43,6 @@ const float R0 = (1.0 - IOR) * (1.0 - IOR)  / ((1.0 + IOR) * (1.0 + IOR));
 
 // https://www.w3.org/WAI/GL/wiki/Relative_luminance
 const vec3 luminance = vec3(0.2126, 0.7152, 0.0722);
-
-#define BOUNCES ${params.bounces}
-${params.useGlass ? '#define USE_GLASS' : ''}
-${params.useShadowCatcher ? '#define USE_SHADOW_CATCHER' : ''}
 
 struct Ray {
   vec3 o;
@@ -183,7 +181,7 @@ vec4 integrator(inout Ray ray) {
 
   // for (int i = 1; i < params.bounces + 1, i += 1)
   // equivelant to
-  ${unrollLoop('i', 1, params.bounces + 1, 1, `
+  ${unrollLoop('i', 1, params.BOUNCES + 1, 1, `
     li += bounce(path, i);
   `)}
 
