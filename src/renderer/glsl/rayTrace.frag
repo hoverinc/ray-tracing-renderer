@@ -112,42 +112,41 @@ ${sampleShadowCatcher(params)}
 
 struct Path {
   Ray ray;
+  vec3 li;
   float alpha;
   vec3 beta;
   bool specularBounce;
   bool abort;
 };
 
-vec3 bounce(inout Path path, int i) {
-  vec3 li;
-
+void bounce(inout Path path, int i) {
   if (path.abort) {
-    return li;
+    return;
   }
 
   SurfaceInteraction si = intersectScene(path.ray);
 
   if (!si.hit) {
     if (path.specularBounce) {
-      li += path.beta * sampleEnvmapFromDirection(path.ray.d);
+      path.li += path.beta * sampleEnvmapFromDirection(path.ray.d);
     }
 
     path.abort = true;
   } else {
     #ifdef USE_GLASS
       if (si.materialType == THIN_GLASS || si.materialType == THICK_GLASS) {
-        li += sampleGlassSpecular(si, i, path.ray, path.beta);
+        path.li += sampleGlassSpecular(si, i, path.ray, path.beta);
         path.specularBounce = true;
       }
     #endif
     #ifdef USE_SHADOW_CATCHER
       if (si.materialType == SHADOW_CATCHER) {
-        li += sampleShadowCatcher(si, i, path.ray, path.beta, path.alpha, li, path.abort);
+        path.li += sampleShadowCatcher(si, i, path.ray, path.beta, path.alpha, path.li, path.abort);
         path.specularBounce = false;
       }
     #endif
     if (si.materialType == STANDARD) {
-      li += sampleMaterial(si, i, path.ray, path.beta, path.abort);
+      path.li += sampleMaterial(si, i, path.ray, path.beta, path.abort);
       path.specularBounce = false;
     }
 
@@ -160,17 +159,14 @@ vec3 bounce(inout Path path, int i) {
       path.beta /= 1.0 - q;
     }
   }
-
-  return li;
 }
 
 // Path tracing integrator as described in
 // http://www.pbr-book.org/3ed-2018/Light_Transport_I_Surface_Reflection/Path_Tracing.html#
 vec4 integrator(inout Ray ray) {
-  vec3 li;
-
   Path path;
   path.ray = ray;
+  path.li = vec3(0);
   path.alpha = 1.0;
   path.beta = vec3(1.0);
   path.specularBounce = true;
@@ -182,10 +178,10 @@ vec4 integrator(inout Ray ray) {
   // for (int i = 1; i < params.bounces + 1, i += 1)
   // equivelant to
   ${unrollLoop('i', 1, params.BOUNCES + 1, 1, `
-    li += bounce(path, i);
+    bounce(path, i);
   `)}
 
-  return vec4(li, path.alpha);
+  return vec4(path.li, path.alpha);
 }
 
 void main() {
