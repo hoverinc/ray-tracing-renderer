@@ -4,7 +4,6 @@
 export default function(params) {
   return `
 
-uniform sampler2D randomTexture;
 uniform float dimension[SAMPLING_DIMENSIONS];
 int dimensionIndex = 0;
 
@@ -20,9 +19,6 @@ uint xorshift(uint x) {
 
 void initRandom() {
   pixelSeed = float(xorshift(xorshift(floatBitsToUint(vCoord.x)) * xorshift(floatBitsToUint(vCoord.y)))) * maxUint;
-  // float width = 1.0 / pixelSize.x;
-  // vec2 pos = vCoord / pixelSize;
-  // pixelSeed = fetchData(randomTexture, int(mod(pos.y * width + pos.x, 4194304.0)), 11).r;
 }
 
 float randomSample() {
