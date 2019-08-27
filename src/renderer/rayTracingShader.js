@@ -11,6 +11,7 @@ import { ThinMaterial, ThickMaterial, ShadowCatcherMaterial } from '../constants
 import * as THREE from 'three';
 import { clamp } from './util';
 import { makeHaltonSequenceCombined } from './haltonSequenceCombined';
+import { makeHaltonSequence } from './haltonSequence';
 
 function textureDimensionsFromArray(count) {
   const columnsLog = Math.round(Math.log2(Math.sqrt(count)));
@@ -107,13 +108,10 @@ export function makeRayTracingShader({
 
   // Refactor this monster
   let samplingDimensions = 0;
-  samplingDimensions += 2; // anti aliasing
-  samplingDimensions += 2; // depth-of-field
+  samplingDimensions += 4; // anti aliasing, depth of field
   for (let i = 0; i < bounces; i++) {
-    samplingDimensions += 2; // specular or diffuse reflection
-    samplingDimensions += 2; // light importance sampling
-    samplingDimensions += 2; // material importance sampling
-    samplingDimensions += 2; // next path direction
+    // specular or diffuse reflection, light importance sampling, material sampling, next path direction
+    samplingDimensions += 8; //
     if (i >= 1) {
       // russian roulette sampling
       // this step is skipped on the first bounce
@@ -289,6 +287,19 @@ export function makeRayTracingShader({
       width: distribution.width,
       height: distribution.height,
     }));
+
+    // const pixelSeed = new Float32Array(2048 * 2048);
+    // for (let i = 0; i < 2048 * 2048; i++) {
+    //   pixelSeed[i] = Math.random();
+    // }
+
+    // textureAllocator.bind(uniforms.randomTexture, makeTexture(gl, {
+    //   data: pixelSeed,
+    //   minFilter: gl.NEAREST,
+    //   magFilter: gl.NEAREST,
+    //   width: 2048,
+    //   height: 2048
+    // }));
 
     return {
       program,
