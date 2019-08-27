@@ -4,59 +4,35 @@
 export default function(params) {
   return `
 
-// higher quality but slower hashing function
-uint wangHash(uint x) {
-  x = (x ^ 61u) ^ (x >> 16u);
-  x *= 9u;
-  x = x ^ (x >> 4u);
-  x *= 0x27d4eb2du;
-  x = x ^ (x >> 15u);
-  return x;
-}
-
-// lower quality but faster hashing function
-uint xorshift(uint x) {
-  x ^= x << 13u;
-  x ^= x >> 17u;
-  x ^= x << 5u;
-  return x;
-}
-
-uniform float seed; // Random number [0, 1)
-uniform float strataStart[STRATA_DIMENSIONS];
-uniform float strataSize;
+uniform float dimension[SAMPLING_DIMENSIONS];
+int dimensionIndex = 0;
 
 const highp float maxUint = 1.0 / 4294967295.0;
-highp uint randState;
-int strataDimension;
+float pixelSeed;
 
 // init state with high quality hashing function to avoid patterns across the 2d image
 void initRandom() {
-  randState = wangHash(floatBitsToUint(seed));
-  randState *= wangHash(floatBitsToUint(vCoord.x));
-  randState *= wangHash(floatBitsToUint(vCoord.y));
-  randState = wangHash(randState);
-  strataDimension = 0;
+  pixelSeed = fract(sin(dot(vCoord, vec2(12.9898,78.233))) * 43758.5453);
 }
 
-float random() {
-  randState = xorshift(randState);
-  float f = float(randState) * maxUint;
+// float random() {
+//   randState = xorshift(randState);
+//   float f = float(randState) * maxUint;
 
-  // transform random number between [0, 1] to (0, 1)
-  return EPS + (1.0 - 2.0 * EPS) * f;
+//   // transform random number between [0, 1] to (0, 1)
+//   return EPS + (1.0 - 2.0 * EPS) * f;
+// }
+
+// vec2 randomVec2() {
+//   return vec2(random(), random());
+// }
+
+float randomSample() {
+  return fract(pixelSeed + dimension[dimensionIndex++]);
 }
 
-vec2 randomVec2() {
-  return vec2(random(), random());
-}
-
-float randomStrata() {
-  return strataStart[strataDimension++] + strataSize * random();
-}
-
-vec2 randomStrataVec2() {
-  return vec2(randomStrata(), randomStrata());
+vec2 randomSampleVec2() {
+  return vec2(randomSample(), randomSample());
 }
 `;
 };

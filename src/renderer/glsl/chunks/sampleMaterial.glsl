@@ -84,25 +84,25 @@ vec3 sampleMaterial(SurfaceInteraction si, int bounce, inout Ray ray, inout vec3
   mat3 basis = orthonormalBasis(si.normal);
   vec3 viewDir = -ray.d;
 
-  vec2 diffuseOrSpecular = randomStrataVec2();
+  vec2 diffuseOrSpecular = randomSampleVec2();
 
   vec3 lightDir = diffuseOrSpecular.x < mix(0.5, 0.0, si.metalness) ?
-    lightDirDiffuse(si.faceNormal, viewDir, basis, randomStrataVec2()) :
-    lightDirSpecular(si.faceNormal, viewDir, basis, si.roughness, randomStrataVec2());
+    lightDirDiffuse(si.faceNormal, viewDir, basis, randomSampleVec2()) :
+    lightDirSpecular(si.faceNormal, viewDir, basis, si.roughness, randomSampleVec2());
 
   bool lastBounce = bounce == BOUNCES;
 
   // Add path contribution
   vec3 li = beta * (
-      importanceSampleLight(si, viewDir, lastBounce, randomStrataVec2()) +
+      importanceSampleLight(si, viewDir, lastBounce, randomSampleVec2()) +
       importanceSampleMaterial(si, viewDir, lastBounce, lightDir)
     );
 
   // Get new path direction
 
   lightDir = diffuseOrSpecular.y < mix(0.5, 0.0, si.metalness) ?
-    lightDirDiffuse(si.faceNormal, viewDir, basis, randomStrataVec2()) :
-    lightDirSpecular(si.faceNormal, viewDir, basis, si.roughness, randomStrataVec2());
+    lightDirDiffuse(si.faceNormal, viewDir, basis, randomSampleVec2()) :
+    lightDirSpecular(si.faceNormal, viewDir, basis, si.roughness, randomSampleVec2());
 
   float cosThetaL = dot(si.normal, lightDir);
 

@@ -151,18 +151,18 @@ vec3 sampleGlassMicrofacet(SurfaceInteraction si, int bounce, inout Ray ray, ino
 
   float F = fresnelSchlickTIR(cosThetaV, R0, IOR); // thick glass
 
-  vec2 reflectionOrRefraction = randomStrataVec2();
+  vec2 reflectionOrRefraction = randomSampleVec2();
 
   vec3 lightDir;
   bool lightRefract;
   float pdf;
 
   if (reflectionOrRefraction.x < F) {
-    lightDir = lightDirSpecular(si.normal, viewDir, basis, si.roughness, randomStrataVec2());
+    lightDir = lightDirSpecular(si.normal, viewDir, basis, si.roughness, randomSampleVec2());
     lightRefract = false;
     pdf = F;
   } else {
-    lightDir = lightDirRefraction(si.normal, viewDir, basis, si.roughness, randomStrataVec2());
+    lightDir = lightDirRefraction(si.normal, viewDir, basis, si.roughness, randomSampleVec2());
     lightRefract = true;
     pdf = 1.0 - F;
   }
@@ -170,7 +170,7 @@ vec3 sampleGlassMicrofacet(SurfaceInteraction si, int bounce, inout Ray ray, ino
   bool lastBounce = bounce == BOUNCES;
 
   vec3 li = beta * (
-      glassImportanceSampleLight(si, viewDir, lightRefract, lastBounce, randomStrataVec2()) +
+      glassImportanceSampleLight(si, viewDir, lightRefract, lastBounce, randomSampleVec2()) +
       glassImportanceSampleMaterial(si, viewDir, lightRefract, lastBounce, lightDir)
     );
 
@@ -181,13 +181,13 @@ vec3 sampleGlassMicrofacet(SurfaceInteraction si, int bounce, inout Ray ray, ino
   vec3 brdf;
 
   if (reflectionOrRefraction.y < F) {
-    lightDir = lightDirSpecular(si.normal, viewDir, basis, si.roughness, randomStrataVec2());
+    lightDir = lightDirSpecular(si.normal, viewDir, basis, si.roughness, randomSampleVec2());
     cosThetaL = dot(si.normal, lightDir);
     brdf = glassReflection(si, viewDir, lightDir, cosThetaL, scatteringPdf);
     scatteringPdf *= F;
     lightRefract = false;
   } else {
-    lightDir = lightDirRefraction(si.normal, viewDir, basis, si.roughness, randomStrataVec2());
+    lightDir = lightDirRefraction(si.normal, viewDir, basis, si.roughness, randomSampleVec2());
     cosThetaL = dot(si.normal, lightDir);
     brdf = glassRefraction(si, viewDir, lightDir, cosThetaL, scatteringPdf);
     scatteringPdf *= 1.0 - F;

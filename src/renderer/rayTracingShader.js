@@ -4,13 +4,13 @@ import { mergeMeshesToGeometry } from './mergeMeshesToGeometry';
 import { bvhAccel, flattenBvh } from './bvhAccel';
 import { envmapDistribution } from './envmapDistribution';
 import { generateEnvMapFromSceneComponents } from './envMapCreation';
-import { makeStratifiedRandomCombined } from './stratifiedRandomCombined';
 import { getTexturesFromMaterials, mergeTexturesFromMaterials } from './texturesFromMaterials';
 import { makeTexture } from './texture';
 import { uploadBuffers } from './uploadBuffers';
 import { ThinMaterial, ThickMaterial, ShadowCatcherMaterial } from '../constants';
 import * as THREE from 'three';
 import { clamp } from './util';
+import { makeHaltonSequenceCombined } from './haltonSequenceCombined';
 
 function textureDimensionsFromArray(count) {
   const columnsLog = Math.round(Math.log2(Math.sqrt(count)));
@@ -105,19 +105,23 @@ export function makeRayTracingShader({
 
   const { OES_texture_float_linear } = optionalExtensions;
 
-  // Use stratified sampling for random variables to reduce clustering of samples thus improving rendering quality.
-  // Each element of this array specifies how many dimensions belong to each set of stratified samples
-  const strataDimensions = [];
-  strataDimensions.push(2, 2); // anti-aliasing, depth-of-field
+  // Refactor this monster
+  let samplingDimensions = 0;
+  samplingDimensions += 2; // anti aliasing
+  samplingDimensions += 2; // depth-of-field
   for (let i = 0; i < bounces; i++) {
-    // specular or diffuse reflection, light importance sampling, material importance sampling, next path direction
-    strataDimensions.push(2, 2, 2, 2);
+    samplingDimensions += 2; // specular or diffuse reflection
+    samplingDimensions += 2; // light importance sampling
+    samplingDimensions += 2; // material importance sampling
+    samplingDimensions += 2; // next path direction
     if (i >= 1) {
       // russian roulette sampling
       // this step is skipped on the first bounce
-      strataDimensions.push(1);
+      samplingDimensions += 1;
     }
   }
+
+  const random = makeHaltonSequenceCombined(samplingDimensions);
 
   function initScene() {
     const { meshes, directionalLights, environmentLights } = decomposeScene(scene);
@@ -159,7 +163,7 @@ export function makeRayTracingShader({
       BOUNCES: bounces,
       USE_GLASS: useGlass,
       USE_SHADOW_CATCHER: useShadowCatcher,
-      STRATA_DIMENSIONS: strataDimensions.reduce((a, b) => a + b)
+      SAMPLING_DIMENSIONS: samplingDimensions
     }));
 
     const program = createProgram(gl, fullscreenQuad.vertexShader, fragmentShader);
@@ -294,8 +298,6 @@ export function makeRayTracingShader({
 
   const { program, uniforms } = initScene();
 
-  let random = null;
-
   function setSize(width, height) {
     gl.useProgram(program);
     gl.uniform2f(uniforms.pixelSize, 1 / width, 1 / height);
@@ -310,15 +312,13 @@ export function makeRayTracingShader({
     gl.uniform1f(uniforms['camera.aperture'], camera.aperture || 0);
   }
 
-  function setStrataCount(count) {
-    random = makeStratifiedRandomCombined(count, strataDimensions);
+  function nextSeed() {
+    gl.useProgram(program);
+    gl.uniform1fv(uniforms['dimension[0]'], random.next());
   }
 
-  function updateSeed() {
-    gl.useProgram(program);
-    gl.uniform1f(uniforms.strataSize, 1.0 / random.strataCount);
-    gl.uniform1fv(uniforms['strataStart[0]'], random.next());
-    gl.uniform1f(uniforms.seed, Math.random());
+  function restartSeed() {
+    random.restart();
   }
 
   function draw() {
@@ -326,11 +326,13 @@ export function makeRayTracingShader({
     fullscreenQuad.draw();
   }
 
+  nextSeed();
+
   return Object.freeze({
     setSize,
     setCamera,
-    setStrataCount,
-    updateSeed,
+    nextSeed,
+    restartSeed,
     draw
   });
 }
