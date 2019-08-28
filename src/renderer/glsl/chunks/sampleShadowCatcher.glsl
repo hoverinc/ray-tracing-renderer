@@ -59,9 +59,7 @@ float importanceSampleMaterialShadowCatcher(SurfaceInteraction si, vec3 viewDir,
     occluded = 0.0;
   }
 
-  float phi = mod(atan(lightDir.z, lightDir.x), TWOPI);
-  float theta = acos(lightDir.y);
-  vec2 uv = vec2(0.5 * phi * INVPI, theta * INVPI);
+  vec2 uv = cartesianToEquirect(lightDir);
 
   float lightPdf = envmapPdf(uv);
 
