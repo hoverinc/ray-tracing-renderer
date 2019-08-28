@@ -7,6 +7,12 @@ export default function(params) {
 uniform sampler2D envmap;
 uniform sampler2D envmapDistribution;
 
+vec2 cartesianToEquirect(vec3 pointOnSphere) {
+  float phi = mod(atan(-pointOnSphere.z, -pointOnSphere.x), TWOPI);
+  float theta = acos(pointOnSphere.y);
+  return vec2(phi * 0.5 * INVPI, theta * INVPI);
+}
+
 float getEnvmapV(float u, out int vOffset, out float pdf) {
   ivec2 size = textureSize(envmap, 0);
 
@@ -70,7 +76,7 @@ vec3 sampleEnvmap(vec2 random, out vec2 uv, out float pdf) {
   float cosPhi = cos(phi);
   float sinPhi = sin(phi);
 
-  vec3 dir = vec3(sinTheta * cosPhi, cosTheta, sinTheta * sinPhi);
+  vec3 dir = vec3(-sinTheta * cosPhi, cosTheta, -sinTheta * sinPhi);
 
   pdf = partialPdf.x * partialPdf.y * INVPI2 / (2.0 * sinTheta);
 
@@ -91,21 +97,18 @@ float envmapPdf(vec2 uv) {
 }
 
 vec3 sampleEnvmapFromDirection(vec3 d) {
-  float theta = acos(d.y) * INVPI;
-  float phi = mod(atan(d.z, d.x), TWOPI) * 0.5 * INVPI;
-
-  return textureLinear(envmap, vec2(phi, theta)).rgb;
+  vec2 uv = cartesianToEquirect(d);
+  return textureLinear(envmap, uv).rgb;
 }
 
 // debugging function
 vec3 sampleEnvmapDistributionFromDirection(vec3 d) {
   vec2 size = vec2(textureSize(envmap, 0));
 
-  float theta = acos(d.y) * INVPI;
-  float phi = mod(atan(d.z, d.x), TWOPI) * 0.5 * INVPI;
+  vec2 uv = cartesianToEquirect(d);
 
-  float u = texelFetch(envmapDistribution, ivec2(1.0 + phi * size.x, theta * size.y), 0).g;
-  float v = texelFetch(envmapDistribution, ivec2(0, theta * size.y), 0).g;
+  float u = texelFetch(envmapDistribution, ivec2(1.0 + uv.x * size.x, uv.y * size.y), 0).g;
+  float v = texelFetch(envmapDistribution, ivec2(0, uv.y * size.y), 0).g;
 
   return vec3(u * v);
 }

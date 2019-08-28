@@ -62,9 +62,7 @@ vec3 importanceSampleMaterial(SurfaceInteraction si, vec3 viewDir, bool lastBoun
     }
   }
 
-  float phi = mod(atan(lightDir.z, lightDir.x), TWOPI);
-  float theta = acos(lightDir.y);
-  vec2 uv = vec2(0.5 * phi * INVPI, theta * INVPI);
+  vec2 uv = cartesianToEquirect(lightDir);
 
   float lightPdf = envmapPdf(uv);
 
