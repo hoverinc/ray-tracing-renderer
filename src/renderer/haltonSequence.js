@@ -22,7 +22,7 @@ export function makeHaltonSequence(dimensionIndex) {
       let i = index;
 
       while (i) {
-        const next = Math.floor(i * invBase);
+        const next = Math.floor(i / base);
         const digit = i - next * base;
         reversedDigits = reversedDigits * base + permutation[digit];
         invBaseN *= invBase;
