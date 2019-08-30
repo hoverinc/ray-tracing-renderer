@@ -1,3 +1,4 @@
+import * as THREE from 'three';
 import fragString from './glsl/rayTrace.frag';
 import { createShader, createProgram, getUniforms } from './glUtil';
 import { mergeMeshesToGeometry } from './mergeMeshesToGeometry';
@@ -8,9 +9,11 @@ import { getTexturesFromMaterials, mergeTexturesFromMaterials } from './textures
 import { makeTexture } from './texture';
 import { uploadBuffers } from './uploadBuffers';
 import { ThinMaterial, ThickMaterial, ShadowCatcherMaterial } from '../constants';
-import * as THREE from 'three';
 import { clamp } from './util';
 import { makeHaltonSequenceCombined } from './haltonSequenceCombined';
+import { makeStratifiedRandomCombined } from './stratifiedRandomCombined';
+
+//Important TODO: Refactor this file to get rid of duplicate and confusing code
 
 function textureDimensionsFromArray(count) {
   const columnsLog = Math.round(Math.log2(Math.sqrt(count)));
@@ -105,20 +108,20 @@ export function makeRayTracingShader({
 
   const { OES_texture_float_linear } = optionalExtensions;
 
-  // Refactor this monster
-  let samplingDimensions = 0;
-  samplingDimensions += 4; // anti aliasing, depth of field
+  const samplingDimensions = [];
+  samplingDimensions.push(2, 2); // anti aliasing, depth of field
   for (let i = 0; i < bounces; i++) {
     // specular or diffuse reflection, light importance sampling, material sampling, next path direction
-    samplingDimensions += 8; //
+    samplingDimensions.push(2, 2, 2, 2); //
     if (i >= 1) {
       // russian roulette sampling
       // this step is skipped on the first bounce
-      samplingDimensions += 1;
+      samplingDimensions.push(1);
     }
   }
 
-  const random = makeHaltonSequenceCombined(samplingDimensions);
+  // set by calling setStrataCount()
+  let random;
 
   function initScene() {
     const { meshes, directionalLights, environmentLights } = decomposeScene(scene);
@@ -160,7 +163,7 @@ export function makeRayTracingShader({
       BOUNCES: bounces,
       USE_GLASS: useGlass,
       USE_SHADOW_CATCHER: useShadowCatcher,
-      SAMPLING_DIMENSIONS: samplingDimensions
+      SAMPLING_DIMENSIONS: samplingDimensions.reduce((a, b) => a + b, 0)
     }));
 
     const program = createProgram(gl, fullscreenQuad.vertexShader, fragmentShader);
@@ -300,6 +303,14 @@ export function makeRayTracingShader({
     gl.uniform2f(uniforms.pixelSize, 1 / width, 1 / height);
   }
 
+  function setNoise(noiseImage) {
+    textureAllocator.bind(uniforms.noise, makeTexture(gl, {
+      data: noiseImage,
+      minFilter: gl.NEAREST,
+      magFilter: gl.NEAREST
+    }));
+  }
+
   function setCamera(camera) {
     gl.useProgram(program);
     gl.uniformMatrix4fv(uniforms['camera.transform'], false, camera.matrixWorld.elements);
@@ -312,6 +323,13 @@ export function makeRayTracingShader({
   function nextSeed() {
     gl.useProgram(program);
     gl.uniform1fv(uniforms['dimension[0]'], random.next());
+    console.log(random.combined);
+  }
+
+  function setStrataCount(strataCount) {
+    random = makeStratifiedRandomCombined(strataCount, samplingDimensions);
+    gl.uniform1f(uniforms.strataSize, 1.0 / strataCount);
+    nextSeed();
   }
 
   function restartSeed() {
@@ -323,13 +341,13 @@ export function makeRayTracingShader({
     fullscreenQuad.draw();
   }
 
-  nextSeed();
-
   return Object.freeze({
-    setSize,
-    setCamera,
+    draw,
     nextSeed,
     restartSeed,
-    draw
+    setCamera,
+    setNoise,
+    setSize,
+    setStrataCount,
   });
 }

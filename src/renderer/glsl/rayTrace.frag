@@ -213,7 +213,9 @@ void main() {
 
   fragColor = liAndAlpha;
 
-  // fragColor = vec4(pixelSeed, pixelSeed, pixelSeed, 1.0);
+  // float test = EPS + (1.0 - 2.0 * EPS) * pixelSeed;
+  // test = fract(test + 0.14591);
+  // fragColor = vec4(vec3(test), 1.0);
 
   // Stratified Sampling Sample Count Test
   // ---------------

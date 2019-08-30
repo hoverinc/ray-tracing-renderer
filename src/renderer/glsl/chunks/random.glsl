@@ -4,15 +4,15 @@
 export default function(params) {
   return `
 
+uniform sampler2D noise;
 uniform float dimension[SAMPLING_DIMENSIONS];
+uniform float strataSize;
+
 int dimensionIndex = 0;
 
 const highp float maxUint = 1.0 / 4294967295.0;
 float pixelSeed;
 highp uint randState;
-
-const float strataSize = 6.0;
-const float strataSizeInv = 1.0 / strataSize;
 
 uint xorshift(uint x) {
   x ^= x << 13u;
@@ -22,14 +22,22 @@ uint xorshift(uint x) {
 }
 
 void initRandom() {
-  pixelSeed = float(xorshift(xorshift(floatBitsToUint(vCoord.x)) * xorshift(floatBitsToUint(vCoord.y)))) * maxUint;
+  randState = xorshift(xorshift(floatBitsToUint(vCoord.x)) * xorshift(floatBitsToUint(vCoord.y)));
+  vec2 size = vec2(textureSize(noise, 0));
+  pixelSeed = texture(noise, vCoord / (pixelSize * size)).r;
+  // pixelSeed = texture(noise, vCoord).r;
 }
 
 float randomSample() {
-  randState = xorshift(randState);
+  // randState = xorshift(floatBitsToUint(pixelSeed));
+  // pixelSeed = float(randState) * maxUint;
 
   float strata = dimension[dimensionIndex++];
-  float random = (floor(strata * strataSize) + fract(pixelSeed + strata)) * strataSizeInv;
+  // float random = fract((floor(strata) + fract(pixelSeed + strata)) * strataSize);
+  float random = fract((strata + pixelSeed) * strataSize);
+  // float random = float(randState) * maxUint;
+
+  // float random = pixelSeed;
 
   // transform random number between [0, 1] to (0, 1)
   return EPS + (1.0 - 2.0 * EPS) * random;

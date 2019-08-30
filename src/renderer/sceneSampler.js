@@ -6,6 +6,9 @@ import { numberArraysEqual, clamp } from './util';
 import { makeTileRender } from './tileRender';
 import { LensCamera } from '../LensCamera';
 import { makeTextureAllocator } from './textureAllocator';
+import noiseBase64 from './texture/noise';
+
+// Important TODO: Refactor this file to get rid of duplicate and confusing code
 
 export function makeSceneSampler({
     gl,
@@ -15,10 +18,21 @@ export function makeSceneSampler({
     bounces, // number of global illumination bounces
   }) {
 
+  let ready = false;
+
   const fullscreenQuad = makeFullscreenQuad(gl);
   const textureAllocator = makeTextureAllocator(gl);
   const rayTracingShader = makeRayTracingShader({gl, optionalExtensions, fullscreenQuad, textureAllocator, scene, bounces});
   const toneMapShader = makeToneMapShader({gl, optionalExtensions, fullscreenQuad, textureAllocator, toneMappingParams});
+
+  rayTracingShader.setStrataCount(6);
+
+  const noiseImage = new Image();
+  noiseImage.src = noiseBase64;
+  noiseImage.onload = () => {
+    rayTracingShader.setNoise(noiseImage);
+    ready = true;
+  };
 
   const useLinearFiltering = optionalExtensions.OES_texture_float_linear;
 
@@ -111,7 +125,9 @@ export function makeSceneSampler({
   }
 
   function drawTile(camera) {
-    if (!camerasEqual(camera, lastCamera)) {
+    if (!ready) {
+      return;
+    } else if (!camerasEqual(camera, lastCamera)) {
       initFirstSample(camera);
       setPreviewBufferDimensions();
       renderPreview();
@@ -133,7 +149,9 @@ export function makeSceneSampler({
   }
 
   function drawOffscreenTile(camera) {
-    if (!camerasEqual(camera, lastCamera)) {
+    if (!ready) {
+      return;
+    } else if (!camerasEqual(camera, lastCamera)) {
       initFirstSample(camera);
     }
 
@@ -152,7 +170,9 @@ export function makeSceneSampler({
   }
 
   function drawFull(camera) {
-    if (!camerasEqual(camera, lastCamera)) {
+    if (!ready) {
+      return;
+    } else if (!camerasEqual(camera, lastCamera)) {
       initFirstSample(camera);
     }
 
