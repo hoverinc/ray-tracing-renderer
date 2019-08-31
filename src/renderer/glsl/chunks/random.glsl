@@ -7,6 +7,7 @@ export default function(params) {
 uniform sampler2D noise;
 uniform float dimension[SAMPLING_DIMENSIONS];
 uniform float strataSize;
+uniform float useStratifiedSampling;
 
 int dimensionIndex = 0;
 
@@ -22,22 +23,21 @@ uint xorshift(uint x) {
 }
 
 void initRandom() {
-  randState = xorshift(xorshift(floatBitsToUint(vCoord.x)) * xorshift(floatBitsToUint(vCoord.y)));
-  vec2 size = vec2(textureSize(noise, 0));
-  pixelSeed = texture(noise, vCoord / (pixelSize * size)).r;
-  // pixelSeed = texture(noise, vCoord).r;
+  vec2 noiseSize = vec2(textureSize(noise, 0));
+  pixelSeed = texture(noise, vCoord / (pixelSize * noiseSize)).r;
+  randState = floatBitsToUint(pixelSeed);
 }
 
 float randomSample() {
-  // randState = xorshift(floatBitsToUint(pixelSeed));
-  // pixelSeed = float(randState) * maxUint;
+  randState = xorshift(randState);
 
   float strata = dimension[dimensionIndex++];
-  // float random = fract((floor(strata) + fract(pixelSeed + strata)) * strataSize);
-  float random = fract((strata + pixelSeed) * strataSize);
-  // float random = float(randState) * maxUint;
 
-  // float random = pixelSeed;
+  float random = mix(
+    float(randState) * maxUint, // white noise
+    fract((strata + pixelSeed) * strataSize), // blue noise with stratafied numbers
+    useStratifiedSampling
+  );
 
   // transform random number between [0, 1] to (0, 1)
   return EPS + (1.0 - 2.0 * EPS) * random;

@@ -10,90 +10,9 @@ import { makeTexture } from './texture';
 import { uploadBuffers } from './uploadBuffers';
 import { ThinMaterial, ThickMaterial, ShadowCatcherMaterial } from '../constants';
 import { clamp } from './util';
-import { makeHaltonSequenceCombined } from './haltonSequenceCombined';
 import { makeStratifiedRandomCombined } from './stratifiedRandomCombined';
 
 //Important TODO: Refactor this file to get rid of duplicate and confusing code
-
-function textureDimensionsFromArray(count) {
-  const columnsLog = Math.round(Math.log2(Math.sqrt(count)));
-  const columns = 2 ** columnsLog;
-  const rows = Math.ceil(count / columns);
-  return {
-    columnsLog,
-    columns,
-    rows,
-    size: rows * columns,
-  };
-}
-
-function maxImageSize(images) {
-  const maxSize = {
-    width: 0,
-    height: 0
-  };
-
-  for (const image of images) {
-    maxSize.width = Math.max(maxSize.width, image.width);
-    maxSize.height = Math.max(maxSize.height, image.height);
-  }
-
-  const relativeSizes = [];
-  for (const image of images) {
-    relativeSizes.push(image.width / maxSize.width);
-    relativeSizes.push(image.height / maxSize.height);
-  }
-
-  return { maxSize, relativeSizes };
-}
-
-// expand array to the given length
-function padArray(typedArray, length) {
-  const newArray = new typedArray.constructor(length);
-  newArray.set(typedArray);
-  return newArray;
-}
-
-function isHDRTexture(texture) {
-  return texture.map
-    && texture.map.image
-    && (texture.map.encoding === THREE.RGBEEncoding || texture.map.encoding === THREE.LinearEncoding);
-}
-
-function decomposeScene(scene) {
-  const meshes = [];
-  const directionalLights = [];
-  const environmentLights = [];
-  scene.traverse(child => {
-    if (child instanceof THREE.Mesh) {
-      if (!child.geometry || !child.geometry.getAttribute('position')) {
-        console.log(child, 'must have a geometry property with a position attribute');
-      }
-      else if (!(child.material instanceof THREE.MeshStandardMaterial)) {
-        console.log(child, 'must use MeshStandardMaterial in order to be rendered.');
-      } else {
-        meshes.push(child);
-      }
-    }
-    if (child instanceof THREE.DirectionalLight) {
-      directionalLights.push(child);
-    }
-    if (child instanceof THREE.EnvironmentLight) {
-      if (environmentLights.length > 1) {
-        console.warn('Only one environment light can be used per scene');
-      }
-      else if (isHDRTexture(child)) {
-        environmentLights.push(child);
-      } else {
-        console.warn('Environment light has invalid map');
-      }
-    }
-  });
-
-  return {
-    meshes, directionalLights, environmentLights
-  };
-}
 
 export function makeRayTracingShader({
     gl,
@@ -120,8 +39,7 @@ export function makeRayTracingShader({
     }
   }
 
-  // set by calling setStrataCount()
-  let random;
+  let random = makeStratifiedRandomCombined(1, samplingDimensions);
 
   function initScene() {
     const { meshes, directionalLights, environmentLights } = decomposeScene(scene);
@@ -323,13 +241,21 @@ export function makeRayTracingShader({
   function nextSeed() {
     gl.useProgram(program);
     gl.uniform1fv(uniforms['dimension[0]'], random.next());
-    console.log(random.combined);
   }
 
   function setStrataCount(strataCount) {
-    random = makeStratifiedRandomCombined(strataCount, samplingDimensions);
+    gl.useProgram(program);
+    if (strataCount > 1) {
+      random = makeStratifiedRandomCombined(strataCount, samplingDimensions);
+    }
+
     gl.uniform1f(uniforms.strataSize, 1.0 / strataCount);
     nextSeed();
+  }
+
+  function useStratifiedSampling(stratifiedSampling) {
+    gl.useProgram(program);
+    gl.uniform1f(uniforms.useStratifiedSampling, stratifiedSampling ? 1.0 : 0.0);
   }
 
   function restartSeed() {
@@ -341,6 +267,9 @@ export function makeRayTracingShader({
     fullscreenQuad.draw();
   }
 
+  setStrataCount(1);
+  useStratifiedSampling(true);
+
   return Object.freeze({
     draw,
     nextSeed,
@@ -349,5 +278,86 @@ export function makeRayTracingShader({
     setNoise,
     setSize,
     setStrataCount,
+    useStratifiedSampling
   });
+}
+
+function textureDimensionsFromArray(count) {
+  const columnsLog = Math.round(Math.log2(Math.sqrt(count)));
+  const columns = 2 ** columnsLog;
+  const rows = Math.ceil(count / columns);
+  return {
+    columnsLog,
+    columns,
+    rows,
+    size: rows * columns,
+  };
+}
+
+function maxImageSize(images) {
+  const maxSize = {
+    width: 0,
+    height: 0
+  };
+
+  for (const image of images) {
+    maxSize.width = Math.max(maxSize.width, image.width);
+    maxSize.height = Math.max(maxSize.height, image.height);
+  }
+
+  const relativeSizes = [];
+  for (const image of images) {
+    relativeSizes.push(image.width / maxSize.width);
+    relativeSizes.push(image.height / maxSize.height);
+  }
+
+  return { maxSize, relativeSizes };
+}
+
+// expand array to the given length
+function padArray(typedArray, length) {
+  const newArray = new typedArray.constructor(length);
+  newArray.set(typedArray);
+  return newArray;
+}
+
+function isHDRTexture(texture) {
+  return texture.map
+    && texture.map.image
+    && (texture.map.encoding === THREE.RGBEEncoding || texture.map.encoding === THREE.LinearEncoding);
+}
+
+function decomposeScene(scene) {
+  const meshes = [];
+  const directionalLights = [];
+  const environmentLights = [];
+  scene.traverse(child => {
+    if (child instanceof THREE.Mesh) {
+      if (!child.geometry || !child.geometry.getAttribute('position')) {
+        console.log(child, 'must have a geometry property with a position attribute');
+      }
+      else if (!(child.material instanceof THREE.MeshStandardMaterial)) {
+        console.log(child, 'must use MeshStandardMaterial in order to be rendered.');
+      } else {
+        meshes.push(child);
+      }
+    }
+    if (child instanceof THREE.DirectionalLight) {
+      directionalLights.push(child);
+    }
+    if (child instanceof THREE.EnvironmentLight) {
+      if (environmentLights.length > 1) {
+        console.warn('Only one environment light can be used per scene');
+      }
+      else if (isHDRTexture(child)) {
+        environmentLights.push(child);
+      } else {
+        console.warn('Environment light has invalid map');
+      }
+    }
+  });
+
+  return {
+    meshes, directionalLights, environmentLights
+  };
 }

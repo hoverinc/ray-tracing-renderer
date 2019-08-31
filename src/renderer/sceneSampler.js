@@ -44,6 +44,13 @@ export function makeSceneSampler({
 
   const lastCamera = new LensCamera();
 
+  // how many samples to render with uniform noise before switching to stratified noise
+  const numUniformSamples = 5;
+
+  // how many partitions of stratified noise should be created
+  // higher number results in faster convergence over time, but with lower quality initial samples
+  const strataCount = 6;
+
   let sampleCount = 0;
 
   let sampleRenderedCallback = () => {};
@@ -60,6 +67,7 @@ export function makeSceneSampler({
   function initFirstSample(camera) {
     lastCamera.copy(camera);
     rayTracingShader.setCamera(camera);
+    rayTracingShader.useStratifiedSampling(false);
     rayTracingShader.restartSeed();
     clear();
   }
@@ -124,11 +132,24 @@ export function makeSceneSampler({
     });
   }
 
+  function updateSeed() {
+    if (sampleCount === 2) {
+      rayTracingShader.useStratifiedSampling(true);
+      rayTracingShader.setStrataCount(1);
+    } else if (sampleCount === numUniformSamples) {
+
+      rayTracingShader.setStrataCount(strataCount);
+    } else {
+      rayTracingShader.nextSeed();
+    }
+  }
+
   function drawTile(camera) {
     if (!ready) {
       return;
     } else if (!camerasEqual(camera, lastCamera)) {
       initFirstSample(camera);
+
       setPreviewBufferDimensions();
       renderPreview();
     } else {
@@ -136,7 +157,7 @@ export function makeSceneSampler({
 
       if (isFirstTile) {
         sampleCount++;
-        rayTracingShader.nextSeed();
+        updateSeed();
       }
 
       renderTile(x, y, tileWidth, tileHeight);
@@ -159,7 +180,7 @@ export function makeSceneSampler({
 
     if (isFirstTile) {
       sampleCount++;
-      rayTracingShader.nextSeed();
+      updateSeed();
     }
 
     renderTile(x, y, tileWidth, tileHeight);
@@ -177,6 +198,7 @@ export function makeSceneSampler({
     }
 
     sampleCount++;
+    updateSeed();
 
     rayTracingShader.nextSeed();
     addSampleToBuffer(hdrBuffer);
