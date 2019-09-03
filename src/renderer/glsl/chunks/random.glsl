@@ -1,13 +1,10 @@
-// Random number generation as described by
-// http://www.reedbeta.com/blog/quick-and-easy-gpu-random-numbers-in-d3d11/
-
 export default function(params) {
   return `
 
 // blue noise texture
 uniform sampler2D noise;
 
-// Independently sampled strata dimensions, usually in groups of 2
+// Independently sampled strata dimensions
 uniform float dimension[SAMPLING_DIMENSIONS];
 uniform float strataSize;
 uniform float useStratifiedSampling;
@@ -18,6 +15,8 @@ const highp float maxUint = 1.0 / 4294967295.0;
 float pixelSeed;
 highp uint randState;
 
+// simple integer hashing function
+// https://en.wikipedia.org/wiki/Xorshift
 uint xorshift(uint x) {
   x ^= x << 13u;
   x ^= x >> 17u;

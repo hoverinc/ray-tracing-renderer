@@ -1,3 +1,14 @@
+/*
+Halton Sampler
+http://www.pbr-book.org/3ed-2018/Sampling_and_Reconstruction/The_Halton_Sampler.html
+
+This method of sampling is an alternative to Stratified sampling.
+It converges faster than stratified sampling, but provides less ray-coherence when used on the GPU.
+
+In the current state of the renderer, stratified sampling performs better in practice,
+but Halton sampling will be useful once we move to denoising.
+*/
+
 import { shuffle } from './util';
 
 // precomputed prime numbers used as the base for each dimension of the Halton sequence

@@ -340,10 +340,10 @@ function decomposeScene(scene) {
   scene.traverse(child => {
     if (child instanceof THREE.Mesh) {
       if (!child.geometry || !child.geometry.getAttribute('position')) {
-        console.log(child, 'must have a geometry property with a position attribute');
+        console.warn(child, 'must have a geometry property with a position attribute');
       }
       else if (!(child.material instanceof THREE.MeshStandardMaterial)) {
-        console.log(child, 'must use MeshStandardMaterial in order to be rendered.');
+        console.warn(child, 'must use MeshStandardMaterial in order to be rendered.');
       } else {
         meshes.push(child);
       }
@@ -353,12 +353,12 @@ function decomposeScene(scene) {
     }
     if (child instanceof THREE.EnvironmentLight) {
       if (environmentLights.length > 1) {
-        console.warn('Only one environment light can be used per scene');
+        console.warn(environmentLights, 'only one environment light can be used per scene');
       }
       else if (isHDRTexture(child)) {
         environmentLights.push(child);
       } else {
-        console.warn('Environment light has invalid map');
+        console.warn(child, 'environment light uses invalid map');
       }
     }
   });
