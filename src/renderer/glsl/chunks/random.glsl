@@ -4,7 +4,10 @@
 export default function(params) {
   return `
 
+// blue noise texture
 uniform sampler2D noise;
+
+// Independently sampled strata dimensions, usually in groups of 2
 uniform float dimension[SAMPLING_DIMENSIONS];
 uniform float strataSize;
 uniform float useStratifiedSampling;

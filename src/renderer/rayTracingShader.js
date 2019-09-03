@@ -31,7 +31,7 @@ export function makeRayTracingShader({
   samplingDimensions.push(2, 2); // anti aliasing, depth of field
   for (let i = 0; i < bounces; i++) {
     // specular or diffuse reflection, light importance sampling, material sampling, next path direction
-    samplingDimensions.push(2, 2, 2, 2); //
+    samplingDimensions.push(2, 2, 2, 2);
     if (i >= 1) {
       // russian roulette sampling
       // this step is skipped on the first bounce
@@ -81,7 +81,7 @@ export function makeRayTracingShader({
       BOUNCES: bounces,
       USE_GLASS: useGlass,
       USE_SHADOW_CATCHER: useShadowCatcher,
-      SAMPLING_DIMENSIONS: samplingDimensions.reduce((a, b) => a + b, 0)
+      SAMPLING_DIMENSIONS: samplingDimensions.reduce((a, b) => a + b)
     }));
 
     const program = createProgram(gl, fullscreenQuad.vertexShader, fragmentShader);
@@ -221,6 +221,7 @@ export function makeRayTracingShader({
     gl.uniform2f(uniforms.pixelSize, 1 / width, 1 / height);
   }
 
+  // noiseImage is a 32-bit PNG image
   function setNoise(noiseImage) {
     textureAllocator.bind(uniforms.noise, makeTexture(gl, {
       data: noiseImage,
@@ -246,7 +247,11 @@ export function makeRayTracingShader({
 
   function setStrataCount(strataCount) {
     gl.useProgram(program);
-    if (strataCount > 1) {
+
+    if (strataCount > 1 && strataCount !== random.strataCount) {
+      // reinitailizing random has a performance cost. we can skip it if
+      // * strataCount is 1, since a strataCount of 1 works with any sized StratifiedRandomCombined
+      // * random already has the same strata count as desired
       random = makeStratifiedRandomCombined(strataCount, samplingDimensions);
     }
 
