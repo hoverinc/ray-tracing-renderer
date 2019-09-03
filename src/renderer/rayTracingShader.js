@@ -225,7 +225,8 @@ export function makeRayTracingShader({
     textureAllocator.bind(uniforms.noise, makeTexture(gl, {
       data: noiseImage,
       minFilter: gl.NEAREST,
-      magFilter: gl.NEAREST
+      magFilter: gl.NEAREST,
+      storage: 'float'
     }));
   }
 

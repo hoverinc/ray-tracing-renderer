@@ -25,7 +25,7 @@ uint xorshift(uint x) {
 void initRandom() {
   vec2 noiseSize = vec2(textureSize(noise, 0));
   pixelSeed = texture(noise, vCoord / (pixelSize * noiseSize)).r;
-  randState = floatBitsToUint(pixelSeed);
+  randState = xorshift(xorshift(floatBitsToUint(vCoord.x)) * xorshift(floatBitsToUint(vCoord.y)));
 }
 
 float randomSample() {

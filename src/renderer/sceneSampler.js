@@ -45,7 +45,7 @@ export function makeSceneSampler({
   const lastCamera = new LensCamera();
 
   // how many samples to render with uniform noise before switching to stratified noise
-  const numUniformSamples = 5;
+  const numUniformSamples = 6;
 
   // how many partitions of stratified noise should be created
   // higher number results in faster convergence over time, but with lower quality initial samples
@@ -137,7 +137,6 @@ export function makeSceneSampler({
       rayTracingShader.useStratifiedSampling(true);
       rayTracingShader.setStrataCount(1);
     } else if (sampleCount === numUniformSamples) {
-
       rayTracingShader.setStrataCount(strataCount);
     } else {
       rayTracingShader.nextSeed();
@@ -149,7 +148,6 @@ export function makeSceneSampler({
       return;
     } else if (!camerasEqual(camera, lastCamera)) {
       initFirstSample(camera);
-
       setPreviewBufferDimensions();
       renderPreview();
     } else {
@@ -198,9 +196,8 @@ export function makeSceneSampler({
     }
 
     sampleCount++;
-    updateSeed();
 
-    rayTracingShader.nextSeed();
+    updateSeed();
     addSampleToBuffer(hdrBuffer);
     hdrBufferToScreen();
   }
