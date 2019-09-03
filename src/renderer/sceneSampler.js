@@ -25,8 +25,6 @@ export function makeSceneSampler({
   const rayTracingShader = makeRayTracingShader({gl, optionalExtensions, fullscreenQuad, textureAllocator, scene, bounces});
   const toneMapShader = makeToneMapShader({gl, optionalExtensions, fullscreenQuad, textureAllocator, toneMappingParams});
 
-  rayTracingShader.setStrataCount(6);
-
   const noiseImage = new Image();
   noiseImage.src = noiseBase64;
   noiseImage.onload = () => {
