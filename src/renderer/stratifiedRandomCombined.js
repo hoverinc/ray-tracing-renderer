@@ -16,12 +16,6 @@ export function makeStratifiedRandomCombined(strataCount, listOfDimensions) {
 
   const combined = [];
 
-  function restart() {
-    for (const strata of strataObjs) {
-      strata.restart();
-    }
-  }
-
   function next() {
     let i = 0;
 
@@ -34,6 +28,12 @@ export function makeStratifiedRandomCombined(strataCount, listOfDimensions) {
     }
 
     return combined;
+  }
+
+  function restart() {
+    for (const strata of strataObjs) {
+      strata.restart();
+    }
   }
 
   return Object.freeze({

@@ -22,11 +22,11 @@ export function makeStratifiedRandom(strataCount, dimensions) {
 
   function restart() {
     index = 0;
-    shuffle(strata);
   }
 
   function next() {
     if (index >= strata.length) {
+      shuffle(strata);
       restart();
     }
     let stratum = strata[index++];

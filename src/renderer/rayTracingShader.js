@@ -39,8 +39,6 @@ export function makeRayTracingShader({
     }
   }
 
-  let random = makeStratifiedRandomCombined(1, samplingDimensions);
-
   function initScene() {
     const { meshes, directionalLights, environmentLights } = decomposeScene(scene);
     if (meshes.length === 0) {
@@ -240,6 +238,8 @@ export function makeRayTracingShader({
     gl.uniform1f(uniforms['camera.aperture'], camera.aperture || 0);
   }
 
+  let random;
+
   function nextSeed() {
     gl.useProgram(program);
     gl.uniform1fv(uniforms['dimension[0]'], random.next());
@@ -253,6 +253,8 @@ export function makeRayTracingShader({
       // * strataCount is 1, since a strataCount of 1 works with any sized StratifiedRandomCombined
       // * random already has the same strata count as desired
       random = makeStratifiedRandomCombined(strataCount, samplingDimensions);
+    } else {
+      random.restart();
     }
 
     gl.uniform1f(uniforms.strataSize, 1.0 / strataCount);
@@ -264,22 +266,16 @@ export function makeRayTracingShader({
     gl.uniform1f(uniforms.useStratifiedSampling, stratifiedSampling ? 1.0 : 0.0);
   }
 
-  function restartSeed() {
-    random.restart();
-  }
-
   function draw() {
     gl.useProgram(program);
     fullscreenQuad.draw();
   }
 
-  setStrataCount(1);
-  useStratifiedSampling(true);
+  random = makeStratifiedRandomCombined(1, samplingDimensions);
 
   return Object.freeze({
     draw,
     nextSeed,
-    restartSeed,
     setCamera,
     setNoise,
     setSize,

@@ -66,7 +66,6 @@ export function makeSceneSampler({
     lastCamera.copy(camera);
     rayTracingShader.setCamera(camera);
     rayTracingShader.useStratifiedSampling(false);
-    rayTracingShader.restartSeed();
     clear();
   }
 
