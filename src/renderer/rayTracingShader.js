@@ -10,7 +10,7 @@ import { makeTexture } from './texture';
 import { uploadBuffers } from './uploadBuffers';
 import { ThinMaterial, ThickMaterial, ShadowCatcherMaterial } from '../constants';
 import { clamp } from './util';
-import { makeStratifiedRandomCombined } from './stratifiedRandomCombined';
+import { makeStratifiedSamplerCombined } from './stratifiedSamplerCombined';
 
 //Important TODO: Refactor this file to get rid of duplicate and confusing code
 
@@ -238,23 +238,23 @@ export function makeRayTracingShader({
     gl.uniform1f(uniforms['camera.aperture'], camera.aperture || 0);
   }
 
-  let random;
+  let samples;
 
   function nextSeed() {
     gl.useProgram(program);
-    gl.uniform1fv(uniforms['dimension[0]'], random.next());
+    gl.uniform1fv(uniforms['dimension[0]'], samples.next());
   }
 
   function setStrataCount(strataCount) {
     gl.useProgram(program);
 
-    if (strataCount > 1 && strataCount !== random.strataCount) {
+    if (strataCount > 1 && strataCount !== samples.strataCount) {
       // reinitailizing random has a performance cost. we can skip it if
       // * strataCount is 1, since a strataCount of 1 works with any sized StratifiedRandomCombined
       // * random already has the same strata count as desired
-      random = makeStratifiedRandomCombined(strataCount, samplingDimensions);
+      samples = makeStratifiedSamplerCombined(strataCount, samplingDimensions);
     } else {
-      random.restart();
+      samples.restart();
     }
 
     gl.uniform1f(uniforms.strataSize, 1.0 / strataCount);
@@ -271,7 +271,7 @@ export function makeRayTracingShader({
     fullscreenQuad.draw();
   }
 
-  random = makeStratifiedRandomCombined(1, samplingDimensions);
+  samples = makeStratifiedSamplerCombined(1, samplingDimensions);
 
   return Object.freeze({
     draw,

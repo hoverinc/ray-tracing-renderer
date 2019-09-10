@@ -9,7 +9,7 @@
 
 import { shuffle } from "./util";
 
-export function makeStratifiedRandom(strataCount, dimensions) {
+export function makeStratifiedSampler(strataCount, dimensions) {
   const strata = [];
   const l = strataCount ** dimensions;
   for (let i = 0; i < l; i++) {

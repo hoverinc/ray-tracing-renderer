@@ -3,15 +3,15 @@
 // It is computationally unfeasible to compute stratified sampling for large dimensions (>2)
 // Instead, we can compute stratified sampling for lower dimensional patterns that sum to the high dimension
 // e.g. instead of sampling a 6D domain, we sample a 2D + 2D + 2D domain.
-// This reaps most of the benifits of stratification while still remaining computable in a reasonable amount of time
+// This reaps most of the benefits of stratification while still remaining computable in a reasonable amount of time
 
-import { makeStratifiedRandom } from "./stratifiedRandom";
+import { makeStratifiedSampler } from "./stratifiedSampler";
 
-export function makeStratifiedRandomCombined(strataCount, listOfDimensions) {
+export function makeStratifiedSamplerCombined(strataCount, listOfDimensions) {
   const strataObjs = [];
 
   for (const dim of listOfDimensions) {
-    strataObjs.push(makeStratifiedRandom(strataCount, dim));
+    strataObjs.push(makeStratifiedSampler(strataCount, dim));
   }
 
   const combined = [];
