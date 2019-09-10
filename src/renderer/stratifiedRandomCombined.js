@@ -37,7 +37,6 @@ export function makeStratifiedRandomCombined(strataCount, listOfDimensions) {
   }
 
   return Object.freeze({
-    combined,
     next,
     restart,
     strataCount

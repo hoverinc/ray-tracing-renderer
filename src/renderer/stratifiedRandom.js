@@ -42,7 +42,6 @@ export function makeStratifiedRandom(strataCount, dimensions) {
   return Object.freeze({
     next,
     restart,
-    sample,
     strataCount
   });
 }
