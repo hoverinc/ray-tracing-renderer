@@ -242,7 +242,7 @@ export function makeRayTracingShader({
 
   function nextSeed() {
     gl.useProgram(program);
-    gl.uniform1fv(uniforms['dimension[0]'], samples.next());
+    gl.uniform1fv(uniforms['stratifiedSamples[0]'], samples.next());
   }
 
   function setStrataCount(strataCount) {

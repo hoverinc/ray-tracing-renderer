@@ -1,17 +1,21 @@
 export default function(params) {
   return `
 
-// blue noise texture
+// Noise texture used to generate a different random number for each pixel.
+// We use blue noise in particular, but any type of noise will work.
 uniform sampler2D noise;
 
-// Independently sampled strata dimensions
-uniform float dimension[SAMPLING_DIMENSIONS];
+uniform float stratifiedSamples[SAMPLING_DIMENSIONS];
 uniform float strataSize;
 uniform float useStratifiedSampling;
 
-int dimensionIndex = 0;
+// Every time we call randomSample() in the shader, and for every call to render,
+// we want that specific bit of the shader to fetch a sample from the same position in stratifiedSamples
+// This allows us to use stratified sampling for each random variable in our path tracing
+int sampleIndex = 0;
 
 const highp float maxUint = 1.0 / 4294967295.0;
+
 float pixelSeed;
 highp uint randState;
 
@@ -26,18 +30,23 @@ uint xorshift(uint x) {
 
 void initRandom() {
   vec2 noiseSize = vec2(textureSize(noise, 0));
+
+  // tile the small noise texture across the entire screen
   pixelSeed = texture(noise, vCoord / (pixelSize * noiseSize)).r;
+
+  // white noise used if stratified sampling is disabled
+  // produces more balanced path tracing for 1 sample-per-pixel renders
   randState = xorshift(xorshift(floatBitsToUint(vCoord.x)) * xorshift(floatBitsToUint(vCoord.y)));
 }
 
 float randomSample() {
   randState = xorshift(randState);
 
-  float strata = dimension[dimensionIndex++];
+  float stratifiedSample = stratifiedSamples[sampleIndex++];
 
   float random = mix(
     float(randState) * maxUint, // white noise
-    fract((strata + pixelSeed) * strataSize), // blue noise with stratafied numbers
+    fract((stratifiedSample + pixelSeed) * strataSize), // blue noise + stratified samples
     useStratifiedSampling
   );
 

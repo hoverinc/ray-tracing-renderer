@@ -122,7 +122,7 @@ vec3 sampleShadowCatcher(SurfaceInteraction si, int bounce, inout Ray ray, inout
 
   // advance dimension index by unused stratified samples
   const int usedDimensions = 6;
-  dimensionIndex += DIMENSIONS_PER_MATERIAL - usedDimensions;
+  sampleIndex += DIMENSIONS_PER_MATERIAL - usedDimensions;
 
   return li;
 }

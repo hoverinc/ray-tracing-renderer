@@ -226,9 +226,9 @@ void main() {
   //   All samples are used by the shader. Correct result!
 
   // fragColor = vec4(0, 0, 0, 1);
-  // if (dimensionIndex == SAMPLING_DIMENSIONS) {
+  // if (sampleIndex == SAMPLING_DIMENSIONS) {
   //   fragColor = vec4(1, 1, 1, 1);
-  // } else if (dimensionIndex > SAMPLING_DIMENSIONS) {
+  // } else if (sampleIndex > SAMPLING_DIMENSIONS) {
   //   fragColor = vec4(1, 0, 0, 1);
   // }
 }

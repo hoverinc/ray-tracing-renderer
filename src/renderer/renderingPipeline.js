@@ -10,7 +10,7 @@ import noiseBase64 from './texture/noise';
 
 // Important TODO: Refactor this file to get rid of duplicate and confusing code
 
-export function makeSceneSampler({
+export function makeRenderingPipeline({
     gl,
     optionalExtensions,
     scene,
