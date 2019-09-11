@@ -84,13 +84,13 @@ vec3 sampleShadowCatcher(SurfaceInteraction si, int bounce, inout Ray ray, inout
   vec3 viewDir = -ray.d;
   vec3 color = sampleEnvmapFromDirection(-viewDir);
 
-  vec3 lightDir = lightDirDiffuse(si.faceNormal, viewDir, basis, randomStrataVec2());
+  vec3 lightDir = lightDirDiffuse(si.faceNormal, viewDir, basis, randomSampleVec2());
 
   float alphaBounce = 0.0;
 
   // Add path contribution
   vec3 li = beta * color * (
-      importanceSampleLightShadowCatcher(si, viewDir, randomStrataVec2(), alphaBounce) +
+      importanceSampleLightShadowCatcher(si, viewDir, randomSampleVec2(), alphaBounce) +
       importanceSampleMaterialShadowCatcher(si, viewDir, lightDir, alphaBounce)
     );
 
@@ -106,7 +106,7 @@ vec3 sampleShadowCatcher(SurfaceInteraction si, int bounce, inout Ray ray, inout
 
   // Get new path direction
 
-  lightDir = lightDirDiffuse(si.faceNormal, viewDir, basis, randomStrataVec2());
+  lightDir = lightDirDiffuse(si.faceNormal, viewDir, basis, randomSampleVec2());
 
   float cosThetaL = dot(si.normal, lightDir);
 
@@ -120,9 +120,9 @@ vec3 sampleShadowCatcher(SurfaceInteraction si, int bounce, inout Ray ray, inout
   float orientation = dot(si.faceNormal, viewDir) * cosThetaL;
   abort = orientation < 0.0;
 
-  // advance strata index by unused stratified samples
-  const int usedStrata = 6;
-  strataDimension += STRATA_PER_MATERIAL - usedStrata;
+  // advance dimension index by unused stratified samples
+  const int usedDimensions = 6;
+  sampleIndex += DIMENSIONS_PER_MATERIAL - usedDimensions;
 
   return li;
 }

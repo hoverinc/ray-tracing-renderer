@@ -1,96 +1,18 @@
+import * as THREE from 'three';
 import fragString from './glsl/rayTrace.frag';
 import { createShader, createProgram, getUniforms } from './glUtil';
 import { mergeMeshesToGeometry } from './mergeMeshesToGeometry';
 import { bvhAccel, flattenBvh } from './bvhAccel';
 import { envmapDistribution } from './envmapDistribution';
 import { generateEnvMapFromSceneComponents } from './envMapCreation';
-import { makeStratifiedRandomCombined } from './stratifiedRandomCombined';
 import { getTexturesFromMaterials, mergeTexturesFromMaterials } from './texturesFromMaterials';
 import { makeTexture } from './texture';
 import { uploadBuffers } from './uploadBuffers';
 import { ThinMaterial, ThickMaterial, ShadowCatcherMaterial } from '../constants';
-import * as THREE from 'three';
 import { clamp } from './util';
+import { makeStratifiedSamplerCombined } from './stratifiedSamplerCombined';
 
-function textureDimensionsFromArray(count) {
-  const columnsLog = Math.round(Math.log2(Math.sqrt(count)));
-  const columns = 2 ** columnsLog;
-  const rows = Math.ceil(count / columns);
-  return {
-    columnsLog,
-    columns,
-    rows,
-    size: rows * columns,
-  };
-}
-
-function maxImageSize(images) {
-  const maxSize = {
-    width: 0,
-    height: 0
-  };
-
-  for (const image of images) {
-    maxSize.width = Math.max(maxSize.width, image.width);
-    maxSize.height = Math.max(maxSize.height, image.height);
-  }
-
-  const relativeSizes = [];
-  for (const image of images) {
-    relativeSizes.push(image.width / maxSize.width);
-    relativeSizes.push(image.height / maxSize.height);
-  }
-
-  return { maxSize, relativeSizes };
-}
-
-// expand array to the given length
-function padArray(typedArray, length) {
-  const newArray = new typedArray.constructor(length);
-  newArray.set(typedArray);
-  return newArray;
-}
-
-function isHDRTexture(texture) {
-  return texture.map
-    && texture.map.image
-    && (texture.map.encoding === THREE.RGBEEncoding || texture.map.encoding === THREE.LinearEncoding);
-}
-
-function decomposeScene(scene) {
-  const meshes = [];
-  const directionalLights = [];
-  const environmentLights = [];
-  scene.traverse(child => {
-    if (child instanceof THREE.Mesh) {
-      if (!child.geometry || !child.geometry.getAttribute('position')) {
-        console.log(child, 'must have a geometry property with a position attribute');
-      }
-      else if (!(child.material instanceof THREE.MeshStandardMaterial)) {
-        console.log(child, 'must use MeshStandardMaterial in order to be rendered.');
-      } else {
-        meshes.push(child);
-      }
-    }
-    if (child instanceof THREE.DirectionalLight) {
-      directionalLights.push(child);
-    }
-    if (child instanceof THREE.EnvironmentLight) {
-      if (environmentLights.length > 1) {
-        console.warn('Only one environment light can be used per scene');
-      }
-      else if (isHDRTexture(child)) {
-        environmentLights.push(child);
-      } else {
-        console.warn('Environment light has invalid map');
-      }
-    }
-  });
-
-  return {
-    meshes, directionalLights, environmentLights
-  };
-}
+//Important TODO: Refactor this file to get rid of duplicate and confusing code
 
 export function makeRayTracingShader({
     gl,
@@ -105,17 +27,15 @@ export function makeRayTracingShader({
 
   const { OES_texture_float_linear } = optionalExtensions;
 
-  // Use stratified sampling for random variables to reduce clustering of samples thus improving rendering quality.
-  // Each element of this array specifies how many dimensions belong to each set of stratified samples
-  const strataDimensions = [];
-  strataDimensions.push(2, 2); // anti-aliasing, depth-of-field
+  const samplingDimensions = [];
+  samplingDimensions.push(2, 2); // anti aliasing, depth of field
   for (let i = 0; i < bounces; i++) {
-    // specular or diffuse reflection, light importance sampling, material importance sampling, next path direction
-    strataDimensions.push(2, 2, 2, 2);
+    // specular or diffuse reflection, light importance sampling, material sampling, next path direction
+    samplingDimensions.push(2, 2, 2, 2);
     if (i >= 1) {
       // russian roulette sampling
       // this step is skipped on the first bounce
-      strataDimensions.push(1);
+      samplingDimensions.push(1);
     }
   }
 
@@ -159,7 +79,7 @@ export function makeRayTracingShader({
       BOUNCES: bounces,
       USE_GLASS: useGlass,
       USE_SHADOW_CATCHER: useShadowCatcher,
-      STRATA_DIMENSIONS: strataDimensions.reduce((a, b) => a + b)
+      SAMPLING_DIMENSIONS: samplingDimensions.reduce((a, b) => a + b)
     }));
 
     const program = createProgram(gl, fullscreenQuad.vertexShader, fragmentShader);
@@ -294,11 +214,19 @@ export function makeRayTracingShader({
 
   const { program, uniforms } = initScene();
 
-  let random = null;
-
   function setSize(width, height) {
     gl.useProgram(program);
     gl.uniform2f(uniforms.pixelSize, 1 / width, 1 / height);
+  }
+
+  // noiseImage is a 32-bit PNG image
+  function setNoise(noiseImage) {
+    textureAllocator.bind(uniforms.noise, makeTexture(gl, {
+      data: noiseImage,
+      minFilter: gl.NEAREST,
+      magFilter: gl.NEAREST,
+      storage: 'float'
+    }));
   }
 
   function setCamera(camera) {
@@ -310,15 +238,32 @@ export function makeRayTracingShader({
     gl.uniform1f(uniforms['camera.aperture'], camera.aperture || 0);
   }
 
-  function setStrataCount(count) {
-    random = makeStratifiedRandomCombined(count, strataDimensions);
+  let samples;
+
+  function nextSeed() {
+    gl.useProgram(program);
+    gl.uniform1fv(uniforms['stratifiedSamples[0]'], samples.next());
   }
 
-  function updateSeed() {
+  function setStrataCount(strataCount) {
     gl.useProgram(program);
-    gl.uniform1f(uniforms.strataSize, 1.0 / random.strataCount);
-    gl.uniform1fv(uniforms['strataStart[0]'], random.next());
-    gl.uniform1f(uniforms.seed, Math.random());
+
+    if (strataCount > 1 && strataCount !== samples.strataCount) {
+      // reinitailizing random has a performance cost. we can skip it if
+      // * strataCount is 1, since a strataCount of 1 works with any sized StratifiedRandomCombined
+      // * random already has the same strata count as desired
+      samples = makeStratifiedSamplerCombined(strataCount, samplingDimensions);
+    } else {
+      samples.restart();
+    }
+
+    gl.uniform1f(uniforms.strataSize, 1.0 / strataCount);
+    nextSeed();
+  }
+
+  function useStratifiedSampling(stratifiedSampling) {
+    gl.useProgram(program);
+    gl.uniform1f(uniforms.useStratifiedSampling, stratifiedSampling ? 1.0 : 0.0);
   }
 
   function draw() {
@@ -326,11 +271,95 @@ export function makeRayTracingShader({
     fullscreenQuad.draw();
   }
 
+  samples = makeStratifiedSamplerCombined(1, samplingDimensions);
+
   return Object.freeze({
-    setSize,
+    draw,
+    nextSeed,
     setCamera,
+    setNoise,
+    setSize,
     setStrataCount,
-    updateSeed,
-    draw
+    useStratifiedSampling
   });
+}
+
+function textureDimensionsFromArray(count) {
+  const columnsLog = Math.round(Math.log2(Math.sqrt(count)));
+  const columns = 2 ** columnsLog;
+  const rows = Math.ceil(count / columns);
+  return {
+    columnsLog,
+    columns,
+    rows,
+    size: rows * columns,
+  };
+}
+
+function maxImageSize(images) {
+  const maxSize = {
+    width: 0,
+    height: 0
+  };
+
+  for (const image of images) {
+    maxSize.width = Math.max(maxSize.width, image.width);
+    maxSize.height = Math.max(maxSize.height, image.height);
+  }
+
+  const relativeSizes = [];
+  for (const image of images) {
+    relativeSizes.push(image.width / maxSize.width);
+    relativeSizes.push(image.height / maxSize.height);
+  }
+
+  return { maxSize, relativeSizes };
+}
+
+// expand array to the given length
+function padArray(typedArray, length) {
+  const newArray = new typedArray.constructor(length);
+  newArray.set(typedArray);
+  return newArray;
+}
+
+function isHDRTexture(texture) {
+  return texture.map
+    && texture.map.image
+    && (texture.map.encoding === THREE.RGBEEncoding || texture.map.encoding === THREE.LinearEncoding);
+}
+
+function decomposeScene(scene) {
+  const meshes = [];
+  const directionalLights = [];
+  const environmentLights = [];
+  scene.traverse(child => {
+    if (child instanceof THREE.Mesh) {
+      if (!child.geometry || !child.geometry.getAttribute('position')) {
+        console.warn(child, 'must have a geometry property with a position attribute');
+      }
+      else if (!(child.material instanceof THREE.MeshStandardMaterial)) {
+        console.warn(child, 'must use MeshStandardMaterial in order to be rendered.');
+      } else {
+        meshes.push(child);
+      }
+    }
+    if (child instanceof THREE.DirectionalLight) {
+      directionalLights.push(child);
+    }
+    if (child instanceof THREE.EnvironmentLight) {
+      if (environmentLights.length > 1) {
+        console.warn(environmentLights, 'only one environment light can be used per scene');
+      }
+      else if (isHDRTexture(child)) {
+        environmentLights.push(child);
+      } else {
+        console.warn(child, 'environment light uses invalid map');
+      }
+    }
+  });
+
+  return {
+    meshes, directionalLights, environmentLights
+  };
 }

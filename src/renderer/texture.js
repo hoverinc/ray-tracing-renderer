@@ -47,7 +47,7 @@ export function makeTexture(gl, params) {
   channels = clamp(channels, 1, 4);
 
   const format = [
-    gl.R,
+    gl.RED,
     gl.RG,
     gl.RGB,
     gl.RGBA

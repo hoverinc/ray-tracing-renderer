@@ -31,7 +31,7 @@ ${addDefines(params)}
 #define THICK_GLASS 2
 #define SHADOW_CATCHER 3
 
-#define STRATA_PER_MATERIAL 8
+#define DIMENSIONS_PER_MATERIAL 8
 
 const float IOR = 1.5;
 const float INV_IOR = 1.0 / IOR;
@@ -153,7 +153,7 @@ void bounce(inout Path path, int i) {
     // Russian Roulette sampling
     if (i >= 2) {
       float q = 1.0 - dot(path.beta, luminance);
-      if (randomStrata() < q) {
+      if (randomSample() < q) {
         path.abort = true;
       }
       path.beta /= 1.0 - q;
@@ -187,13 +187,13 @@ vec4 integrator(inout Ray ray) {
 void main() {
   initRandom();
 
-  vec2 vCoordAntiAlias = vCoord + pixelSize * (randomStrataVec2() - 0.5);
+  vec2 vCoordAntiAlias = vCoord + pixelSize * (randomSampleVec2() - 0.5);
 
   vec3 direction = normalize(vec3(vCoordAntiAlias - 0.5, -1.0) * vec3(camera.aspect, 1.0, camera.fov));
 
   // Thin lens model with depth-of-field
   // http://www.pbr-book.org/3ed-2018/Camera_Models/Projective_Camera_Models.html#TheThinLensModelandDepthofField
-  vec2 lensPoint = camera.aperture * sampleCircle(randomStrataVec2());
+  vec2 lensPoint = camera.aperture * sampleCircle(randomSampleVec2());
   vec3 focusPoint = -direction * camera.focus / direction.z; // intersect ray direction with focus plane
 
   vec3 origin = vec3(lensPoint, 0.0);
@@ -226,9 +226,9 @@ void main() {
   //   All samples are used by the shader. Correct result!
 
   // fragColor = vec4(0, 0, 0, 1);
-  // if (strataDimension == STRATA_DIMENSIONS) {
+  // if (sampleIndex == SAMPLING_DIMENSIONS) {
   //   fragColor = vec4(1, 1, 1, 1);
-  // } else if (strataDimension > STRATA_DIMENSIONS) {
+  // } else if (sampleIndex > SAMPLING_DIMENSIONS) {
   //   fragColor = vec4(1, 0, 0, 1);
   // }
 }
