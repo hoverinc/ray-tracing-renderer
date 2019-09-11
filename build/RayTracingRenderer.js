@@ -1,8 +1,8 @@
 (function (global, factory) {
   typeof exports === 'object' && typeof module !== 'undefined' ? factory(exports, require('three')) :
   typeof define === 'function' && define.amd ? define(['exports', 'three'], factory) :
-  (factory((global.RayTracingRenderer = {}),global.THREE));
-}(this, (function (exports,THREE$1) { 'use strict';
+  (global = global || self, factory(global.RayTracingRenderer = {}, global.THREE));
+}(this, function (exports, THREE$1) { 'use strict';
 
   const ThinMaterial = 1;
   const ThickMaterial = 2;
@@ -35,6 +35,18 @@
     copy(source) {
       super.copy(source);
       this.softness = source.softness;
+    }
+  }
+
+  class EnvironmentLight extends THREE$1.Light {
+    constructor(map, ...args) {
+      super(...args);
+      this.map = map;
+    }
+
+    copy(source) {
+      super.copy(source);
+      this.map = source.map;
     }
   }
 
@@ -249,8 +261,6 @@ void main() {
   function textureLinear(params) {
     return `
 
-  ${params.OES_texture_float_linear ? '#define OES_texture_float_linear' : ''}
-
   vec4 textureLinear(sampler2D map, vec2 uv) {
     #ifdef OES_texture_float_linear
       return texture(map, uv);
@@ -276,16 +286,6 @@ void main() {
   function intersect(params) {
     return `
 
-#define BVH_COLUMNS ${params.bvhColumnsLog}
-#define INDEX_COLUMNS ${params.indexColumnsLog}
-#define VERTEX_COLUMNS ${params.vertexColumnsLog}
-#define STACK_SIZE ${params.maxBvhDepth}
-#define NUM_TRIS ${params.numTris}
-#define NUM_MATERIALS ${params.numMaterials}
-${params.numDiffuseMaps > 0 ? `#define NUM_DIFFUSE_MAPS ${params.numDiffuseMaps}` : ''}
-${params.numNormalMaps > 0 ? `#define NUM_NORMAL_MAPS ${params.numNormalMaps}` : ''}
-${params.numPbrMaps > 0 ? `#define NUM_PBR_MAPS ${params.numPbrMaps}` : ''}
-
 uniform highp isampler2D indices;
 uniform sampler2D positions;
 uniform sampler2D normals;
@@ -301,7 +301,7 @@ uniform Materials {
   #endif
 
   #if defined(NUM_DIFFUSE_MAPS) || defined(NUM_NORMAL_MAPS)
-    vec4 diffuseNormalMapSize[${Math.max(params.numDiffuseMaps, params.numNormalMaps)}];
+    vec4 diffuseNormalMapSize[${Math.max(params.NUM_DIFFUSE_MAPS, params.NUM_NORMAL_MAPS)}];
   #endif
 
   #if defined(NUM_PBR_MAPS)
@@ -648,23 +648,29 @@ bool intersectSceneShadow(inout Ray ray) {
 `;
   }
 
-  // Random number generation as described by
-  // http://www.reedbeta.com/blog/quick-and-easy-gpu-random-numbers-in-d3d11/
-
   function random(params) {
     return `
 
-// higher quality but slower hashing function
-uint wangHash(uint x) {
-  x = (x ^ 61u) ^ (x >> 16u);
-  x *= 9u;
-  x = x ^ (x >> 4u);
-  x *= 0x27d4eb2du;
-  x = x ^ (x >> 15u);
-  return x;
-}
+// Noise texture used to generate a different random number for each pixel.
+// We use blue noise in particular, but any type of noise will work.
+uniform sampler2D noise;
 
-// lower quality but faster hashing function
+uniform float stratifiedSamples[SAMPLING_DIMENSIONS];
+uniform float strataSize;
+uniform float useStratifiedSampling;
+
+// Every time we call randomSample() in the shader, and for every call to render,
+// we want that specific bit of the shader to fetch a sample from the same position in stratifiedSamples
+// This allows us to use stratified sampling for each random variable in our path tracing
+int sampleIndex = 0;
+
+const highp float maxUint = 1.0 / 4294967295.0;
+
+float pixelSeed;
+highp uint randState;
+
+// simple integer hashing function
+// https://en.wikipedia.org/wiki/Xorshift
 uint xorshift(uint x) {
   x ^= x << 13u;
   x ^= x >> 17u;
@@ -672,43 +678,34 @@ uint xorshift(uint x) {
   return x;
 }
 
-#define STRATA_DIMENSIONS ${params.strataDimensions}
-
-uniform float seed; // Random number [0, 1)
-uniform float strataStart[STRATA_DIMENSIONS];
-uniform float strataSize;
-
-const highp float maxUint = 1.0 / 4294967295.0;
-highp uint randState;
-int strataDimension;
-
-// init state with high quality hashing function to avoid patterns across the 2d image
 void initRandom() {
-  randState = wangHash(floatBitsToUint(seed));
-  randState *= wangHash(floatBitsToUint(vCoord.x));
-  randState *= wangHash(floatBitsToUint(vCoord.y));
-  randState = wangHash(randState);
-  strataDimension = 0;
+  vec2 noiseSize = vec2(textureSize(noise, 0));
+
+  // tile the small noise texture across the entire screen
+  pixelSeed = texture(noise, vCoord / (pixelSize * noiseSize)).r;
+
+  // white noise used if stratified sampling is disabled
+  // produces more balanced path tracing for 1 sample-per-pixel renders
+  randState = xorshift(xorshift(floatBitsToUint(vCoord.x)) * xorshift(floatBitsToUint(vCoord.y)));
 }
 
-float random() {
+float randomSample() {
   randState = xorshift(randState);
-  float f = float(randState) * maxUint;
+
+  float stratifiedSample = stratifiedSamples[sampleIndex++];
+
+  float random = mix(
+    float(randState) * maxUint, // white noise
+    fract((stratifiedSample + pixelSeed) * strataSize), // blue noise + stratified samples
+    useStratifiedSampling
+  );
 
   // transform random number between [0, 1] to (0, 1)
-  return EPS + (1.0 - 2.0 * EPS) * f;
+  return EPS + (1.0 - 2.0 * EPS) * random;
 }
 
-vec2 randomVec2() {
-  return vec2(random(), random());
-}
-
-float randomStrata() {
-  return strataStart[strataDimension++] + strataSize * random();
-}
-
-vec2 randomStrataVec2() {
-  return vec2(randomStrata(), randomStrata());
+vec2 randomSampleVec2() {
+  return vec2(randomSample(), randomSample());
 }
 `;
   }
@@ -721,6 +718,12 @@ vec2 randomStrataVec2() {
 
 uniform sampler2D envmap;
 uniform sampler2D envmapDistribution;
+
+vec2 cartesianToEquirect(vec3 pointOnSphere) {
+  float phi = mod(atan(-pointOnSphere.z, -pointOnSphere.x), TWOPI);
+  float theta = acos(pointOnSphere.y);
+  return vec2(phi * 0.5 * INVPI, theta * INVPI);
+}
 
 float getEnvmapV(float u, out int vOffset, out float pdf) {
   ivec2 size = textureSize(envmap, 0);
@@ -785,7 +788,7 @@ vec3 sampleEnvmap(vec2 random, out vec2 uv, out float pdf) {
   float cosPhi = cos(phi);
   float sinPhi = sin(phi);
 
-  vec3 dir = vec3(sinTheta * cosPhi, cosTheta, sinTheta * sinPhi);
+  vec3 dir = vec3(-sinTheta * cosPhi, cosTheta, -sinTheta * sinPhi);
 
   pdf = partialPdf.x * partialPdf.y * INVPI2 / (2.0 * sinTheta);
 
@@ -806,21 +809,18 @@ float envmapPdf(vec2 uv) {
 }
 
 vec3 sampleEnvmapFromDirection(vec3 d) {
-  float theta = acos(d.y) * INVPI;
-  float phi = mod(atan(d.z, d.x), TWOPI) * 0.5 * INVPI;
-
-  return textureLinear(envmap, vec2(phi, theta)).rgb;
+  vec2 uv = cartesianToEquirect(d);
+  return textureLinear(envmap, uv).rgb;
 }
 
 // debugging function
 vec3 sampleEnvmapDistributionFromDirection(vec3 d) {
   vec2 size = vec2(textureSize(envmap, 0));
 
-  float theta = acos(d.y) * INVPI;
-  float phi = mod(atan(d.z, d.x), TWOPI) * 0.5 * INVPI;
+  vec2 uv = cartesianToEquirect(d);
 
-  float u = texelFetch(envmapDistribution, ivec2(1.0 + phi * size.x, theta * size.y), 0).g;
-  float v = texelFetch(envmapDistribution, ivec2(0, theta * size.y), 0).g;
+  float u = texelFetch(envmapDistribution, ivec2(1.0 + uv.x * size.x, uv.y * size.y), 0).g;
+  float v = texelFetch(envmapDistribution, ivec2(0, uv.y * size.y), 0).g;
 
   return vec3(u * v);
 }
@@ -919,7 +919,7 @@ vec3 materialBrdf(SurfaceInteraction si, vec3 viewDir, vec3 lightDir, float cosT
 
   pdf = mix(0.5 * (specularPdf + diffusePdf), specularPdf, si.metalness);
 
-  return mix(si.color * diffuse + mix(si.color, vec3(1.0), F) * specular, si.color * specular, si.metalness);
+  return mix(si.color * diffuse + specular, si.color * specular, si.metalness);
 }
 
 `;
@@ -1048,9 +1048,7 @@ vec3 importanceSampleMaterial(SurfaceInteraction si, vec3 viewDir, bool lastBoun
     }
   }
 
-  float phi = mod(atan(lightDir.z, lightDir.x), TWOPI);
-  float theta = acos(lightDir.y);
-  vec2 uv = vec2(0.5 * phi * INVPI, theta * INVPI);
+  vec2 uv = cartesianToEquirect(lightDir);
 
   float lightPdf = envmapPdf(uv);
 
@@ -1070,25 +1068,25 @@ vec3 sampleMaterial(SurfaceInteraction si, int bounce, inout Ray ray, inout vec3
   mat3 basis = orthonormalBasis(si.normal);
   vec3 viewDir = -ray.d;
 
-  vec2 diffuseOrSpecular = randomStrataVec2();
+  vec2 diffuseOrSpecular = randomSampleVec2();
 
   vec3 lightDir = diffuseOrSpecular.x < mix(0.5, 0.0, si.metalness) ?
-    lightDirDiffuse(si.faceNormal, viewDir, basis, randomStrataVec2()) :
-    lightDirSpecular(si.faceNormal, viewDir, basis, si.roughness, randomStrataVec2());
+    lightDirDiffuse(si.faceNormal, viewDir, basis, randomSampleVec2()) :
+    lightDirSpecular(si.faceNormal, viewDir, basis, si.roughness, randomSampleVec2());
 
   bool lastBounce = bounce == BOUNCES;
 
   // Add path contribution
   vec3 li = beta * (
-      importanceSampleLight(si, viewDir, lastBounce, randomStrataVec2()) +
+      importanceSampleLight(si, viewDir, lastBounce, randomSampleVec2()) +
       importanceSampleMaterial(si, viewDir, lastBounce, lightDir)
     );
 
   // Get new path direction
 
   lightDir = diffuseOrSpecular.y < mix(0.5, 0.0, si.metalness) ?
-    lightDirDiffuse(si.faceNormal, viewDir, basis, randomStrataVec2()) :
-    lightDirSpecular(si.faceNormal, viewDir, basis, si.roughness, randomStrataVec2());
+    lightDirDiffuse(si.faceNormal, viewDir, basis, randomSampleVec2()) :
+    lightDirSpecular(si.faceNormal, viewDir, basis, si.roughness, randomSampleVec2());
 
   float cosThetaL = dot(si.normal, lightDir);
 
@@ -1171,9 +1169,7 @@ float importanceSampleMaterialShadowCatcher(SurfaceInteraction si, vec3 viewDir,
     occluded = 0.0;
   }
 
-  float phi = mod(atan(lightDir.z, lightDir.x), TWOPI);
-  float theta = acos(lightDir.y);
-  vec2 uv = vec2(0.5 * phi * INVPI, theta * INVPI);
+  vec2 uv = cartesianToEquirect(lightDir);
 
   float lightPdf = envmapPdf(uv);
 
@@ -1198,13 +1194,13 @@ vec3 sampleShadowCatcher(SurfaceInteraction si, int bounce, inout Ray ray, inout
   vec3 viewDir = -ray.d;
   vec3 color = sampleEnvmapFromDirection(-viewDir);
 
-  vec3 lightDir = lightDirDiffuse(si.faceNormal, viewDir, basis, randomStrataVec2());
+  vec3 lightDir = lightDirDiffuse(si.faceNormal, viewDir, basis, randomSampleVec2());
 
   float alphaBounce = 0.0;
 
   // Add path contribution
   vec3 li = beta * color * (
-      importanceSampleLightShadowCatcher(si, viewDir, randomStrataVec2(), alphaBounce) +
+      importanceSampleLightShadowCatcher(si, viewDir, randomSampleVec2(), alphaBounce) +
       importanceSampleMaterialShadowCatcher(si, viewDir, lightDir, alphaBounce)
     );
 
@@ -1220,7 +1216,7 @@ vec3 sampleShadowCatcher(SurfaceInteraction si, int bounce, inout Ray ray, inout
 
   // Get new path direction
 
-  lightDir = lightDirDiffuse(si.faceNormal, viewDir, basis, randomStrataVec2());
+  lightDir = lightDirDiffuse(si.faceNormal, viewDir, basis, randomSampleVec2());
 
   float cosThetaL = dot(si.normal, lightDir);
 
@@ -1234,9 +1230,9 @@ vec3 sampleShadowCatcher(SurfaceInteraction si, int bounce, inout Ray ray, inout
   float orientation = dot(si.faceNormal, viewDir) * cosThetaL;
   abort = orientation < 0.0;
 
-  // advance strata index by unused stratified samples
-  const int usedStrata = 6;
-  strataDimension += STRATA_PER_MATERIAL - usedStrata;
+  // advance dimension index by unused stratified samples
+  const int usedDimensions = 6;
+  sampleIndex += DIMENSIONS_PER_MATERIAL - usedDimensions;
 
   return li;
 }
@@ -1260,7 +1256,7 @@ vec3 sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Ray ray, inout
 
   vec3 lightDir;
 
-  float reflectionOrRefraction = randomStrata();
+  float reflectionOrRefraction = randomSample();
 
   if (reflectionOrRefraction < F) {
     lightDir = reflect(-viewDir, si.normal);
@@ -1273,9 +1269,9 @@ vec3 sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Ray ray, inout
 
   initRay(ray, si.position + EPS * lightDir, lightDir);
 
-  // advance strata index by unused stratified samples
-  const int usedStrata = 1;
-  strataDimension += STRATA_PER_MATERIAL - usedStrata;
+  // advance sample index by unused stratified samples
+  const int usedDimensions = 1;
+  sampleIndex += DIMENSIONS_PER_MATERIAL - usedDimensions;
 
   return bounce == BOUNCES ? beta * sampleEnvmapFromDirection(lightDir) : vec3(0.0);
 }
@@ -1296,11 +1292,27 @@ vec3 sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Ray ray, inout
     return unrolled;
   }
 
+  function addDefines(params) {
+    let defines = '';
+
+    for (let [name, value] of Object.entries(params)) {
+      // don't define falsy values such as false, 0, and ''.
+      // this adds support for #ifdef on falsy values
+      if (value) {
+        defines += `#define ${name} ${value}\n`;
+      }
+    }
+
+    return defines;
+  }
+
   function fragString(params) {
     return `#version 300 es
 
 precision mediump float;
 precision mediump int;
+
+${addDefines(params)}
 
 #define PI 3.14159265359
 #define TWOPI 6.28318530718
@@ -1315,7 +1327,7 @@ precision mediump int;
 #define THICK_GLASS 2
 #define SHADOW_CATCHER 3
 
-#define STRATA_PER_MATERIAL 8
+#define DIMENSIONS_PER_MATERIAL 8
 
 const float IOR = 1.5;
 const float INV_IOR = 1.0 / IOR;
@@ -1327,10 +1339,6 @@ const float R0 = (1.0 - IOR) * (1.0 - IOR)  / ((1.0 + IOR) * (1.0 + IOR));
 
 // https://www.w3.org/WAI/GL/wiki/Relative_luminance
 const vec3 luminance = vec3(0.2126, 0.7152, 0.0722);
-
-#define BOUNCES ${params.bounces}
-${params.useGlass ? '#define USE_GLASS' : ''}
-${params.useShadowCatcher ? '#define USE_SHADOW_CATCHER' : ''}
 
 struct Ray {
   vec3 o;
@@ -1388,77 +1396,73 @@ ivec4 fetchData(isampler2D s, int i, int columnsLog2) {
   return texelFetch(s, unpackTexel(i, columnsLog2), 0);
 }
 
-${textureLinear(params)}
+${textureLinear()}
 ${intersect(params)}
-${random(params)}
-${envmap(params)}
-${bsdf(params)}
-${sample(params)}
-${sampleMaterial(params)}
-${sampleGlass(params)}
-${sampleShadowCatcher(params)}
+${random()}
+${envmap()}
+${bsdf()}
+${sample()}
+${sampleMaterial()}
+${sampleGlass()}
+${sampleShadowCatcher()}
 
 struct Path {
   Ray ray;
+  vec3 li;
   float alpha;
   vec3 beta;
   bool specularBounce;
   bool abort;
 };
 
-vec3 bounce(inout Path path, int i) {
-  vec3 li;
-
+void bounce(inout Path path, int i) {
   if (path.abort) {
-    return li;
+    return;
   }
 
   SurfaceInteraction si = intersectScene(path.ray);
 
   if (!si.hit) {
     if (path.specularBounce) {
-      li += path.beta * sampleEnvmapFromDirection(path.ray.d);
+      path.li += path.beta * sampleEnvmapFromDirection(path.ray.d);
     }
 
     path.abort = true;
   } else {
     #ifdef USE_GLASS
       if (si.materialType == THIN_GLASS || si.materialType == THICK_GLASS) {
-        li += sampleGlassSpecular(si, i, path.ray, path.beta);
+        path.li += sampleGlassSpecular(si, i, path.ray, path.beta);
         path.specularBounce = true;
       }
     #endif
     #ifdef USE_SHADOW_CATCHER
       if (si.materialType == SHADOW_CATCHER) {
-        li += sampleShadowCatcher(si, i, path.ray, path.beta, path.alpha, li, path.abort);
+        path.li += sampleShadowCatcher(si, i, path.ray, path.beta, path.alpha, path.li, path.abort);
         path.specularBounce = false;
       }
     #endif
     if (si.materialType == STANDARD) {
-      li += sampleMaterial(si, i, path.ray, path.beta, path.abort);
+      path.li += sampleMaterial(si, i, path.ray, path.beta, path.abort);
       path.specularBounce = false;
     }
 
     // Russian Roulette sampling
     if (i >= 2) {
       float q = 1.0 - dot(path.beta, luminance);
-      if (randomStrata() < q) {
+      if (randomSample() < q) {
         path.abort = true;
       }
       path.beta /= 1.0 - q;
     }
   }
-
-  return li;
 }
 
 // Path tracing integrator as described in
 // http://www.pbr-book.org/3ed-2018/Light_Transport_I_Surface_Reflection/Path_Tracing.html#
 vec4 integrator(inout Ray ray) {
-  vec3 li;
-
   Path path;
   path.ray = ray;
+  path.li = vec3(0);
   path.alpha = 1.0;
   path.beta = vec3(1.0);
   path.specularBounce = true;
@@ -1469,23 +1473,23 @@ vec4 integrator(inout Ray ray) {
 
   // for (int i = 1; i < params.bounces + 1, i += 1)
   // equivelant to
-  ${unrollLoop('i', 1, params.bounces + 1, 1, `
-    li += bounce(path, i);
+  ${unrollLoop('i', 1, params.BOUNCES + 1, 1, `
+    bounce(path, i);
   `)}
 
-  return vec4(li, path.alpha);
+  return vec4(path.li, path.alpha);
 }
 
 void main() {
   initRandom();
 
-  vec2 vCoordAntiAlias = vCoord + pixelSize * (randomStrataVec2() - 0.5);
+  vec2 vCoordAntiAlias = vCoord + pixelSize * (randomSampleVec2() - 0.5);
 
   vec3 direction = normalize(vec3(vCoordAntiAlias - 0.5, -1.0) * vec3(camera.aspect, 1.0, camera.fov));
 
   // Thin lens model with depth-of-field
   // http://www.pbr-book.org/3ed-2018/Camera_Models/Projective_Camera_Models.html#TheThinLensModelandDepthofField
-  vec2 lensPoint = camera.aperture * sampleCircle(randomStrataVec2());
+  vec2 lensPoint = camera.aperture * sampleCircle(randomSampleVec2());
   vec3 focusPoint = -direction * camera.focus / direction.z; // intersect ray direction with focus plane
 
   vec3 origin = vec3(lensPoint, 0.0);
@@ -1518,9 +1522,9 @@ void main() {
   //   All samples are used by the shader. Correct result!
 
   // fragColor = vec4(0, 0, 0, 1);
-  // if (strataDimension == STRATA_DIMENSIONS) {
+  // if (sampleIndex == SAMPLING_DIMENSIONS) {
   //   fragColor = vec4(1, 1, 1, 1);
-  // } else if (strataDimension > STRATA_DIMENSIONS) {
+  // } else if (sampleIndex > SAMPLING_DIMENSIONS) {
   //   fragColor = vec4(1, 0, 0, 1);
   // }
 }
@@ -1636,7 +1640,9 @@ void main() {
     array[a] = x;
   }
 
-  // https://en.cppreference.com/w/cpp/algorithm/partition
+  // Reorders the elements in the range [first, last) in such a way that
+  // all elements for which the comparator c returns true
+  // precede the elements for which comparator c returns false.
   function partition(array, compare, left = 0, right = array.length) {
     while (left !== right) {
       while (compare(array[left])) {
@@ -1659,7 +1665,9 @@ void main() {
     return left;
   }
 
-  // https://en.cppreference.com/w/cpp/algorithm/nth_element
+  // nth_element is a partial sorting algorithm that rearranges elements in [first, last) such that:
+  // The element pointed at by nth is changed to whatever element would occur in that position if [first, last) were sorted.
+  // All of the elements before this new nth element compare to true with elements after the nth element
   function nthElement(array, compare, left = 0, right = array.length, k = Math.floor((left + right) / 2)) {
     for (let i = left; i <= k; i++) {
       let minIndex = i;
@@ -2039,46 +2047,58 @@ void main() {
     return true;
   }
 
+  const DEFAULT_MAP_RESOLUTION = {
+    width: 4096,
+    height: 2048,
+  };
+
   // Tools for generating and modify env maps for lighting from scene component data
-  function generateEnvMapFromSceneComponents(background, directionalLights){
+  function generateEnvMapFromSceneComponents(directionalLights, environmentLights) {
+    let envImage = initializeEnvMap(environmentLights);
+    directionalLights.forEach( light => { envImage.data = addDirectionalLightToEnvMap(light, envImage); });
+
+    return envImage;
+  }
+
+  function initializeEnvMap(environmentLights) {
     let envImage;
-    if(background && background.encoding === THREE.LinearEncoding) {
-      // background is an HDR image
-      const image = background.image;
+    // Initialize map from environment light if present
+    if (environmentLights.length > 0) {
+      // TODO: support multiple environment lights (what if they have different resolutions?)
+      const environmentLight = environmentLights[0];
       envImage = {
-        width: image.width,
-        height: image.height,
-        data: image.data
+        width: environmentLight.map.image.width,
+        height: environmentLight.map.image.height,
+        data: environmentLight.map.image.data,
       };
       envImage.data = rgbeToFloat(envImage.data);
-      directionalLights.forEach( light => { envImage.data = addDirectionalLightToEnvMap(light, envImage); });
-    } else {
-      // background is a single color
-      let color = background;
-
-      if (!(color instanceof THREE.Color)) {
-        if (color) {
-          // color is defined and set to something other than THREE.Color
-          console.warn('scene.background should be an HDR image or a THREE.Color');
-        }
-
-        color = new THREE.Color(0xffffff);
-      }
-
-      envImage = {
-        width: 1,
-        height: 1,
-        data: new Float32Array(color.toArray())
-      };
+      envImage.data.forEach((datum, index, arr) => {
+        arr[index] = datum * environmentLight.intensity;
+      }); 
+    } else { // initialize blank map
+      envImage = generateBlankMap(DEFAULT_MAP_RESOLUTION.width, DEFAULT_MAP_RESOLUTION.height);
     }
+
     return envImage;
+  }
+
+  function generateBlankMap(width, height) {
+    const texels = width * height;
+    const floatBuffer = new Float32Array(texels * 3);
+    floatBuffer.fill(0.0);
+
+    return {
+      width: width,
+      height: height,
+      data: floatBuffer,
+    };
   }
 
   function addDirectionalLightToEnvMap(light, image) {
     const sphericalCoords = new THREE$1.Spherical();
     const lightDirection = light.position.clone().sub(light.target.position);
     sphericalCoords.setFromVector3(lightDirection);
-    sphericalCoords.theta = (Math.PI / 2) - sphericalCoords.theta;
+    sphericalCoords.theta = (Math.PI * 3 / 2) - sphericalCoords.theta;
     sphericalCoords.makeSafe();
     return addLightAtCoordinates(light, image, sphericalCoords);
   }
@@ -2089,7 +2109,6 @@ void main() {
     const width = image.width;
     const height = image.height;
 
-    const texels = floatBuffer.length / 3;
     const xTexels = (floatBuffer.length / (3 * height));
     const yTexels = (floatBuffer.length / (3 * width));
     // default softness for standard directional lights is 0.95
@@ -2116,9 +2135,9 @@ void main() {
   }
 
   function angleBetweenSphericals(originCoords, currentCoords) {
-    const originVector = new THREE.Vector3();
+    const originVector = new THREE$1.Vector3();
     originVector.setFromSpherical(originCoords);
-    const currentVector = new THREE.Vector3();
+    const currentVector = new THREE$1.Vector3();
     currentVector.setFromSpherical(currentCoords);
     return originVector.angleTo(currentVector);
   }
@@ -2135,82 +2154,6 @@ void main() {
     const phi = (Math.PI * y) / height;
     const sphericalCoords = new THREE$1.Spherical(1.0, phi, theta);
     return sphericalCoords;
-  }
-
-  // Stratified Sampling
-
-  function makeStratifiedRandom(strataCount, dimensions) {
-    const samples = [];
-    const l = strataCount ** dimensions;
-    for (let i = 0; i < l; i++) {
-      samples[i] = i;
-    }
-
-    let index = samples.length;
-
-    const randomNums = [];
-
-    function reset() {
-      index = 0;
-      shuffle(samples);
-    }
-
-    function next() {
-      if (index >= samples.length) {
-        reset();
-      }
-      let sample = samples[index++];
-
-      for (let i = 0; i < dimensions; i++) {
-        randomNums[i] = (sample % strataCount) / strataCount;
-        sample = Math.floor(sample / strataCount);
-      }
-
-      return randomNums;
-    }
-
-    return Object.freeze({
-      reset,
-      next,
-      strataCount
-    });
-  }
-
-  // Stratified Sampling
-
-  function makeStratifiedRandomCombined(strataCount, listOfDimensions) {
-    const strataObjs = [];
-    for (const dim of listOfDimensions) {
-      strataObjs.push(makeStratifiedRandom(strataCount, dim));
-    }
-
-    const randomNums = [];
-
-    function reset() {
-      for (const strata of strataObjs) {
-        strata.reset();
-      }
-    }
-
-    function next() {
-      let i = 0;
-
-      for (const strata of strataObjs) {
-        const nums = strata.next();
-
-        for (const num of nums) {
-          randomNums[i++] = num;
-        }
-      }
-
-      return randomNums;
-    }
-
-    return Object.freeze({
-      next,
-      reset,
-      strataCount
-    });
   }
 
   function texturesFromMaterials(materials, textureName, textures) {
@@ -2279,7 +2222,8 @@ void main() {
       height = null,
       channels = null,
       storage = null,
-      data = null
+      data = null,
+      flipY = false
     } = params;
 
     width = width || data.width || 0;
@@ -2314,7 +2258,7 @@ void main() {
     channels = clamp(channels, 1, 4);
 
     const format = [
-      gl.R,
+      gl.RED,
       gl.RG,
       gl.RGB,
       gl.RGBA
@@ -2360,11 +2304,18 @@ void main() {
         // otherwise use the max size of the array texture
         const layerWidth = dataArray[i].width || width;
         const layerHeight = dataArray[i].height || height;
+
+        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, Array.isArray(flipY) ? flipY[i] : flipY);
+
         gl.texSubImage3D(target, 0, 0, 0, i, layerWidth, layerHeight, 1, format, type, dataArray[i]);
       }
     } else {
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, flipY);
       gl.texImage2D(target, 0, internalFormat, width, height, 0, format, type, data);
     }
+
+    // return state to default
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
 
     return Object.freeze({
       target,
@@ -2436,91 +2387,138 @@ void main() {
     materialBuffer.bind(0);
   }
 
-  function textureDimensionsFromArray(count) {
-    const columnsLog = Math.round(Math.log2(Math.sqrt(count)));
-    const columns = 2 ** columnsLog;
-    const rows = Math.ceil(count / columns);
-    return {
-      columnsLog,
-      columns,
-      rows,
-      size: rows * columns,
-    };
-  }
+  /*
+  Stratified Sampling
+  http://www.pbr-book.org/3ed-2018/Sampling_and_Reconstruction/Stratified_Sampling.html
 
-  function maxImageSize(images) {
-    const maxSize = {
-      width: 0,
-      height: 0
-    };
+  Repeatedly sampling random numbers between [0, 1) has the effect of producing numbers that are coincidentally clustered together,
+  instead of being evenly spaced across the domain.
+  This produces low quality results for the path tracer since clustered samples send too many rays in similar directions.
 
-    for (const image of images) {
-      maxSize.width = Math.max(maxSize.width, image.width);
-      maxSize.height = Math.max(maxSize.height, image.height);
+  We can reduce the amount of clustering of random numbers by using stratified sampling.
+  Stratification divides the [0, 1) range into partitions, or stratum, of equal size.
+  Each invocation of the stratified sampler draws one uniform random number from one stratum from a shuffled sequence of stratums.
+  When every stratum has been sampled once, this sequence is shuffled again and the process repeats.
+
+  The returned sample ranges between [0, numberOfStratum).
+  The integer part ideintifies the stratum (the first stratum being 0).
+  The fractional part is the random number.
+
+  To obtain the stratified sample between [0, 1), divide the returned sample by the stratum count.
+  */
+
+  function makeStratifiedSampler(strataCount, dimensions) {
+    const strata = [];
+    const l = strataCount ** dimensions;
+    for (let i = 0; i < l; i++) {
+      strata[i] = i;
     }
 
-    const relativeSizes = [];
-    for (const image of images) {
-      relativeSizes.push(image.width / maxSize.width);
-      relativeSizes.push(image.height / maxSize.height);
+    let index = strata.length;
+
+    const sample = [];
+
+    function restart() {
+      index = 0;
     }
 
-    return { maxSize, relativeSizes };
-  }
-
-  // expand array to the given length
-  function padArray(typedArray, length) {
-    const newArray = new typedArray.constructor(length);
-    newArray.set(typedArray);
-    return newArray;
-  }
-
-  function decomposeScene(scene) {
-    const meshes = [];
-    const directionalLights = [];
-
-    scene.traverse(child => {
-      if (child instanceof THREE$1.Mesh) {
-        if (!child.geometry || !child.geometry.getAttribute('position')) {
-          console.log(child, 'must have a geometry property with a position attribute');
-        }
-        else if (!(child.material instanceof THREE$1.MeshStandardMaterial)) {
-          console.log(child, 'must use MeshStandardMaterial in order to be rendered.');
-        } else {
-          meshes.push(child);
-        }
+    function next() {
+      if (index >= strata.length) {
+        shuffle(strata);
+        restart();
       }
-      if (child instanceof THREE$1.DirectionalLight) {
-        directionalLights.push(child);
+      let stratum = strata[index++];
+
+      for (let i = 0; i < dimensions; i++) {
+        sample[i] = stratum % strataCount + Math.random();
+        stratum = Math.floor(stratum / strataCount);
       }
+
+      return sample;
+    }
+
+    return Object.freeze({
+      next,
+      restart,
+      strataCount
     });
-
-    return {
-      meshes, directionalLights
-    };
   }
 
-  function makeRayTracingShader(gl, optionalExtensions, fullscreenQuad, textureAllocator, scene) {
+  /*
+  Stratified Sampling
+  http://www.pbr-book.org/3ed-2018/Sampling_and_Reconstruction/Stratified_Sampling.html
+
+  It is computationally unfeasible to compute stratified sampling for large dimensions (>2)
+  Instead, we can compute stratified sampling for lower dimensional patterns that sum to the high dimension
+  e.g. instead of sampling a 6D domain, we sample a 2D + 2D + 2D domain.
+  This reaps many benefits of stratification while still allowing for small strata sizes.
+  */
+
+  function makeStratifiedSamplerCombined(strataCount, listOfDimensions) {
+    const strataObjs = [];
+
+    for (const dim of listOfDimensions) {
+      strataObjs.push(makeStratifiedSampler(strataCount, dim));
+    }
+
+    const combined = [];
+
+    function next() {
+      let i = 0;
+
+      for (const strata of strataObjs) {
+        const nums = strata.next();
+
+        for (const num of nums) {
+          combined[i++] = num;
+        }
+      }
+
+      return combined;
+    }
+
+    function restart() {
+      for (const strata of strataObjs) {
+        strata.restart();
+      }
+    }
+
+    return Object.freeze({
+      next,
+      restart,
+      strataCount
+    });
+  }
+
+  //Important TODO: Refactor this file to get rid of duplicate and confusing code
+
+  function makeRayTracingShader({
+      gl,
+      optionalExtensions,
+      fullscreenQuad,
+      textureAllocator,
+      scene,
+      bounces // number of global illumination bounces
+    }) {
+
+    bounces = clamp(bounces, 1, 6);
 
     const { OES_texture_float_linear } = optionalExtensions;
 
-    // Number of ray bounces per sample
-    const bounces = 3;
-
-    // Use stratified sampling for random variables to reduce clustering of samples thus improving rendering quality.
-    // Each element of this array specifies how many dimensions belong to each set of stratified samples
-    const strataDimensions = [];
-    strataDimensions.push(2, 2); // anti-aliasing, depth-of-field
+    const samplingDimensions = [];
+    samplingDimensions.push(2, 2); // anti aliasing, depth of field
     for (let i = 0; i < bounces; i++) {
-      // specular or diffuse reflection, light importance sampling, material importance sampling, next path direction
-      strataDimensions.push(2, 2, 2, 2);
+      // specular or diffuse reflection, light importance sampling, material sampling, next path direction
+      samplingDimensions.push(2, 2, 2, 2);
       if (i >= 1) {
-        strataDimensions.push(1); // russian roulette sampling
+        // russian roulette sampling
+        // this step is skipped on the first bounce
+        samplingDimensions.push(1);
       }
     }
 
     function initScene() {
-      const { meshes, directionalLights } = decomposeScene(scene);
+      const { meshes, directionalLights, environmentLights } = decomposeScene(scene);
       if (meshes.length === 0) {
         throw 'RayTracingRenderer: Scene contains no renderable meshes.';
       }
@@ -2547,19 +2545,19 @@ void main() {
 
       const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragString({
         OES_texture_float_linear,
-        bvhColumnsLog: bvhDim.columnsLog,
-        indexColumnsLog: indexDim.columnsLog,
-        vertexColumnsLog: vertexDim.columnsLog,
-        maxBvhDepth: flattenedBvh.maxDepth,
-        numTris: numTris,
-        numMaterials: materials.length,
-        numDiffuseMaps: maps.map.textures.length,
-        numNormalMaps: maps.normalMap.textures.length,
-        numPbrMaps: pbrMap.textures.length,
-        bounces,
-        useGlass,
-        useShadowCatcher,
-        strataDimensions: strataDimensions.reduce((a, b) => a + b)
+        BVH_COLUMNS: bvhDim.columnsLog,
+        INDEX_COLUMNS: indexDim.columnsLog,
+        VERTEX_COLUMNS: vertexDim.columnsLog,
+        STACK_SIZE: flattenedBvh.maxDepth,
+        NUM_TRIS: numTris,
+        NUM_MATERIALS: materials.length,
+        NUM_DIFFUSE_MAPS: maps.map.textures.length,
+        NUM_NORMAL_MAPS: maps.normalMap.textures.length,
+        NUM_PBR_MAPS: pbrMap.textures.length,
+        BOUNCES: bounces,
+        USE_GLASS: useGlass,
+        USE_SHADOW_CATCHER: useShadowCatcher,
+        SAMPLING_DIMENSIONS: samplingDimensions.reduce((a, b) => a + b)
       }));
 
       const program = createProgram(gl, fullscreenQuad.vertexShader, fragmentShader);
@@ -2585,6 +2583,7 @@ void main() {
 
       if (maps.map.textures.length > 0) {
         const images = maps.map.textures.map(t => t.image);
+        const flipY = maps.map.textures.map(t => t.flipY);
         const { maxSize, relativeSizes } = maxImageSize(images);
         // create GL Array Texture from individual textures
         textureAllocator.bind(uniforms.diffuseMap, makeTexture(gl, {
@@ -2592,7 +2591,8 @@ void main() {
           height: maxSize.height,
           channels: 3,
           gammaCorrection: true,
-          data: images
+          data: images,
+          flipY
         }));
         bufferData.diffuseMapSize = relativeSizes;
         bufferData.diffuseMapIndex = maps.map.indices;
@@ -2600,13 +2600,15 @@ void main() {
 
       if (maps.normalMap.textures.length > 0) {
         const images = maps.normalMap.textures.map(t => t.image);
+        const flipY = maps.normalMap.textures.map(t => t.flipY);
         const { maxSize, relativeSizes } = maxImageSize(images);
         // create GL Array Texture from individual textures
         textureAllocator.bind(uniforms.normalMap, makeTexture(gl, {
           width: maxSize.width,
           height: maxSize.height,
           channels: 3,
-          data: images
+          data: images,
+          flipY
         }));
         bufferData.normalMapSize = relativeSizes;
         bufferData.normalMapIndex = maps.normalMap.indices;
@@ -2614,13 +2616,15 @@ void main() {
 
       if (pbrMap.textures.length > 0) {
         const images = pbrMap.textures.map(t => t.image);
+        const flipY = pbrMap.textures.map(t => t.flipY);
         const { maxSize, relativeSizes } = maxImageSize(images);
         // create GL Array Texture from individual textures
         textureAllocator.bind(uniforms.pbrMap, makeTexture(gl, {
           width: maxSize.width,
           height: maxSize.height,
           channels: 3,
-          data: images
+          data: images,
+          flipY
         }));
         bufferData.pbrMapSize = relativeSizes;
         bufferData.roughnessMapIndex = pbrMap.indices.roughnessMap;
@@ -2661,8 +2665,7 @@ void main() {
         height: bvhDim.rows,
       }));
 
-      const background = scene.background;
-      const envImage = generateEnvMapFromSceneComponents(background, directionalLights);
+      const envImage = generateEnvMapFromSceneComponents(directionalLights, environmentLights);
 
       textureAllocator.bind(uniforms.envmap, makeTexture(gl, {
         data: envImage.data,
@@ -2689,11 +2692,19 @@ void main() {
 
     const { program, uniforms } = initScene();
 
-    let random = null;
-
     function setSize(width, height) {
       gl.useProgram(program);
       gl.uniform2f(uniforms.pixelSize, 1 / width, 1 / height);
+    }
+
+    // noiseImage is a 32-bit PNG image
+    function setNoise(noiseImage) {
+      textureAllocator.bind(uniforms.noise, makeTexture(gl, {
+        data: noiseImage,
+        minFilter: gl.NEAREST,
+        magFilter: gl.NEAREST,
+        storage: 'float'
+      }));
     }
 
     function setCamera(camera) {
@@ -2705,15 +2716,32 @@ void main() {
       gl.uniform1f(uniforms['camera.aperture'], camera.aperture || 0);
     }
 
-    function setStrataCount(count) {
-      random = makeStratifiedRandomCombined(count, strataDimensions);
+    let samples;
+
+    function nextSeed() {
+      gl.useProgram(program);
+      gl.uniform1fv(uniforms['stratifiedSamples[0]'], samples.next());
     }
 
-    function updateSeed() {
+    function setStrataCount(strataCount) {
       gl.useProgram(program);
-      gl.uniform1f(uniforms.strataSize, 1.0 / random.strataCount);
-      gl.uniform1fv(uniforms['strataStart[0]'], random.next());
-      gl.uniform1f(uniforms.seed, Math.random());
+
+      if (strataCount > 1 && strataCount !== samples.strataCount) {
+        // reinitailizing random has a performance cost. we can skip it if
+        // * strataCount is 1, since a strataCount of 1 works with any sized StratifiedRandomCombined
+        // * random already has the same strata count as desired
+        samples = makeStratifiedSamplerCombined(strataCount, samplingDimensions);
+      } else {
+        samples.restart();
+      }
+
+      gl.uniform1f(uniforms.strataSize, 1.0 / strataCount);
+      nextSeed();
+    }
+
+    function useStratifiedSampling(stratifiedSampling) {
+      gl.useProgram(program);
+      gl.uniform1f(uniforms.useStratifiedSampling, stratifiedSampling ? 1.0 : 0.0);
     }
 
     function draw() {
@@ -2721,13 +2749,97 @@ void main() {
       fullscreenQuad.draw();
     }
 
+    samples = makeStratifiedSamplerCombined(1, samplingDimensions);
+
     return Object.freeze({
-      setSize,
+      draw,
+      nextSeed,
       setCamera,
+      setNoise,
+      setSize,
       setStrataCount,
-      updateSeed,
-      draw
+      useStratifiedSampling
     });
+  }
+
+  function textureDimensionsFromArray(count) {
+    const columnsLog = Math.round(Math.log2(Math.sqrt(count)));
+    const columns = 2 ** columnsLog;
+    const rows = Math.ceil(count / columns);
+    return {
+      columnsLog,
+      columns,
+      rows,
+      size: rows * columns,
+    };
+  }
+
+  function maxImageSize(images) {
+    const maxSize = {
+      width: 0,
+      height: 0
+    };
+
+    for (const image of images) {
+      maxSize.width = Math.max(maxSize.width, image.width);
+      maxSize.height = Math.max(maxSize.height, image.height);
+    }
+
+    const relativeSizes = [];
+    for (const image of images) {
+      relativeSizes.push(image.width / maxSize.width);
+      relativeSizes.push(image.height / maxSize.height);
+    }
+
+    return { maxSize, relativeSizes };
+  }
+
+  // expand array to the given length
+  function padArray(typedArray, length) {
+    const newArray = new typedArray.constructor(length);
+    newArray.set(typedArray);
+    return newArray;
+  }
+
+  function isHDRTexture(texture) {
+    return texture.map
+      && texture.map.image
+      && (texture.map.encoding === THREE$1.RGBEEncoding || texture.map.encoding === THREE$1.LinearEncoding);
+  }
+
+  function decomposeScene(scene) {
+    const meshes = [];
+    const directionalLights = [];
+    const environmentLights = [];
+    scene.traverse(child => {
+      if (child instanceof THREE$1.Mesh) {
+        if (!child.geometry || !child.geometry.getAttribute('position')) {
+          console.warn(child, 'must have a geometry property with a position attribute');
+        }
+        else if (!(child.material instanceof THREE$1.MeshStandardMaterial)) {
+          console.warn(child, 'must use MeshStandardMaterial in order to be rendered.');
+        } else {
+          meshes.push(child);
+        }
+      }
+      if (child instanceof THREE$1.DirectionalLight) {
+        directionalLights.push(child);
+      }
+      if (child instanceof THREE$1.EnvironmentLight) {
+        if (environmentLights.length > 1) {
+          console.warn(environmentLights, 'only one environment light can be used per scene');
+        }
+        else if (isHDRTexture(child)) {
+          environmentLights.push(child);
+        } else {
+          console.warn(child, 'environment light uses invalid map');
+        }
+      }
+    });
+
+    return {
+      meshes, directionalLights, environmentLights
+    };
   }
 
   function fragString$1(params) {
@@ -2742,7 +2854,7 @@ out vec4 fragColor;
 
 uniform sampler2D image;
 
-${textureLinear(params)}
+${textureLinear()}
 
 // Tonemapping functions from THREE.js
 
@@ -2801,10 +2913,16 @@ void main() {
     [THREE$1.ACESFilmicToneMapping]: 'acesFilmic'
   };
 
-  function makeToneMapShader(gl, optionalExtensions, fullscreenQuad, textureAllocator, toneMapParams) {
+  function makeToneMapShader({
+      gl,
+      optionalExtensions,
+      fullscreenQuad,
+      textureAllocator,
+      toneMappingParams
+    }) {
 
     const { OES_texture_float_linear } = optionalExtensions;
-    const { toneMapping, whitePoint, exposure } = toneMapParams;
+    const { toneMapping, whitePoint, exposure } = toneMappingParams;
 
     const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragString$1({
       OES_texture_float_linear,
@@ -3068,11 +3186,31 @@ void main() {
     });
   }
 
-  function makeSceneSampler(gl, optionalExtensions, scene, toneMappingParams) {
+  var noiseBase64 = 'data:image/png;base64,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';
+
+  // Important TODO: Refactor this file to get rid of duplicate and confusing code
+
+  function makeRenderingPipeline({
+      gl,
+      optionalExtensions,
+      scene,
+      toneMappingParams,
+      bounces, // number of global illumination bounces
+    }) {
+
+    let ready = false;
+
     const fullscreenQuad = makeFullscreenQuad(gl);
     const textureAllocator = makeTextureAllocator(gl);
-    const rayTracingShader = makeRayTracingShader(gl, optionalExtensions, fullscreenQuad, textureAllocator, scene);
-    const toneMapShader = makeToneMapShader(gl, optionalExtensions, fullscreenQuad, textureAllocator, toneMappingParams);
+    const rayTracingShader = makeRayTracingShader({gl, optionalExtensions, fullscreenQuad, textureAllocator, scene, bounces});
+    const toneMapShader = makeToneMapShader({gl, optionalExtensions, fullscreenQuad, textureAllocator, toneMappingParams});
+
+    const noiseImage = new Image();
+    noiseImage.src = noiseBase64;
+    noiseImage.onload = () => {
+      rayTracingShader.setNoise(noiseImage);
+      ready = true;
+    };
 
     const useLinearFiltering = optionalExtensions.OES_texture_float_linear;
 
@@ -3084,11 +3222,12 @@ void main() {
 
     const lastCamera = new LensCamera();
 
-    // how many samples to render with simple noise before switching to stratified noise
-    const numSimpleSamples = 4;
+    // how many samples to render with uniform noise before switching to stratified noise
+    const numUniformSamples = 6;
 
     // how many partitions of stratified noise should be created
-    const strataSize = 6;
+    // higher number results in faster convergence over time, but with lower quality initial samples
+    const strataCount = 6;
 
     let sampleCount = 0;
 
@@ -3101,13 +3240,12 @@ void main() {
 
       sampleCount = 0;
       tileRender.reset();
-      rayTracingShader.setStrataCount(1);
-      rayTracingShader.updateSeed();
     }
 
     function initFirstSample(camera) {
       lastCamera.copy(camera);
       rayTracingShader.setCamera(camera);
+      rayTracingShader.useStratifiedSampling(false);
       clear();
     }
 
@@ -3171,8 +3309,21 @@ void main() {
       });
     }
 
+    function updateSeed() {
+      if (sampleCount === 2) {
+        rayTracingShader.useStratifiedSampling(true);
+        rayTracingShader.setStrataCount(1);
+      } else if (sampleCount === numUniformSamples) {
+        rayTracingShader.setStrataCount(strataCount);
+      } else {
+        rayTracingShader.nextSeed();
+      }
+    }
+
     function drawTile(camera) {
-      if (!camerasEqual(camera, lastCamera)) {
+      if (!ready) {
+        return;
+      } else if (!camerasEqual(camera, lastCamera)) {
         initFirstSample(camera);
         setPreviewBufferDimensions();
         renderPreview();
@@ -3181,11 +3332,7 @@ void main() {
 
         if (isFirstTile) {
           sampleCount++;
-          rayTracingShader.updateSeed();
-
-          if (sampleCount === numSimpleSamples) {
-            rayTracingShader.setStrataCount(strataSize);
-          }
+          updateSeed();
         }
 
         renderTile(x, y, tileWidth, tileHeight);
@@ -3198,7 +3345,9 @@ void main() {
     }
 
     function drawOffscreenTile(camera) {
-      if (!camerasEqual(camera, lastCamera)) {
+      if (!ready) {
+        return;
+      } else if (!camerasEqual(camera, lastCamera)) {
         initFirstSample(camera);
       }
 
@@ -3206,12 +3355,7 @@ void main() {
 
       if (isFirstTile) {
         sampleCount++;
-        rayTracingShader.updateSeed();
-
-
-        if (sampleCount === numSimpleSamples) {
-          rayTracingShader.setStrataCount(strataSize);
-        }
+        updateSeed();
       }
 
       renderTile(x, y, tileWidth, tileHeight);
@@ -3222,17 +3366,15 @@ void main() {
     }
 
     function drawFull(camera) {
-      if (!camerasEqual(camera, lastCamera)) {
+      if (!ready) {
+        return;
+      } else if (!camerasEqual(camera, lastCamera)) {
         initFirstSample(camera);
-      }
-
-      if (sampleCount === numSimpleSamples) {
-        rayTracingShader.setStrataCount(strataSize);
       }
 
       sampleCount++;
 
-      rayTracingShader.updateSeed();
+      updateSeed();
       addSampleToBuffer(hdrBuffer);
       hdrBufferToScreen();
     }
@@ -3287,21 +3429,22 @@ void main() {
     const optionalExtensions = loadExtensions(gl, glOptionalExtensions);
 
     // private properties
-    let sceneSampler = null;
+    let pipeline = null;
     const size = new THREE$1.Vector2();
     let renderTime = 22;
     let pixelRatio = 1;
-    let lastFocus = false;
 
     const module = {
+      bounces: 3,
       domElement: canvas,
+      maxHardwareUsage: false,
       needsUpdate: true,
       onSampleRendered: null,
       renderWhenOffFocus: true,
       renderToScreen: true,
+      toneMapping: THREE$1.LinearToneMapping,
       toneMappingExposure: 1,
       toneMappingWhitePoint: 1,
-      toneMapping: THREE$1.LinearToneMapping,
     };
 
     function initScene(scene) {
@@ -3313,9 +3456,11 @@ void main() {
         toneMapping: module.toneMapping
       };
 
-      sceneSampler = makeSceneSampler(gl, optionalExtensions, scene, toneMappingParams);
+      const bounces = module.bounces;
 
-      sceneSampler.onSampleRendered = (...args) => {
+      pipeline = makeRenderingPipeline({gl, optionalExtensions, scene, toneMappingParams, bounces});
+
+      pipeline.onSampleRendered = (...args) => {
         if (module.onSampleRendered) {
           module.onSampleRendered(...args);
         }
@@ -3327,8 +3472,8 @@ void main() {
     }
 
     function restartTimer() {
-      if (sceneSampler) {
-        sceneSampler.restartTimer();
+      if (pipeline) {
+        pipeline.restartTimer();
       }
     }
 
@@ -3342,8 +3487,8 @@ void main() {
         canvas.style.height = `${ size.height }px`;
       }
 
-      if (sceneSampler) {
-        sceneSampler.setSize(size.width * pixelRatio, size.height * pixelRatio);
+      if (pipeline) {
+        pipeline.setSize(size.width * pixelRatio, size.height * pixelRatio);
       }
     };
 
@@ -3367,8 +3512,8 @@ void main() {
 
     module.setRenderTime = (time) => {
       renderTime = time;
-      if (sceneSampler) {
-        sceneSampler.setRenderTime(time);
+      if (pipeline) {
+        pipeline.setRenderTime(time);
       }
     };
 
@@ -3377,17 +3522,18 @@ void main() {
     };
 
     module.getTotalSamplesRendered = () => {
-      if (sceneSampler) {
-        return sceneSampler.getTotalSamplesRendered();
+      if (pipeline) {
+        return pipeline.getTotalSamplesRendered();
       }
     };
 
     module.sendToScreen = () => {
-      if (sceneSampler) {
-        sceneSampler.hdrBufferToScreen();
+      if (pipeline) {
+        pipeline.hdrBufferToScreen();
       }
     };
 
+    let lastFocus = false;
     module.render = (scene, camera) => {
       if (!module.renderWhenOffFocus) {
         const hasFocus = document.hasFocus();
@@ -3407,12 +3553,17 @@ void main() {
       camera.updateMatrixWorld();
 
       if (module.renderToScreen) {
-        sceneSampler.drawTile(camera);
-      } else {
-        sceneSampler.drawOffscreenTile(camera);
-      }
+        if(module.maxHardwareUsage) {
+          // render new sample for the entire screen
+          pipeline.drawFull(camera);
+        } else {
+          // render new sample for a tiled subset of the screen
+          pipeline.drawTile(camera);
+        }
 
-      // sceneSampler.drawFull(camera);
+      } else {
+        pipeline.drawOffscreenTile(camera);
+      }
     };
 
     // Assume module.render is called using requestAnimationFrame.
@@ -3423,7 +3574,7 @@ void main() {
 
     module.dispose = () => {
       document.removeEventListener('visibilitychange', restartTimer);
-      sceneSampler = false;
+      pipeline = false;
     };
 
     return module;
@@ -3453,18 +3604,20 @@ void main() {
   if (THREE) {
     THREE.LensCamera = LensCamera;
     THREE.SoftDirectionalLight = SoftDirectionalLight;
+    THREE.EnvironmentLight = EnvironmentLight;
     THREE.RayTracingMaterial = RayTracingMaterial;
     THREE.RayTracingRenderer = RayTracingRenderer;
     THREE.ThickMaterial = ThickMaterial;
     THREE.ThinMaterial = ThinMaterial;
   }
 
-  exports.constants = constants;
+  exports.EnvironmentLight = EnvironmentLight;
   exports.LensCamera = LensCamera;
-  exports.SoftDirectionalLight = SoftDirectionalLight;
   exports.RayTracingMaterial = RayTracingMaterial;
   exports.RayTracingRenderer = RayTracingRenderer;
+  exports.SoftDirectionalLight = SoftDirectionalLight;
+  exports.constants = constants;
 
   Object.defineProperty(exports, '__esModule', { value: true });
 
-})));
+}));
