@@ -15,17 +15,15 @@ import { makeStratifiedSamplerCombined } from './stratifiedSamplerCombined';
 //Important TODO: Refactor this file to get rid of duplicate and confusing code
 
 export function makeRayTracingShader({
+    bounces, // number of global illumination bounces
+    fullscreenQuad,
     gl,
     optionalExtensions,
-    fullscreenQuad,
-    textureAllocator,
     scene,
-    bounces // number of global illumination bounces
+    textureAllocator,
   }) {
 
   bounces = clamp(bounces, 1, 6);
-
-  const { OES_texture_float_linear } = optionalExtensions;
 
   const samplingDimensions = [];
   samplingDimensions.push(2, 2); // anti aliasing, depth of field
@@ -39,180 +37,9 @@ export function makeRayTracingShader({
     }
   }
 
-  function initScene() {
-    const { meshes, directionalLights, environmentLights } = decomposeScene(scene);
-    if (meshes.length === 0) {
-      throw 'RayTracingRenderer: Scene contains no renderable meshes.';
-    }
-
-    // merge meshes in scene to a single, static geometry
-    const { geometry, materials, materialIndices } = mergeMeshesToGeometry(meshes);
-
-    // extract textures shared by meshes in scene
-    const maps = getTexturesFromMaterials(materials, ['map', 'normalMap']);
-    const pbrMap = mergeTexturesFromMaterials(materials, ['roughnessMap', 'metalnessMap']);
-
-    // create bounding volume hierarchy from a static scene
-    const bvh = bvhAccel(geometry, materialIndices);
-    const flattenedBvh = flattenBvh(bvh);
-    const numTris = geometry.index.count / 3;
-
-    // describes optimal dimensions used to pack 1-dimensional data into a 2-dimensional array
-    const indexDim = textureDimensionsFromArray(numTris);
-    const bvhDim = textureDimensionsFromArray(flattenedBvh.count);
-    const vertexDim = textureDimensionsFromArray(geometry.attributes.position.count);
-
-    const useGlass = materials.some(m => m.transparent);
-    const useShadowCatcher = materials.some(m => m.shadowCatcher);
-
-    const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragString({
-      OES_texture_float_linear,
-      BVH_COLUMNS: bvhDim.columnsLog,
-      INDEX_COLUMNS: indexDim.columnsLog,
-      VERTEX_COLUMNS: vertexDim.columnsLog,
-      STACK_SIZE: flattenedBvh.maxDepth,
-      NUM_TRIS: numTris,
-      NUM_MATERIALS: materials.length,
-      NUM_DIFFUSE_MAPS: maps.map.textures.length,
-      NUM_NORMAL_MAPS: maps.normalMap.textures.length,
-      NUM_PBR_MAPS: pbrMap.textures.length,
-      BOUNCES: bounces,
-      USE_GLASS: useGlass,
-      USE_SHADOW_CATCHER: useShadowCatcher,
-      SAMPLING_DIMENSIONS: samplingDimensions.reduce((a, b) => a + b)
-    }));
-
-    const program = createProgram(gl, fullscreenQuad.vertexShader, fragmentShader);
-    gl.useProgram(program);
-
-    const uniforms = getUniforms(gl, program);
-
-    const bufferData = {};
-
-    bufferData.color = materials.map(m => m.color);
-    bufferData.roughness = materials.map(m => m.roughness);
-    bufferData.metalness = materials.map(m => m.metalness);
-    bufferData.normalScale = materials.map(m => m.normalScale);
-
-    bufferData.type = materials.map(m => {
-      if (m.shadowCatcher) {
-        return ShadowCatcherMaterial;
-      }
-      if (m.transparent) {
-        return m.solid ? ThickMaterial : ThinMaterial;
-      }
-    });
-
-    if (maps.map.textures.length > 0) {
-      const images = maps.map.textures.map(t => t.image);
-      const flipY = maps.map.textures.map(t => t.flipY);
-      const { maxSize, relativeSizes } = maxImageSize(images);
-      // create GL Array Texture from individual textures
-      textureAllocator.bind(uniforms.diffuseMap, makeTexture(gl, {
-        width: maxSize.width,
-        height: maxSize.height,
-        channels: 3,
-        gammaCorrection: true,
-        data: images,
-        flipY
-      }));
-      bufferData.diffuseMapSize = relativeSizes;
-      bufferData.diffuseMapIndex = maps.map.indices;
-    }
-
-    if (maps.normalMap.textures.length > 0) {
-      const images = maps.normalMap.textures.map(t => t.image);
-      const flipY = maps.normalMap.textures.map(t => t.flipY);
-      const { maxSize, relativeSizes } = maxImageSize(images);
-      // create GL Array Texture from individual textures
-      textureAllocator.bind(uniforms.normalMap, makeTexture(gl, {
-        width: maxSize.width,
-        height: maxSize.height,
-        channels: 3,
-        data: images,
-        flipY
-      }));
-      bufferData.normalMapSize = relativeSizes;
-      bufferData.normalMapIndex = maps.normalMap.indices;
-    }
-
-    if (pbrMap.textures.length > 0) {
-      const images = pbrMap.textures.map(t => t.image);
-      const flipY = pbrMap.textures.map(t => t.flipY);
-      const { maxSize, relativeSizes } = maxImageSize(images);
-      // create GL Array Texture from individual textures
-      textureAllocator.bind(uniforms.pbrMap, makeTexture(gl, {
-        width: maxSize.width,
-        height: maxSize.height,
-        channels: 3,
-        data: images,
-        flipY
-      }));
-      bufferData.pbrMapSize = relativeSizes;
-      bufferData.roughnessMapIndex = pbrMap.indices.roughnessMap;
-      bufferData.metalnessMapIndex = pbrMap.indices.metalnessMap;
-    }
-
-    uploadBuffers(gl, program, bufferData);
-
-    textureAllocator.bind(uniforms.positions,  makeTexture(gl, {
-      data: padArray(geometry.getAttribute('position').array, 3 * vertexDim.size),
-      minFilter: gl.NEAREST,
-      magFilter: gl.NEAREST,
-      width: vertexDim.columns,
-      height: vertexDim.rows
-    }));
-
-    textureAllocator.bind(uniforms.normals,  makeTexture(gl, {
-      data: padArray(geometry.getAttribute('normal').array, 3 * vertexDim.size),
-      minFilter: gl.NEAREST,
-      magFilter: gl.NEAREST,
-      width: vertexDim.columns,
-      height: vertexDim.rows
-    }));
-
-    textureAllocator.bind(uniforms.uvs,  makeTexture(gl, {
-      data: padArray(geometry.getAttribute('uv').array, 2 * vertexDim.size),
-      minFilter: gl.NEAREST,
-      magFilter: gl.NEAREST,
-      width: vertexDim.columns,
-      height: vertexDim.rows
-    }));
-
-    textureAllocator.bind(uniforms.bvh, makeTexture(gl, {
-      data: padArray(flattenedBvh.buffer, 4 * bvhDim.size),
-      minFilter: gl.NEAREST,
-      magFilter: gl.NEAREST,
-      width: bvhDim.columns,
-      height: bvhDim.rows,
-    }));
-
-    const envImage = generateEnvMapFromSceneComponents(directionalLights, environmentLights);
-
-    textureAllocator.bind(uniforms.envmap, makeTexture(gl, {
-      data: envImage.data,
-      minFilter: OES_texture_float_linear ? gl.LINEAR : gl.NEAREST,
-      magFilter: OES_texture_float_linear ? gl.LINEAR : gl.NEAREST,
-      width: envImage.width,
-      height: envImage.height,
-    }));
-
-    const distribution = envmapDistribution(envImage);
-    textureAllocator.bind(uniforms.envmapDistribution, makeTexture(gl, {
-      data: distribution.data,
-      minFilter: gl.NEAREST,
-      magFilter: gl.NEAREST,
-      width: distribution.width,
-      height: distribution.height,
-    }));
-
-    return {
-      program,
-      uniforms,
-    };
-  }
-
-  const { program, uniforms } = initScene();
+  const { program, uniforms } = makeProgramFromScene({
+    bounces, fullscreenQuad, gl, optionalExtensions, samplingDimensions, scene, textureAllocator
+  });
 
   function setSize(width, height) {
     gl.useProgram(program);
@@ -273,7 +100,7 @@ export function makeRayTracingShader({
 
   samples = makeStratifiedSamplerCombined(1, samplingDimensions);
 
-  return Object.freeze({
+  return {
     draw,
     nextSeed,
     setCamera,
@@ -281,7 +108,179 @@ export function makeRayTracingShader({
     setSize,
     setStrataCount,
     useStratifiedSampling
+  };
+}
+function makeProgramFromScene({
+    bounces,
+    fullscreenQuad,
+    gl,
+    optionalExtensions,
+    samplingDimensions,
+    scene,
+    textureAllocator
+  }) {
+  const { OES_texture_float_linear } = optionalExtensions;
+
+  const { meshes, directionalLights, environmentLights } = decomposeScene(scene);
+  if (meshes.length === 0) {
+    throw 'RayTracingRenderer: Scene contains no renderable meshes.';
+  }
+
+  // merge meshes in scene to a single, static geometry
+  const { geometry, materials, materialIndices } = mergeMeshesToGeometry(meshes);
+
+  // extract textures shared by meshes in scene
+  const maps = getTexturesFromMaterials(materials, ['map', 'normalMap']);
+  const pbrMap = mergeTexturesFromMaterials(materials, ['roughnessMap', 'metalnessMap']);
+
+  // create bounding volume hierarchy from a static scene
+  const bvh = bvhAccel(geometry, materialIndices);
+  const flattenedBvh = flattenBvh(bvh);
+  const numTris = geometry.index.count / 3;
+
+  const useGlass = materials.some(m => m.transparent);
+  const useShadowCatcher = materials.some(m => m.shadowCatcher);
+
+  const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragString({
+    OES_texture_float_linear,
+    BVH_COLUMNS: textureDimensionsFromArray(flattenedBvh.count).columnsLog,
+    INDEX_COLUMNS: textureDimensionsFromArray(numTris).columnsLog,
+    VERTEX_COLUMNS: textureDimensionsFromArray(geometry.attributes.position.count).columnsLog,
+    STACK_SIZE: flattenedBvh.maxDepth,
+    NUM_TRIS: numTris,
+    NUM_MATERIALS: materials.length,
+    NUM_DIFFUSE_MAPS: maps.map.textures.length,
+    NUM_NORMAL_MAPS: maps.normalMap.textures.length,
+    NUM_PBR_MAPS: pbrMap.textures.length,
+    BOUNCES: bounces,
+    USE_GLASS: useGlass,
+    USE_SHADOW_CATCHER: useShadowCatcher,
+    SAMPLING_DIMENSIONS: samplingDimensions.reduce((a, b) => a + b)
+  }));
+
+  const program = createProgram(gl, fullscreenQuad.vertexShader, fragmentShader);
+  gl.useProgram(program);
+
+  const uniforms = getUniforms(gl, program);
+
+  const bufferData = {};
+
+  bufferData.color = materials.map(m => m.color);
+  bufferData.roughness = materials.map(m => m.roughness);
+  bufferData.metalness = materials.map(m => m.metalness);
+  bufferData.normalScale = materials.map(m => m.normalScale);
+
+  bufferData.type = materials.map(m => {
+    if (m.shadowCatcher) {
+      return ShadowCatcherMaterial;
+    }
+    if (m.transparent) {
+      return m.solid ? ThickMaterial : ThinMaterial;
+    }
   });
+
+  if (maps.map.textures.length > 0) {
+    const { relativeSizes, texture } = makeTextureArray(gl, maps.map.textures, true);
+    textureAllocator.bind(uniforms.diffuseMap, texture);
+    bufferData.diffuseMapSize = relativeSizes;
+    bufferData.diffuseMapIndex = maps.map.indices;
+  }
+
+  if (maps.normalMap.textures.length > 0) {
+    const { relativeSizes, texture } = makeTextureArray(gl, maps.normalMap.textures, false);
+    textureAllocator.bind(uniforms.normalMap, texture);
+    bufferData.normalMapSize = relativeSizes;
+    bufferData.normalMapIndex = maps.normalMap.indices;
+  }
+
+  if (pbrMap.textures.length > 0) {
+    const { relativeSizes, texture } = makeTextureArray(gl, pbrMap.textures, false);
+    textureAllocator.bind(uniforms.pbrMap, texture);
+    bufferData.pbrMapSize = relativeSizes;
+    bufferData.roughnessMapIndex = pbrMap.indices.roughnessMap;
+    bufferData.metalnessMapIndex = pbrMap.indices.metalnessMap;
+  }
+
+  uploadBuffers(gl, program, bufferData);
+
+  textureAllocator.bind(
+    uniforms.positions,
+    makeDataTexture(gl, geometry.getAttribute('position').array, 3)
+  );
+
+  textureAllocator.bind(
+    uniforms.normals,
+    makeDataTexture(gl, geometry.getAttribute('normal').array, 3)
+  );
+
+  textureAllocator.bind(
+    uniforms.uvs,
+    makeDataTexture(gl, geometry.getAttribute('uv').array, 2)
+  );
+
+  textureAllocator.bind(
+    uniforms.bvh,
+    makeDataTexture(gl, flattenedBvh.buffer, 4)
+  );
+
+  const envImage = generateEnvMapFromSceneComponents(directionalLights, environmentLights);
+
+  textureAllocator.bind(uniforms.envmap, makeTexture(gl, {
+    data: envImage.data,
+    minFilter: OES_texture_float_linear ? gl.LINEAR : gl.NEAREST,
+    magFilter: OES_texture_float_linear ? gl.LINEAR : gl.NEAREST,
+    width: envImage.width,
+    height: envImage.height,
+  }));
+
+  const distribution = envmapDistribution(envImage);
+  textureAllocator.bind(uniforms.envmapDistribution, makeTexture(gl, {
+    data: distribution.data,
+    minFilter: gl.NEAREST,
+    magFilter: gl.NEAREST,
+    width: distribution.width,
+    height: distribution.height,
+  }));
+
+  return {
+    program,
+    uniforms,
+  };
+}
+
+function decomposeScene(scene) {
+  const meshes = [];
+  const directionalLights = [];
+  const environmentLights = [];
+  scene.traverse(child => {
+    if (child instanceof THREE.Mesh) {
+      if (!child.geometry || !child.geometry.getAttribute('position')) {
+        console.warn(child, 'must have a geometry property with a position attribute');
+      }
+      else if (!(child.material instanceof THREE.MeshStandardMaterial)) {
+        console.warn(child, 'must use MeshStandardMaterial in order to be rendered.');
+      } else {
+        meshes.push(child);
+      }
+    }
+    if (child instanceof THREE.DirectionalLight) {
+      directionalLights.push(child);
+    }
+    if (child instanceof THREE.EnvironmentLight) {
+      if (environmentLights.length > 1) {
+        console.warn(environmentLights, 'only one environment light can be used per scene');
+      }
+      else if (isHDRTexture(child)) {
+        environmentLights.push(child);
+      } else {
+        console.warn(child, 'environment light does not use THREE.RGBEEncoding');
+      }
+    }
+  });
+
+  return {
+    meshes, directionalLights, environmentLights
+  };
 }
 
 function textureDimensionsFromArray(count) {
@@ -293,6 +292,38 @@ function textureDimensionsFromArray(count) {
     columns,
     rows,
     size: rows * columns,
+  };
+}
+
+function makeDataTexture(gl, dataArray, channels) {
+  const textureDim = textureDimensionsFromArray(dataArray.length / channels);
+  return makeTexture(gl, {
+    data: padArray(dataArray, channels * textureDim.size),
+    minFilter: gl.NEAREST,
+    magFilter: gl.NEAREST,
+    width: textureDim.columns,
+    height: textureDim.rows,
+  });
+}
+
+function makeTextureArray(gl, textures, gammaCorrection = false) {
+  const images = textures.map(t => t.image);
+  const flipY = textures.map(t => t.flipY);
+  const { maxSize, relativeSizes } = maxImageSize(images);
+
+  // create GL Array Texture from individual textures
+  const texture = makeTexture(gl, {
+    width: maxSize.width,
+    height: maxSize.height,
+    gammaCorrection,
+    data: images,
+    flipY,
+    channels: 3
+  });
+
+  return {
+   texture,
+   relativeSizes
   };
 }
 
@@ -327,39 +358,4 @@ function isHDRTexture(texture) {
   return texture.map
     && texture.map.image
     && (texture.map.encoding === THREE.RGBEEncoding || texture.map.encoding === THREE.LinearEncoding);
-}
-
-function decomposeScene(scene) {
-  const meshes = [];
-  const directionalLights = [];
-  const environmentLights = [];
-  scene.traverse(child => {
-    if (child instanceof THREE.Mesh) {
-      if (!child.geometry || !child.geometry.getAttribute('position')) {
-        console.warn(child, 'must have a geometry property with a position attribute');
-      }
-      else if (!(child.material instanceof THREE.MeshStandardMaterial)) {
-        console.warn(child, 'must use MeshStandardMaterial in order to be rendered.');
-      } else {
-        meshes.push(child);
-      }
-    }
-    if (child instanceof THREE.DirectionalLight) {
-      directionalLights.push(child);
-    }
-    if (child instanceof THREE.EnvironmentLight) {
-      if (environmentLights.length > 1) {
-        console.warn(environmentLights, 'only one environment light can be used per scene');
-      }
-      else if (isHDRTexture(child)) {
-        environmentLights.push(child);
-      } else {
-        console.warn(child, 'environment light uses invalid map');
-      }
-    }
-  });
-
-  return {
-    meshes, directionalLights, environmentLights
-  };
 }

@@ -1,4 +1,4 @@
-noise.js is a 64x64 resolution precomputed blue noise texture.
+noise.js is a 64x64 pixel precomputed blue noise texture.
 It was created by Christoph Peters and downloaded from http://momentsingraphics.de/BlueNoise.html
 
 The included PNG is converted to base64 and stored as a string inside of noise.js.

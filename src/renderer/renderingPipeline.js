@@ -206,7 +206,7 @@ export function makeRenderingPipeline({
     clear();
   }
 
-  return Object.freeze({
+  return {
     drawTile,
     drawOffscreenTile,
     drawFull,
@@ -223,5 +223,5 @@ export function makeRenderingPipeline({
     get onSampleRendered() {
       return sampleRenderedCallback;
     }
-  });
+  };
 }

@@ -54,7 +54,7 @@ vec3 glassRefraction(SurfaceInteraction si, vec3 viewDir, vec3 lightDir, float c
 }
 
 vec3 lightDirRefraction(vec3 normal, vec3 viewDir, mat3 basis, float roughness, vec2 random) {
-  float phi = 2.0 * PI * random.y;
+  float phi = TWOPI * random.y;
   float alpha = roughness * roughness;
   float cosTheta = sqrt((1.0 - random.x) / (1.0 + (alpha * alpha - 1.0) * random.x));
   float sinTheta = sqrt(1.0 - cosTheta * cosTheta);

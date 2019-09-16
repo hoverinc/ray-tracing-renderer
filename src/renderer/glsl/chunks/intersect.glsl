@@ -115,7 +115,7 @@ void surfaceInteractionFromIntersection(inout SurfaceInteraction si, Triangle tr
       dpdu *= invmax;
       dpdv *= invmax;
 
-      vec3 n = 2.0 * texture(normalMap, vec3(uv * materials.diffuseNormalMapSize[normalMapIndex].zw, normalMapIndex)).rgb - 1.0;
+      vec3 n = 2.0 * texture(normalMap, vec3(uv * materials.diffuseNormalMapSize[normalMapIndex].zw, normalMapIndex)).xyz - 1.0;
       n.xy *= materials.roughnessMetalnessNormalScale[materialIndex].zw;
 
       mat3 tbn = mat3(dpdu, dpdv, si.normal);

@@ -29,7 +29,7 @@ export function initializeEnvMap(environmentLights) {
     envImage.data = rgbeToFloat(envImage.data);
     envImage.data.forEach((datum, index, arr) => {
       arr[index] = datum * environmentLight.intensity;
-    }); 
+    });
   } else { // initialize blank map
     envImage = generateBlankMap(DEFAULT_MAP_RESOLUTION.width, DEFAULT_MAP_RESOLUTION.height);
   }

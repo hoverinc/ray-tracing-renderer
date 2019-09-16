@@ -10,7 +10,7 @@ const glOptionalExtensions = [
   'OES_texture_float_linear', // enables gl.LINEAR texture filtering for float textures,
 ];
 
-function RayTracingRenderer(params = {}) {
+export function RayTracingRenderer(params = {}) {
   const canvas = params.canvas || document.createElement('canvas');
 
   const gl = canvas.getContext('webgl2', {
@@ -21,10 +21,10 @@ function RayTracingRenderer(params = {}) {
     powerPreference: 'high-performance',
     failIfMajorPerformanceCaveat: true
   });
+
   loadExtensions(gl, glRequiredExtensions);
   const optionalExtensions = loadExtensions(gl, glOptionalExtensions);
 
-  // private properties
   let pipeline = null;
   const size = new THREE.Vector2();
   let renderTime = 22;
@@ -195,5 +195,3 @@ RayTracingRenderer.isSupported = () => {
 
   return true;
 };
-
-export { RayTracingRenderer };

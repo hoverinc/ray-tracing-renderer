@@ -21,7 +21,7 @@ vec3 linear(vec3 color) {
 }
 // https://www.cs.utah.edu/~reinhard/cdrom/
 vec3 reinhard(vec3 color) {
-  return clamp(color / (vec3(1.0 ) + color), vec3(0.0), vec3(1.0));
+  return clamp(color / (vec3(1.0) + color), vec3(0.0), vec3(1.0));
 }
 // http://filmicworlds.com/blog/filmic-tonemapping-operators/
 #define uncharted2Helper(x) max(((x * (0.15 * x + 0.10 * 0.50) + 0.20 * 0.02) / (x * (0.15 * x + 0.50) + 0.20 * 0.30)) - 0.02 / 0.30, vec3(0.0))
@@ -44,12 +44,12 @@ vec3 acesFilmic( vec3 color ) {
 void main() {
   vec4 tex = textureLinear(image, vCoord);
 
-  vec3 light = tex.rgb / tex.a;
   // alpha channel stores the number of samples progressively rendered
   // divide the sum of light by alpha to obtain average contribution of light
 
   // in addition, alpha contains a scale factor for the shadow catcher material
   // dividing by alpha normalizes the brightness of the shadow catcher to match the background envmap.
+  vec3 light = tex.rgb / tex.a;
 
   light *= ${params.exposure}; // exposure
 

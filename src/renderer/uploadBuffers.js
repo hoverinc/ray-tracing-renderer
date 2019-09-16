@@ -1,22 +1,7 @@
 import { makeUniformBuffer } from './glUtil';
 
-function interleave(...arrays) {
-  const maxLength = arrays.reduce((m, a) => {
-    return Math.max(m, a.data.length / a.channels);
-  }, 0);
-
-  const interleaved = [];
-  for (let i = 0; i < maxLength; i++) {
-    for (let j = 0; j < arrays.length; j++) {
-      const { data, channels } = arrays[j];
-      for (let c = 0; c < channels; c++) {
-        interleaved.push(data[i * channels + c]);
-      }
-    }
-  }
-
-  return interleaved;
-}
+// Upload arrays to uniform buffer objects
+// Packs different arrays into vec4's to take advantage of GLSL's std140 memory layout
 
 export function uploadBuffers(gl, program, bufferData) {
   const materialBuffer = makeUniformBuffer(gl, program, 'Materials');
@@ -62,4 +47,22 @@ export function uploadBuffers(gl, program, bufferData) {
   materialBuffer.set('Materials.pbrMapSize[0]', pbrMapSize);
 
   materialBuffer.bind(0);
+}
+
+function interleave(...arrays) {
+  const maxLength = arrays.reduce((m, a) => {
+    return Math.max(m, a.data.length / a.channels);
+  }, 0);
+
+  const interleaved = [];
+  for (let i = 0; i < maxLength; i++) {
+    for (let j = 0; j < arrays.length; j++) {
+      const { data, channels } = arrays[j];
+      for (let c = 0; c < channels; c++) {
+        interleaved.push(data[i * channels + c]);
+      }
+    }
+  }
+
+  return interleaved;
 }
