@@ -24,8 +24,8 @@ export function makeTextureAllocator(gl) {
     };
   }
 
-  return Object.freeze({
+  return {
     bind,
     reserveSlot
-  });
+  };
 }

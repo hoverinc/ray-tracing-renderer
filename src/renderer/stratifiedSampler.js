@@ -50,9 +50,9 @@ export function makeStratifiedSampler(strataCount, dimensions) {
     return sample;
   }
 
-  return Object.freeze({
+  return {
     next,
     restart,
     strataCount
-  });
+  };
 }

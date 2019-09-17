@@ -31,7 +31,7 @@ ${addDefines(params)}
 #define THICK_GLASS 2
 #define SHADOW_CATCHER 3
 
-#define DIMENSIONS_PER_MATERIAL 8
+#define SAMPLES_PER_MATERIAL 8
 
 const float IOR = 1.5;
 const float INV_IOR = 1.0 / IOR;
@@ -175,9 +175,9 @@ vec4 integrator(inout Ray ray) {
   // Manually unroll for loop.
   // Some hardware fails to interate over a GLSL loop, so we provide this workaround
 
-  // for (int i = 1; i < params.bounces + 1, i += 1)
-  // equivelant to
   ${unrollLoop('i', 1, params.BOUNCES + 1, 1, `
+  // equivelant to
+  // for (int i = 1; i < params.bounces + 1, i += 1)
     bounce(path, i);
   `)}
 

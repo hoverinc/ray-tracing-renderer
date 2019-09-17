@@ -1,5 +1,5 @@
 // Sample the environment map using a cumulative distribution function as described in
-// http://www.pbr-book.org/3ed-2018/Light_Sources/Infinite_Area_Lights.html
+// http://www.pbr-book.org/3ed-2018/Light_Transport_I_Surface_Reflection/Sampling_Light_Sources.html#InfiniteAreaLights
 
 export default function(params) {
   return `
@@ -29,6 +29,8 @@ float getEnvmapV(float u, out int vOffset, out float pdf) {
   }
   vOffset = left - 1;
 
+  // x channel is cumulative distribution of envmap luminance
+  // y channel is partial probability density of envmap luminance
   vec2 s0 = texelFetch(envmapDistribution, ivec2(0, vOffset), 0).xy;
   vec2 s1 = texelFetch(envmapDistribution, ivec2(0, vOffset + 1), 0).xy;
 
@@ -53,6 +55,8 @@ float getEnvmapU(float u, int vOffset, out float pdf) {
   }
   int uOffset = left - 1;
 
+  // x channel is cumulative distribution of envmap luminance
+  // y channel is partial probability density of envmap luminance
   vec2 s0 = texelFetch(envmapDistribution, ivec2(1 + uOffset, vOffset), 0).xy;
   vec2 s1 = texelFetch(envmapDistribution, ivec2(1 + uOffset + 1, vOffset), 0).xy;
 
@@ -90,8 +94,8 @@ float envmapPdf(vec2 uv) {
 
   uv *= size;
 
-  float partialX = texelFetch(envmapDistribution, ivec2(1.0 + uv.x, uv.y), 0).g;
-  float partialY = texelFetch(envmapDistribution, ivec2(0, uv.y), 0).g;
+  float partialX = texelFetch(envmapDistribution, ivec2(1.0 + uv.x, uv.y), 0).y;
+  float partialY = texelFetch(envmapDistribution, ivec2(0, uv.y), 0).y;
 
   return partialX * partialY * INVPI2 / (2.0 * sinTheta);
 }
@@ -99,18 +103,6 @@ float envmapPdf(vec2 uv) {
 vec3 sampleEnvmapFromDirection(vec3 d) {
   vec2 uv = cartesianToEquirect(d);
   return textureLinear(envmap, uv).rgb;
-}
-
-// debugging function
-vec3 sampleEnvmapDistributionFromDirection(vec3 d) {
-  vec2 size = vec2(textureSize(envmap, 0));
-
-  vec2 uv = cartesianToEquirect(d);
-
-  float u = texelFetch(envmapDistribution, ivec2(1.0 + uv.x * size.x, uv.y * size.y), 0).g;
-  float v = texelFetch(envmapDistribution, ivec2(0, uv.y * size.y), 0).g;
-
-  return vec3(u * v);
 }
 
 `;

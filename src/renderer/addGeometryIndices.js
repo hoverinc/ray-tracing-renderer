@@ -1,4 +1,23 @@
-import { BufferGeometry, BufferAttribute } from 'three';
+import { BufferAttribute } from 'three';
+
+export function addFlatGeometryIndices(geometry) {
+  const position = geometry.getAttribute('position');
+
+  if (!position) {
+    console.warn('No position attribute');
+    return;
+  }
+
+  const index = new Uint32Array(position.count);
+
+  for (let i = 0; i < index.length; i++) {
+    index[i] = i;
+  }
+
+  geometry.setIndex(new BufferAttribute(index, 1, false));
+
+  return geometry;
+}
 
 //TODO: Add UV support
 export function addSmoothGeometryIndices(geometry) {
@@ -39,23 +58,3 @@ export function addSmoothGeometryIndices(geometry) {
 
   return bg;
 }
-
-export function addFlatGeometryIndices(geometry) {
-  const position = geometry.getAttribute('position');
-
-  if (!position) {
-    console.warn('No position attribute');
-    return;
-  }
-
-  const index = new Uint32Array(position.count);
-
-  for (let i = 0; i < index.length; i++) {
-    index[i] = i;
-  }
-
-  geometry.setIndex(new BufferAttribute(index, 1, false));
-
-  return geometry;
-}
-
