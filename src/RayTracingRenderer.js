@@ -1,5 +1,5 @@
 import { loadExtensions } from './renderer/glUtil';
-import { makeRenderingPipeline } from './renderer/renderingPipeline';
+import { makeRenderingPipeline } from './renderer/renderingPipelineNew';
 import * as THREE from 'three';
 
 const glRequiredExtensions = [
@@ -15,9 +15,8 @@ export function RayTracingRenderer(params = {}) {
 
   const gl = canvas.getContext('webgl2', {
     alpha: false,
-    depth: false,
     stencil: false,
-    antialias: false,
+    antialias: true,
     powerPreference: 'high-performance',
     failIfMajorPerformanceCaveat: true
   });

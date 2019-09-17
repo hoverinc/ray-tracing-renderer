@@ -45,6 +45,20 @@ export function createProgram(gl, vertexShader, fragmentShader, transformVarying
   throw gl.getProgramInfoLog(program);
 }
 
+export function getAttributes(gl, program) {
+  const attributes = {};
+
+  const count = gl.getProgramParameter(program, gl.ACTIVE_ATTRIBUTES);
+  for (let i = 0; i < count; i++) {
+    const { name } = gl.getActiveAttrib(program, i);
+    if (name) {
+      attributes[name] = i;
+    }
+  }
+
+  return attributes;
+}
+
 export function getUniforms(gl, program) {
   const uniforms = {};
 

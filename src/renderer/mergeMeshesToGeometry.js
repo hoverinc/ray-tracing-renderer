@@ -21,6 +21,8 @@ export function mergeMeshesToGeometry(meshes) {
 
     if (!geometry.getAttribute('normal')) {
       geometry.computeVertexNormals();
+    } else {
+      geometry.normalizeNormals();
     }
 
     vertexCount += geometry.getAttribute('position').count;
