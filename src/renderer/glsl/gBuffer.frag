@@ -4,7 +4,9 @@ export default function(params) {
 precision mediump float;
 precision mediump int;
 
+in vec3 v_worldPosition;
 in vec3 v_normal;
+
 out vec4 fragColor;
 
 void main() {

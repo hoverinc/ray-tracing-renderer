@@ -1,15 +1,20 @@
 import { decomposeScene } from './decomposeScene';
+import { makeFramebuffer } from './frameBuffer';
+import { makeFullscreenQuad } from './fullscreenQuad';
 import { createShader, createProgram, getAttributes, getUniforms } from './glUtil';
+import { mergeMeshesToGeometry } from './mergeMeshesToGeometry';
+import { makeRenderTargets } from './renderTargets';
+import { makeTextureAllocator } from './textureAllocator';
+import { makeToneMapShader } from './toneMapShader';
 import gBufferVert from './glsl/gBuffer.vert';
 import gBufferFrag from './glsl/gBuffer.frag';
-import { mergeMeshesToGeometry } from './mergeMeshesToGeometry';
 
 // Important TODO: Refactor this file to get rid of duplicate and confusing code
 
 export function makeRenderingPipeline(params) {
 
   const {
-    gl, scene
+    gl, optionalExtensions, scene, toneMappingParams
   } = params;
 
   const { meshes } = decomposeScene(scene);
@@ -43,14 +48,45 @@ export function makeRenderingPipeline(params) {
 
   gl.enable(gl.DEPTH_TEST);
 
+  const textureAllocator = makeTextureAllocator(gl);
+  const fullscreenQuad = makeFullscreenQuad(gl);
+
+  const renderTargets = makeRenderTargets([
+    {
+      name: 'position',
+      storage: 'float',
+    },
+    {
+      name: 'normal',
+      storage: 'float'
+    }
+  ]);
+
+  const rt = makeFramebuffer({
+    depth: true,
+    gl,
+    renderTargets
+  });
+
+  const toneMapShader = makeToneMapShader({gl, fullscreenQuad, optionalExtensions, textureAllocator, toneMappingParams });
+
   function drawFull(camera) {
+    gl.bindVertexArray(vao);
+    gl.useProgram(program);
     gl.uniformMatrix4fv(uniforms.projection, false, camera.projectionMatrix.elements);
-    gl.uniformMatrix4fv(uniforms.cameraInverse, false, camera.matrixWorldInverse.elements);
+    gl.uniformMatrix4fv(uniforms.view, false, camera.matrixWorldInverse.elements);
+
+    rt.bind();
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     gl.drawElements(gl.TRIANGLES, elementCount, gl.UNSIGNED_INT, 0);
+    rt.unbind();
+
+    toneMapShader.draw({texture: rt.texture});
   }
 
   function setSize(width, height) {
     gl.viewport(0, 0, width, height);
+    rt.setSize(width, height);
   }
 
   return {

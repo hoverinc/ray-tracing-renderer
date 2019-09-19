@@ -2,17 +2,29 @@ import { clamp } from './util';
 
 export function makeTexture(gl, params) {
   let {
+    width = null,
+    height = null,
+
+    // A single HTMLImageElement, ImageData, or TypedArray,
+    // Or an array of any of these objects. In this case an Array Texture will be created
+    data = null,
+
+    // Number of channels, [1-4]. If left blank, the the function will decide the number of channels automatically from the data
+    channels = null,
+
+    // Either 'byte' or 'float'
+    // If left empty, the function will decide the format automatically from the data
+    storage = null,
+
+    // Reverse the texture across the y-axis.
+    flipY = false,
+
+    // sampling properties
+    gammaCorrection = false,
     wrapS = gl.REPEAT,
     wrapT = gl.REPEAT,
     minFilter = gl.LINEAR,
     magFilter = gl.LINEAR,
-    gammaCorrection = false,
-    width = null,
-    height = null,
-    channels = null,
-    storage = null,
-    data = null,
-    flipY = false
   } = params;
 
   width = width || data.width || 0;
@@ -23,7 +35,7 @@ export function makeTexture(gl, params) {
   let target;
   let dataArray;
 
-  // if data is a JS array but not a TypedArray, assume data is an array of TypedArrays and create a GL Array Texture
+  // if data is a JS array but not a TypedArray, assume data is an array of images and create a GL Array Texture
   if (Array.isArray(data)) {
     dataArray = data;
     data = dataArray[0];
@@ -105,6 +117,26 @@ export function makeTexture(gl, params) {
 
   // return state to default
   gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+
+  return {
+    target,
+    texture
+  };
+}
+
+export function makeDepthTexture(gl, params) {
+  let {
+    width = 0,
+    height = 0,
+  } = params;
+
+  const texture = gl.createTexture();
+  const target = gl.TEXTURE_2D;
+
+  gl.activeTexture(gl.TEXTURE0);
+  gl.bindTexture(target, texture);
+
+  gl.texImage2D(target, 0, gl.DEPTH_COMPONENT24, width, height, 0, gl.DEPTH_COMPONENT, gl.UNSIGNED_INT, null);
 
   return {
     target,

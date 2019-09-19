@@ -10,13 +10,14 @@ const toneMapFunctions = {
   [THREE.ACESFilmicToneMapping]: 'acesFilmic'
 };
 
-export function makeToneMapShader({
+export function makeToneMapShader(params) {
+  const {
+    fullscreenQuad,
     gl,
     optionalExtensions,
-    fullscreenQuad,
     textureAllocator,
     toneMappingParams
-  }) {
+  } = params;
 
   const { OES_texture_float_linear } = optionalExtensions;
   const { toneMapping, whitePoint, exposure } = toneMappingParams;
@@ -30,12 +31,12 @@ export function makeToneMapShader({
   const program = createProgram(gl, fullscreenQuad.vertexShader, fragmentShader);
 
   const uniforms = getUniforms(gl, program);
-  const bindFramebuffer = textureAllocator.reserveSlot();
+  const bindImage = textureAllocator.reserveSlot();
 
   function draw({ texture }) {
     gl.useProgram(program);
 
-    bindFramebuffer(uniforms.image, texture);
+    bindImage(uniforms.image, texture);
 
     fullscreenQuad.draw();
   }
