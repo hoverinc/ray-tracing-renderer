@@ -49,11 +49,13 @@ void main() {
 
   // in addition, alpha contains a scale factor for the shadow catcher material
   // dividing by alpha normalizes the brightness of the shadow catcher to match the background envmap.
-  vec3 light = tex.rgb / tex.a;
+  // vec3 light = tex.rgb / tex.a;
 
-  light *= ${params.exposure}; // exposure
+  // light *= ${params.exposure}; // exposure
 
-  light = ${params.toneMapping}(light); // tone mapping
+  // light = ${params.toneMapping}(light); // tone mapping
+
+  vec3 light = 0.5 * tex.rgb + 0.5;
 
   light = pow(light, vec3(1.0 / 2.2)); // gamma correction
 

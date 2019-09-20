@@ -2,11 +2,11 @@ import { makeDepthTexture, makeTexture } from "./texture";
 
 export function makeFramebuffer(params) {
   const {
-    renderTargets, // RenderTargets object
     depth = false, // use depth buffer
     gl,
     linearFiltering = false, // linearly filter textures
-    float = false, // use floating point texture
+    renderTarget, // { storage: 'byte' | 'float' }
+    renderTargets, // RenderTargets object
   } = params;
 
   const framebuffer = gl.createFramebuffer();
@@ -29,7 +29,13 @@ export function makeFramebuffer(params) {
     width = Math.floor(w);
     height = Math.floor(h);
 
-    colorTexture = initSingleTexture(gl, width, height, float ? 'float' : 'byte', linearFiltering);
+    if (renderTarget) {
+      colorTexture = initSingleTexture(gl, width, height, linearFiltering, renderTarget);
+    } else if (renderTargets) {
+      colorTexture = initMultipleTextures(gl, width, height, linearFiltering, renderTargets);
+    } else {
+      console.error('makeFramebuffer must contain a renderTarget or renderTargets parameter');
+    }
 
     if (depth) {
       const depthTexture = makeDepthTexture(gl, {
@@ -65,7 +71,7 @@ export function makeFramebuffer(params) {
   };
 }
 
-function initSingleTexture(gl, width, height, storage, linearFiltering) {
+function initSingleTexture(gl, width, height, linearFiltering, { storage }) {
   const texture = makeTexture(gl, {
     width,
     height,
@@ -75,6 +81,31 @@ function initSingleTexture(gl, width, height, storage, linearFiltering) {
     channels: 4
   });
   gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, texture.target, texture.texture, 0);
+
+  return texture;
+}
+
+function initMultipleTextures(gl, width, height, linearFiltering, renderTargets) {
+  const texture = {};
+  const drawBuffers = [];
+
+  for (const { name, storage, index } of renderTargets.targets) {
+    const t = makeTexture(gl, {
+      width,
+      height,
+      storage,
+      minFilter: linearFiltering ? gl.LINEAR : gl.NEAREST,
+      magFilter: linearFiltering ? gl.LINEAR : gl.NEAREST,
+      channels: 4
+    });
+
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0 + index, t.target, t.texture, 0);
+
+    texture[name] = t;
+    drawBuffers.push(gl.COLOR_ATTACHMENT0 + index);
+  }
+
+  gl.drawBuffers(drawBuffers);
 
   return texture;
 }

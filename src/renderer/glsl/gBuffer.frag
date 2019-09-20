@@ -1,4 +1,4 @@
-export default function(params) {
+export default function(renderTargets, defines) {
   return `#version 300 es
 
 precision mediump float;
@@ -7,10 +7,11 @@ precision mediump int;
 in vec3 v_worldPosition;
 in vec3 v_normal;
 
-out vec4 fragColor;
+${renderTargets.glslOutput()}
 
 void main() {
-  fragColor = vec4(v_normal * 0.5 + 0.5, 1);
+  out_position = vec4(v_worldPosition, 1.0);
+  out_normal = vec4(v_normal, 1.0);
 }
 `;
 }

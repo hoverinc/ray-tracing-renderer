@@ -95,7 +95,7 @@ export function makeTexture(gl, params) {
       gl.RGBA32F
     ][channels - 1];
   } else {
-    console.error('Texture of unknown type:', data);
+    console.error('Texture of unknown type:', storage || data);
   }
 
   if (dataArray) {
