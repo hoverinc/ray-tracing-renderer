@@ -1,5 +1,5 @@
 import { decomposeScene } from './decomposeScene';
-import { makeFramebuffer } from './frameBuffer';
+import { makeFramebuffer } from './FrameBuffer';
 import { makeFullscreenQuad } from './FullscreenQuad';
 import { createShader, createProgram, getAttributes, getUniforms } from './glUtil';
 import { makeGBufferShader } from './GBufferShader';
