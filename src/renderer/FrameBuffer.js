@@ -1,4 +1,4 @@
-import { makeDepthTexture, makeTexture } from "./texture";
+import { makeDepthTexture, makeTexture } from "./Texture";
 
 export function makeFramebuffer(params) {
   const {

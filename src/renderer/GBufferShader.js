@@ -1,5 +1,5 @@
 import { createShader, createProgram, getAttributes, getUniforms } from './glUtil';
-import { makeRenderTargets } from './renderTargets';
+import { makeRenderTargets } from './RenderTargets';
 import gBufferVert from './glsl/gBuffer.vert';
 import gBufferFrag from './glsl/gBuffer.frag';
 

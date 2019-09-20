@@ -1,12 +1,12 @@
 import { decomposeScene } from './decomposeScene';
 import { makeFramebuffer } from './frameBuffer';
-import { makeFullscreenQuad } from './fullscreenQuad';
+import { makeFullscreenQuad } from './FullscreenQuad';
 import { createShader, createProgram, getAttributes, getUniforms } from './glUtil';
-import { makeGBufferShader } from './gBufferShader';
+import { makeGBufferShader } from './GBufferShader';
 import { mergeMeshesToGeometry } from './mergeMeshesToGeometry';
 
-import { makeTextureAllocator } from './textureAllocator';
-import { makeToneMapShader } from './toneMapShader';
+import { makeTextureAllocator } from './TextureAllocator';
+import { makeToneMapShader } from './ToneMapShader';
 
 
 // Important TODO: Refactor this file to get rid of duplicate and confusing code
