@@ -1,3 +1,6 @@
+// Convert image data from the RGBE format to a 32-bit floating point format
+// See https://www.cg.tuwien.ac.at/research/theses/matkovic/node84.html for a description of the RGBE format
+
 import { rgbeToFloat } from './rgbeToFloat';
 import { clamp } from './util';
 import * as THREE from 'three';
@@ -26,10 +29,7 @@ export function initializeEnvMap(environmentLights) {
       height: environmentLight.map.image.height,
       data: environmentLight.map.image.data,
     };
-    envImage.data = rgbeToFloat(envImage.data);
-    envImage.data.forEach((datum, index, arr) => {
-      arr[index] = datum * environmentLight.intensity;
-    }); 
+    envImage.data = rgbeToFloat(envImage.data, environmentLight.intensity);
   } else { // initialize blank map
     envImage = generateBlankMap(DEFAULT_MAP_RESOLUTION.width, DEFAULT_MAP_RESOLUTION.height);
   }
@@ -59,34 +59,84 @@ export function addDirectionalLightToEnvMap(light, image) {
 }
 
 // Perform modifications on env map to match input scene
-function addLightAtCoordinates(light, image, originSphericalCoords) {
+function addLightAtCoordinates(light, image, originCoords) {
   const floatBuffer = image.data;
   const width = image.width;
   const height = image.height;
-
   const xTexels = (floatBuffer.length / (3 * height));
   const yTexels = (floatBuffer.length / (3 * width));
-  // default softness for standard directional lights is 0.95
-  const softness = ("softness" in light && light.softness !== null) ? light.softness : 0.45;
+  const density = 8;
+  // default softness for standard directional lights is 0.01, i.e. a hard shadow
+  const softness = ("softness" in light && light.softness !== null) ? light.softness : 0.01;
+
+  const threshold = findThreshold(originCoords, softness);
+  let encounteredX = false;
+  let encounteredY = false;
+  let passedX = false;
+
+  let currentCoords,
+      falloff,
+      intensity,
+      bufferIndex;
+
   for (let i = 0; i < xTexels; i++) {
     for (let j = 0; j < yTexels; j++) {
-      const bufferIndex = j * width + i;
-      const currentSphericalCoords = equirectangularToSpherical(i, j, width, height);
-      const falloff = getIntensityFromAngleDifferential(originSphericalCoords, currentSphericalCoords, softness);
-      const intensity = light.intensity * falloff;
+      bufferIndex = j * width + i;
+      currentCoords = equirectangularToSpherical(i, j, width, height);
+      falloff = getIntensityFromAngleDifferential(originCoords, currentCoords, softness, threshold);
+      if(encounteredX && falloff == 0) {
+        passedX = true;
+      }
+      if(falloff > 0) {
+        encounteredX = true;
+        encounteredY = true;
+      }
+      intensity = light.intensity * falloff;
 
       floatBuffer[bufferIndex * 3] += intensity * light.color.r;
       floatBuffer[bufferIndex * 3 + 1] += intensity * light.color.g;
       floatBuffer[bufferIndex * 3 + 2] += intensity * light.color.b;
+
     }
+    if(!encounteredX && encounteredY) {
+      // the entire light has been added
+      return floatBuffer;
+    }
+    passedX = false;
+    encounteredX = false;
   }
   return floatBuffer;
 }
 
-function getIntensityFromAngleDifferential(originCoords, currentCoords, softness) {
+function findThreshold(originCoords, softness) {
+  const step = Math.PI / 128;
+  const maxSteps = (2.0 * Math.PI) / step;
+  for (let i = 0; i < maxSteps; i++) {
+    const angle = i * step;
+    const falloff = getFalloffAtAngle(angle, softness);
+    if (falloff <= 0.0001) {
+      return angle;
+    }
+  }
+}
+
+function getIntensityFromAngleDifferential(originCoords, currentCoords, softness, threshold) {
+  if (threshold < Math.PI / 8) {
+    let deltaPhi = getAngleDelta(originCoords.phi, currentCoords.phi);
+    let deltaTheta =  getAngleDelta(originCoords.theta, currentCoords.theta);
+
+    if(deltaTheta > threshold && deltaPhi > threshold) {
+      return 0;
+    }
+  }
   const angle = angleBetweenSphericals(originCoords, currentCoords);
   const falloffCoeficient = getFalloffAtAngle(angle, softness);
   return falloffCoeficient;
+}
+
+export function getAngleDelta(angleA, angleB) {
+  let diff = Math.abs(angleA - angleB) % (2 * Math.PI);
+  return diff > Math.PI ? (2 * Math.PI - diff) : diff;
 }
 
 function angleBetweenSphericals(originCoords, currentCoords) {
@@ -98,6 +148,8 @@ function angleBetweenSphericals(originCoords, currentCoords) {
 }
 
 function getFalloffAtAngle(angle, softness) {
+  // TODO: clean this up and optimize it
+  // For now it doesn't matter too much because of the threshold cutoff in getIntensityFromAngleDifferential
   const softnessCoeficient = Math.pow(2, 14.5 * Math.max(0.001, (1.0 - clamp(softness, 0.0, 1.0))));
   const falloff = Math.pow(softnessCoeficient, 1.1) * Math.pow(8, softnessCoeficient * -1 * (Math.pow(angle, 1.8)));
   return falloff;

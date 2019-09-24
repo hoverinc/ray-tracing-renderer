@@ -1,4 +1,5 @@
-import { equirectangularToSpherical } from 'src/renderer/envMapCreation';
+import { equirectangularToSpherical, getAngleDelta } from 'src/renderer/envMapCreation';
+import * as THREE from 'three';
 
 describe('equirectangularToSpherical', () => {
   let oddWidth, oddHeight, evenWidth, evenHeight;
@@ -23,5 +24,13 @@ describe('equirectangularToSpherical', () => {
     coords = equirectangularToSpherical(0, 0, evenWidth, evenHeight);
     expect(coords.theta).toBeCloseTo(0);
     expect(coords.phi).toBeCloseTo(0);
+  });
+});
+
+describe('getAngleDelta', () => {
+  test('handles wraparound case properly', () => {
+    const angleA = Math.PI / 8;
+    const angleB = (2 * Math.PI) - (Math.PI / 8);
+    expect(getAngleDelta(angleA, angleB)).toBeCloseTo(Math.PI / 4);
   });
 });
