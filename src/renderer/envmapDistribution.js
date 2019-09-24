@@ -1,23 +1,6 @@
 // Create a piecewise 2D cumulative distribution function of light intensity from an envmap
 // http://www.pbr-book.org/3ed-2018/Monte_Carlo_Integration/2D_Sampling_with_Multidimensional_Transformations.html#Piecewise-Constant2DDistributions
 
-function makeTextureArray(width, height, channels) {
-  const array = new Float32Array(channels * width * height);
-
-  return {
-    set(x, y, channel, val) {
-      array[channels * (y * width + x) + channel] = val;
-    },
-    get(x, y, channel) {
-      return array[channels * (y * width + x) + channel];
-    },
-    width,
-    height,
-    channels,
-    array
-  };
-}
-
 export function envmapDistribution(image) {
   const data = image.data;
 
@@ -61,4 +44,22 @@ export function envmapDistribution(image) {
   cdfImage.data = cdf.array;
 
   return cdfImage;
+}
+
+
+function makeTextureArray(width, height, channels) {
+  const array = new Float32Array(channels * width * height);
+
+  return {
+    set(x, y, channel, val) {
+      array[channels * (y * width + x) + channel] = val;
+    },
+    get(x, y, channel) {
+      return array[channels * (y * width + x) + channel];
+    },
+    width,
+    height,
+    channels,
+    array
+  };
 }

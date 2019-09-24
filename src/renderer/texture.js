@@ -106,8 +106,8 @@ export function makeTexture(gl, params) {
   // return state to default
   gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
 
-  return Object.freeze({
+  return {
     target,
     texture
-  });
+  };
 }

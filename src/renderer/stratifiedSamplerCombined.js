@@ -39,9 +39,9 @@ export function makeStratifiedSamplerCombined(strataCount, listOfDimensions) {
     }
   }
 
-  return Object.freeze({
+  return {
     next,
     restart,
     strataCount
-  });
+  };
 }

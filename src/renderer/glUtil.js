@@ -16,9 +16,8 @@ export function createShader(gl, type, source) {
     return shader;
   }
 
-  console.log(
-    source.split('\n').map((x, i) => `${i + 1}: ${x}`).join('\n')
-  );
+  const output = source.split('\n').map((x, i) => `${i + 1}: ${x}`).join('\n');
+  console.log(output);
 
   throw gl.getShaderInfoLog(shader);
 }
@@ -61,43 +60,15 @@ export function getUniforms(gl, program) {
   return uniforms;
 }
 
-function setData(dataView, setter, size, offset, stride, components, value) {
-  const l = Math.min(value.length / components, size);
-  for (let i = 0; i < l; i++) {
-    for (let k = 0; k < components; k++) {
-      dataView[setter](offset + i * stride + k * 4, value[components * i + k], true);
-    }
-  }
-}
-
 export function makeUniformBuffer(gl, program, blockName) {
   const blockIndex = gl.getUniformBlockIndex(program, blockName);
   const blockSize = gl.getActiveUniformBlockParameter(program, blockIndex, gl.UNIFORM_BLOCK_DATA_SIZE);
 
-  function getUniformInfo() {
-    const indices = gl.getActiveUniformBlockParameter(program, blockIndex, gl.UNIFORM_BLOCK_ACTIVE_UNIFORM_INDICES);
-    const offset = gl.getActiveUniforms(program, indices, gl.UNIFORM_OFFSET);
-    const stride = gl.getActiveUniforms(program, indices, gl.UNIFORM_ARRAY_STRIDE);
-
-    const uniforms = {};
-    for (let i = 0; i < indices.length; i++) {
-      const { name, type, size } = gl.getActiveUniform(program, indices[i]);
-      uniforms[name] = {
-        type,
-        size,
-        offset: offset[i],
-        stride: stride[i]
-      };
-    }
-
-    return uniforms;
-  }
-
-  const uniforms = getUniformInfo();
+  const uniforms = getUniformBlockInfo(gl, program, blockIndex);
 
   const buffer = gl.createBuffer();
   gl.bindBuffer(gl.UNIFORM_BUFFER, buffer);
-  gl.bufferData(gl.UNIFORM_BUFFER, blockSize, gl.DYNAMIC_DRAW);
+  gl.bufferData(gl.UNIFORM_BUFFER, blockSize, gl.STATIC_DRAW);
 
   const data = new DataView(new ArrayBuffer(blockSize));
 
@@ -147,8 +118,36 @@ export function makeUniformBuffer(gl, program, blockName) {
     gl.bindBufferBase(gl.UNIFORM_BUFFER, index, buffer);
   }
 
-  return Object.freeze({
+  return {
     set,
     bind
-  });
+  };
+}
+
+function getUniformBlockInfo(gl, program, blockIndex) {
+  const indices = gl.getActiveUniformBlockParameter(program, blockIndex, gl.UNIFORM_BLOCK_ACTIVE_UNIFORM_INDICES);
+  const offset = gl.getActiveUniforms(program, indices, gl.UNIFORM_OFFSET);
+  const stride = gl.getActiveUniforms(program, indices, gl.UNIFORM_ARRAY_STRIDE);
+
+  const uniforms = {};
+  for (let i = 0; i < indices.length; i++) {
+    const { name, type, size } = gl.getActiveUniform(program, indices[i]);
+    uniforms[name] = {
+      type,
+      size,
+      offset: offset[i],
+      stride: stride[i]
+    };
+  }
+
+  return uniforms;
+}
+
+function setData(dataView, setter, size, offset, stride, components, value) {
+  const l = Math.min(value.length / components, size);
+  for (let i = 0; i < l; i++) {
+    for (let k = 0; k < components; k++) {
+      dataView[setter](offset + i * stride + k * 4, value[components * i + k], true);
+    }
+  }
 }
