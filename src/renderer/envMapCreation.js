@@ -67,7 +67,7 @@ function addLightAtCoordinates(light, image, originCoords) {
   const yTexels = (floatBuffer.length / (3 * width));
   const density = 8;
   // default softness for standard directional lights is 0.01, i.e. a hard shadow
-  const softness = ("softness" in light && light.softness !== null) ? light.softness : 0.01;
+  const softness = light.softness || 0.01;
 
   const threshold = findThreshold(originCoords, softness);
   let encounteredX = false;
