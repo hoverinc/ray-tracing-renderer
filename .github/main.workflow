@@ -2,7 +2,6 @@ workflow "test" {
   on = "push"
 }
 
-node:10.15.3-alpine
 action "install" {
   uses = "docker://node:10.15.3"
   args = "npm install"
