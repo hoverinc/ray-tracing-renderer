@@ -11,23 +11,6 @@ import { clamp } from './util';
 // Since the render time of a tile is dependent on the device, we find the desired tile dimensions by measuring
 // the time it takes to render an arbitrarily-set tile size and adjusting the size according to the benchmark.
 
-function pixelsPerTileEstimate(gl) {
-  const maxRenderbufferSize = gl.getParameter(gl.MAX_RENDERBUFFER_SIZE);
-  const maxViewportDims = gl.getParameter(gl.MAX_VIEWPORT_DIMS);
-
-  if (maxRenderbufferSize <= 8192) {
-    return 25000;
-  } else if (maxRenderbufferSize === 16384 && maxViewportDims[0] <= 16384) {
-    return 50000;
-  } else if (maxRenderbufferSize === 16384 && maxViewportDims[0] >= 32768) {
-    return 100000;
-  } else if (maxRenderbufferSize >= 32768) {
-    return 200000;
-  } else {
-    return 50000;
-  }
-}
-
 export function makeTileRender(gl) {
   let currentTile = -1;
   let numTiles = 1;
@@ -136,7 +119,7 @@ export function makeTileRender(gl) {
     };
   }
 
-  return Object.freeze({
+  return {
     setSize,
     reset,
     nextTile,
@@ -147,5 +130,22 @@ export function makeTileRender(gl) {
     setRenderTime(time) {
       desiredTimePerTile = time;
     },
-  });
+  };
+}
+
+function pixelsPerTileEstimate(gl) {
+  const maxRenderbufferSize = gl.getParameter(gl.MAX_RENDERBUFFER_SIZE);
+  const maxViewportDims = gl.getParameter(gl.MAX_VIEWPORT_DIMS);
+
+  if (maxRenderbufferSize <= 8192) {
+    return 25000;
+  } else if (maxRenderbufferSize === 16384 && maxViewportDims[0] <= 16384) {
+    return 50000;
+  } else if (maxRenderbufferSize === 16384 && maxViewportDims[0] >= 32768) {
+    return 100000;
+  } else if (maxRenderbufferSize >= 32768) {
+    return 200000;
+  } else {
+    return 50000;
+  }
 }

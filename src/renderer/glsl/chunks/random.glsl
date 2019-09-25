@@ -1,20 +1,26 @@
-// Random number generation as described by
-// http://www.reedbeta.com/blog/quick-and-easy-gpu-random-numbers-in-d3d11/
-
 export default function(params) {
   return `
 
-// higher quality but slower hashing function
-uint wangHash(uint x) {
-  x = (x ^ 61u) ^ (x >> 16u);
-  x *= 9u;
-  x = x ^ (x >> 4u);
-  x *= 0x27d4eb2du;
-  x = x ^ (x >> 15u);
-  return x;
-}
+// Noise texture used to generate a different random number for each pixel.
+// We use blue noise in particular, but any type of noise will work.
+uniform sampler2D noise;
 
-// lower quality but faster hashing function
+uniform float stratifiedSamples[SAMPLING_DIMENSIONS];
+uniform float strataSize;
+uniform float useStratifiedSampling;
+
+// Every time we call randomSample() in the shader, and for every call to render,
+// we want that specific bit of the shader to fetch a sample from the same position in stratifiedSamples
+// This allows us to use stratified sampling for each random variable in our path tracing
+int sampleIndex = 0;
+
+const highp float maxUint = 1.0 / 4294967295.0;
+
+float pixelSeed;
+highp uint randState;
+
+// simple integer hashing function
+// https://en.wikipedia.org/wiki/Xorshift
 uint xorshift(uint x) {
   x ^= x << 13u;
   x ^= x >> 17u;
@@ -22,41 +28,34 @@ uint xorshift(uint x) {
   return x;
 }
 
-uniform float seed; // Random number [0, 1)
-uniform float strataStart[STRATA_DIMENSIONS];
-uniform float strataSize;
-
-const highp float maxUint = 1.0 / 4294967295.0;
-highp uint randState;
-int strataDimension;
-
-// init state with high quality hashing function to avoid patterns across the 2d image
 void initRandom() {
-  randState = wangHash(floatBitsToUint(seed));
-  randState *= wangHash(floatBitsToUint(vCoord.x));
-  randState *= wangHash(floatBitsToUint(vCoord.y));
-  randState = wangHash(randState);
-  strataDimension = 0;
+  vec2 noiseSize = vec2(textureSize(noise, 0));
+
+  // tile the small noise texture across the entire screen
+  pixelSeed = texture(noise, vCoord / (pixelSize * noiseSize)).r;
+
+  // white noise used if stratified sampling is disabled
+  // produces more balanced path tracing for 1 sample-per-pixel renders
+  randState = xorshift(xorshift(floatBitsToUint(vCoord.x)) * xorshift(floatBitsToUint(vCoord.y)));
 }
 
-float random() {
+float randomSample() {
   randState = xorshift(randState);
-  float f = float(randState) * maxUint;
+
+  float stratifiedSample = stratifiedSamples[sampleIndex++];
+
+  float random = mix(
+    float(randState) * maxUint, // white noise
+    fract((stratifiedSample + pixelSeed) * strataSize), // blue noise + stratified samples
+    useStratifiedSampling
+  );
 
   // transform random number between [0, 1] to (0, 1)
-  return EPS + (1.0 - 2.0 * EPS) * f;
+  return EPS + (1.0 - 2.0 * EPS) * random;
 }
 
-vec2 randomVec2() {
-  return vec2(random(), random());
-}
-
-float randomStrata() {
-  return strataStart[strataDimension++] + strataSize * random();
-}
-
-vec2 randomStrataVec2() {
-  return vec2(randomStrata(), randomStrata());
+vec2 randomSampleVec2() {
+  return vec2(randomSample(), randomSample());
 }
 `;
 };

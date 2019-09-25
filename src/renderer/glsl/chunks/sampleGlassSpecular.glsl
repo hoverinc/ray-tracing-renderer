@@ -13,7 +13,7 @@ vec3 sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Ray ray, inout
 
   vec3 lightDir;
 
-  float reflectionOrRefraction = randomStrata();
+  float reflectionOrRefraction = randomSample();
 
   if (reflectionOrRefraction < F) {
     lightDir = reflect(-viewDir, si.normal);
@@ -26,9 +26,9 @@ vec3 sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Ray ray, inout
 
   initRay(ray, si.position + EPS * lightDir, lightDir);
 
-  // advance strata index by unused stratified samples
-  const int usedStrata = 1;
-  strataDimension += STRATA_PER_MATERIAL - usedStrata;
+  // advance sample index by unused stratified samples
+  const int usedSamples = 1;
+  sampleIndex += SAMPLES_PER_MATERIAL - usedSamples;
 
   return bounce == BOUNCES ? beta * sampleEnvmapFromDirection(lightDir) : vec3(0.0);
 }

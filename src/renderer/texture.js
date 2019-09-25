@@ -47,7 +47,7 @@ export function makeTexture(gl, params) {
   channels = clamp(channels, 1, 4);
 
   const format = [
-    gl.R,
+    gl.RED,
     gl.RG,
     gl.RGB,
     gl.RGBA
@@ -106,8 +106,8 @@ export function makeTexture(gl, params) {
   // return state to default
   gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
 
-  return Object.freeze({
+  return {
     target,
     texture
-  });
+  };
 }
