@@ -40,7 +40,7 @@ export function makeToneMapShader({
     fullscreenQuad.draw();
   }
 
-  return Object.freeze({
+  return {
     draw
-  });
+  };
 }

@@ -1,10 +1,3 @@
-
-function swap(array, a, b) {
-  const x = array[b];
-  array[b] = array[a];
-  array[a] = x;
-}
-
 // Reorders the elements in the range [first, last) in such a way that
 // all elements for which the comparator c returns true
 // precede the elements for which comparator c returns false.
@@ -45,4 +38,10 @@ export function nthElement(array, compare, left = 0, right = array.length, k = M
       }
     }
   }
+}
+
+function swap(array, a, b) {
+  const x = array[b];
+  array[b] = array[a];
+  array[a] = x;
 }
