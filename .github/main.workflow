@@ -1,5 +1,6 @@
 workflow "check" {
   on = "push"
+  resolves = "test"
 }
 
 action "install" {
