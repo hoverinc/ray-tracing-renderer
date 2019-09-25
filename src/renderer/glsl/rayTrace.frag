@@ -8,13 +8,15 @@ import sampleMaterial from './chunks/sampleMaterial.glsl';
 import sampleShadowCatcher from './chunks/sampleShadowCatcher.glsl';
 import sampleGlass from './chunks/sampleGlassSpecular.glsl';
 // import sampleGlass from './chunks/sampleGlassMicrofacet.glsl';
-import { unrollLoop } from '../glslUtil';
+import { unrollLoop, addDefines } from '../glslUtil';
 
 export default function(params) {
   return `#version 300 es
 
 precision mediump float;
 precision mediump int;
+
+${addDefines(params)}
 
 #define PI 3.14159265359
 #define TWOPI 6.28318530718
@@ -29,7 +31,7 @@ precision mediump int;
 #define THICK_GLASS 2
 #define SHADOW_CATCHER 3
 
-#define STRATA_PER_MATERIAL 8
+#define SAMPLES_PER_MATERIAL 8
 
 const float IOR = 1.5;
 const float INV_IOR = 1.0 / IOR;
@@ -41,10 +43,6 @@ const float R0 = (1.0 - IOR) * (1.0 - IOR)  / ((1.0 + IOR) * (1.0 + IOR));
 
 // https://www.w3.org/WAI/GL/wiki/Relative_luminance
 const vec3 luminance = vec3(0.2126, 0.7152, 0.0722);
-
-#define BOUNCES ${params.bounces}
-${params.useGlass ? '#define USE_GLASS' : ''}
-${params.useShadowCatcher ? '#define USE_SHADOW_CATCHER' : ''}
 
 struct Ray {
   vec3 o;
@@ -114,65 +112,61 @@ ${sampleShadowCatcher(params)}
 
 struct Path {
   Ray ray;
+  vec3 li;
   float alpha;
   vec3 beta;
   bool specularBounce;
   bool abort;
 };
 
-vec3 bounce(inout Path path, int i) {
-  vec3 li;
-
+void bounce(inout Path path, int i) {
   if (path.abort) {
-    return li;
+    return;
   }
 
   SurfaceInteraction si = intersectScene(path.ray);
 
   if (!si.hit) {
     if (path.specularBounce) {
-      li += path.beta * sampleEnvmapFromDirection(path.ray.d);
+      path.li += path.beta * sampleEnvmapFromDirection(path.ray.d);
     }
 
     path.abort = true;
   } else {
     #ifdef USE_GLASS
       if (si.materialType == THIN_GLASS || si.materialType == THICK_GLASS) {
-        li += sampleGlassSpecular(si, i, path.ray, path.beta);
+        path.li += sampleGlassSpecular(si, i, path.ray, path.beta);
         path.specularBounce = true;
       }
     #endif
     #ifdef USE_SHADOW_CATCHER
       if (si.materialType == SHADOW_CATCHER) {
-        li += sampleShadowCatcher(si, i, path.ray, path.beta, path.alpha, li, path.abort);
+        path.li += sampleShadowCatcher(si, i, path.ray, path.beta, path.alpha, path.li, path.abort);
         path.specularBounce = false;
       }
     #endif
     if (si.materialType == STANDARD) {
-      li += sampleMaterial(si, i, path.ray, path.beta, path.abort);
+      path.li += sampleMaterial(si, i, path.ray, path.beta, path.abort);
       path.specularBounce = false;
     }
 
     // Russian Roulette sampling
     if (i >= 2) {
       float q = 1.0 - dot(path.beta, luminance);
-      if (randomStrata() < q) {
+      if (randomSample() < q) {
         path.abort = true;
       }
       path.beta /= 1.0 - q;
     }
   }
-
-  return li;
 }
 
 // Path tracing integrator as described in
 // http://www.pbr-book.org/3ed-2018/Light_Transport_I_Surface_Reflection/Path_Tracing.html#
 vec4 integrator(inout Ray ray) {
-  vec3 li;
-
   Path path;
   path.ray = ray;
+  path.li = vec3(0);
   path.alpha = 1.0;
   path.beta = vec3(1.0);
   path.specularBounce = true;
@@ -181,25 +175,25 @@ vec4 integrator(inout Ray ray) {
   // Manually unroll for loop.
   // Some hardware fails to interate over a GLSL loop, so we provide this workaround
 
-  // for (int i = 1; i < params.bounces + 1, i += 1)
+  ${unrollLoop('i', 1, params.BOUNCES + 1, 1, `
   // equivelant to
-  ${unrollLoop('i', 1, params.bounces + 1, 1, `
-    li += bounce(path, i);
+  // for (int i = 1; i < params.bounces + 1, i += 1)
+    bounce(path, i);
   `)}
 
-  return vec4(li, path.alpha);
+  return vec4(path.li, path.alpha);
 }
 
 void main() {
   initRandom();
 
-  vec2 vCoordAntiAlias = vCoord + pixelSize * (randomStrataVec2() - 0.5);
+  vec2 vCoordAntiAlias = vCoord + pixelSize * (randomSampleVec2() - 0.5);
 
   vec3 direction = normalize(vec3(vCoordAntiAlias - 0.5, -1.0) * vec3(camera.aspect, 1.0, camera.fov));
 
   // Thin lens model with depth-of-field
   // http://www.pbr-book.org/3ed-2018/Camera_Models/Projective_Camera_Models.html#TheThinLensModelandDepthofField
-  vec2 lensPoint = camera.aperture * sampleCircle(randomStrataVec2());
+  vec2 lensPoint = camera.aperture * sampleCircle(randomSampleVec2());
   vec3 focusPoint = -direction * camera.focus / direction.z; // intersect ray direction with focus plane
 
   vec3 origin = vec3(lensPoint, 0.0);
@@ -232,9 +226,9 @@ void main() {
   //   All samples are used by the shader. Correct result!
 
   // fragColor = vec4(0, 0, 0, 1);
-  // if (strataDimension == STRATA_DIMENSIONS) {
+  // if (sampleIndex == SAMPLING_DIMENSIONS) {
   //   fragColor = vec4(1, 1, 1, 1);
-  // } else if (strataDimension > STRATA_DIMENSIONS) {
+  // } else if (sampleIndex > SAMPLING_DIMENSIONS) {
   //   fragColor = vec4(1, 0, 0, 1);
   // }
 }

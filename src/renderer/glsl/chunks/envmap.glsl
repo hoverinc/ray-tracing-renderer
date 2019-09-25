@@ -1,11 +1,17 @@
 // Sample the environment map using a cumulative distribution function as described in
-// http://www.pbr-book.org/3ed-2018/Light_Sources/Infinite_Area_Lights.html
+// http://www.pbr-book.org/3ed-2018/Light_Transport_I_Surface_Reflection/Sampling_Light_Sources.html#InfiniteAreaLights
 
 export default function(params) {
   return `
 
 uniform sampler2D envmap;
 uniform sampler2D envmapDistribution;
+
+vec2 cartesianToEquirect(vec3 pointOnSphere) {
+  float phi = mod(atan(-pointOnSphere.z, -pointOnSphere.x), TWOPI);
+  float theta = acos(pointOnSphere.y);
+  return vec2(phi * 0.5 * INVPI, theta * INVPI);
+}
 
 float getEnvmapV(float u, out int vOffset, out float pdf) {
   ivec2 size = textureSize(envmap, 0);
@@ -23,6 +29,8 @@ float getEnvmapV(float u, out int vOffset, out float pdf) {
   }
   vOffset = left - 1;
 
+  // x channel is cumulative distribution of envmap luminance
+  // y channel is partial probability density of envmap luminance
   vec2 s0 = texelFetch(envmapDistribution, ivec2(0, vOffset), 0).xy;
   vec2 s1 = texelFetch(envmapDistribution, ivec2(0, vOffset + 1), 0).xy;
 
@@ -47,6 +55,8 @@ float getEnvmapU(float u, int vOffset, out float pdf) {
   }
   int uOffset = left - 1;
 
+  // x channel is cumulative distribution of envmap luminance
+  // y channel is partial probability density of envmap luminance
   vec2 s0 = texelFetch(envmapDistribution, ivec2(1 + uOffset, vOffset), 0).xy;
   vec2 s1 = texelFetch(envmapDistribution, ivec2(1 + uOffset + 1, vOffset), 0).xy;
 
@@ -70,7 +80,7 @@ vec3 sampleEnvmap(vec2 random, out vec2 uv, out float pdf) {
   float cosPhi = cos(phi);
   float sinPhi = sin(phi);
 
-  vec3 dir = vec3(sinTheta * cosPhi, cosTheta, sinTheta * sinPhi);
+  vec3 dir = vec3(-sinTheta * cosPhi, cosTheta, -sinTheta * sinPhi);
 
   pdf = partialPdf.x * partialPdf.y * INVPI2 / (2.0 * sinTheta);
 
@@ -84,30 +94,15 @@ float envmapPdf(vec2 uv) {
 
   uv *= size;
 
-  float partialX = texelFetch(envmapDistribution, ivec2(1.0 + uv.x, uv.y), 0).g;
-  float partialY = texelFetch(envmapDistribution, ivec2(0, uv.y), 0).g;
+  float partialX = texelFetch(envmapDistribution, ivec2(1.0 + uv.x, uv.y), 0).y;
+  float partialY = texelFetch(envmapDistribution, ivec2(0, uv.y), 0).y;
 
   return partialX * partialY * INVPI2 / (2.0 * sinTheta);
 }
 
 vec3 sampleEnvmapFromDirection(vec3 d) {
-  float theta = acos(d.y) * INVPI;
-  float phi = mod(atan(d.z, d.x), TWOPI) * 0.5 * INVPI;
-
-  return textureLinear(envmap, vec2(phi, theta)).rgb;
-}
-
-// debugging function
-vec3 sampleEnvmapDistributionFromDirection(vec3 d) {
-  vec2 size = vec2(textureSize(envmap, 0));
-
-  float theta = acos(d.y) * INVPI;
-  float phi = mod(atan(d.z, d.x), TWOPI) * 0.5 * INVPI;
-
-  float u = texelFetch(envmapDistribution, ivec2(1.0 + phi * size.x, theta * size.y), 0).g;
-  float v = texelFetch(envmapDistribution, ivec2(0, theta * size.y), 0).g;
-
-  return vec3(u * v);
+  vec2 uv = cartesianToEquirect(d);
+  return textureLinear(envmap, uv).rgb;
 }
 
 `;

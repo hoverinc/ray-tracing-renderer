@@ -18,8 +18,8 @@ export function makeFullscreenQuad(gl) {
     gl.drawArrays(gl.TRIANGLES, 0, 6);
   }
 
-  return Object.freeze({
+  return {
     draw,
     vertexShader
-  });
+  };
 }

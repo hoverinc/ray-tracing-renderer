@@ -5,30 +5,88 @@
 import { Box3, Vector3 }  from 'three';
 import { partition, nthElement } from './bvhUtil';
 
-const size = new Vector3;
+const size = new Vector3();
 
-function maximumExtent(box3) {
-  box3.getSize(size);
-  if (size.x > size.z) {
-    return size.x > size.y ? 'x' : 'y';
-  } else {
-    return size.z > size.y ? 'z' : 'y';
-  }
+export function bvhAccel(geometry, materialIndices) {
+  const primitiveInfo = makePrimitiveInfo(geometry, materialIndices);
+  const node = recursiveBuild(primitiveInfo, 0, primitiveInfo.length);
+
+  return node;
 }
 
-function boxOffset(box3, dim, v) {
-  let offset = v[dim] - box3.min[dim];
+export function flattenBvh(bvh) {
+  const flat = [];
+  const isBounds = [];
 
-  if (box3.max[dim] > box3.min[dim]){
-    offset /= box3.max[dim] - box3.min[dim];
+  const splitAxisMap = {
+    x: 0,
+    y: 1,
+    z: 2
+  };
+
+  let maxDepth = 1;
+  const traverse = (node, depth = 1) => {
+
+    maxDepth = Math.max(depth, maxDepth);
+
+    if (node.primitives) {
+      for (let i = 0; i < node.primitives.length; i++) {
+        const p = node.primitives[i];
+        flat.push(
+          p.indices[0], p.indices[1], p.indices[2], node.primitives.length,
+          p.faceNormal.x, p.faceNormal.y, p.faceNormal.z, p.materialIndex
+        );
+        isBounds.push(false);
+      }
+    } else {
+      const bounds = node.bounds;
+
+      flat.push(
+        bounds.min.x, bounds.min.y, bounds.min.z, splitAxisMap[node.splitAxis],
+        bounds.max.x, bounds.max.y, bounds.max.z, null // pointer to second shild
+      );
+
+      const i = flat.length - 1;
+      isBounds.push(true);
+
+      traverse(node.child0, depth + 1);
+      flat[i] = flat.length / 4; // pointer to second child
+      traverse(node.child1, depth + 1);
+    }
+  };
+
+  traverse(bvh);
+
+  const buffer = new ArrayBuffer(4 * flat.length);
+  const floatView = new Float32Array(buffer);
+  const intView = new Int32Array(buffer);
+
+  for (let i = 0; i < isBounds.length; i++) {
+    let k = 8 * i;
+
+    if (isBounds[i]) {
+      floatView[k] = flat[k];
+      floatView[k + 1] = flat[k + 1];
+      floatView[k + 2] = flat[k + 2];
+      intView[k + 3] = flat[k + 3];
+    } else {
+      intView[k] = flat[k];
+      intView[k + 1] = flat[k + 1];
+      intView[k + 2] = flat[k + 2];
+      intView[k + 3] = -flat[k + 3]; // negative signals to shader that this node is a triangle
+    }
+
+    floatView[k + 4] = flat[k + 4];
+    floatView[k + 5] = flat[k + 5];
+    floatView[k + 6] = flat[k + 6];
+    intView[k + 7] = flat[k + 7];
   }
 
-  return offset;
-}
-
-function surfaceArea(box3) {
-  box3.getSize(size);
-  return 2 * (size.x * size.z + size.x * size.y + size.z * size.y);
+  return {
+    maxDepth,
+    count: flat.length / 4,
+    buffer: floatView
+  };
 }
 
 function makePrimitiveInfo(geometry, materialIndices) {
@@ -66,22 +124,6 @@ function makePrimitiveInfo(geometry, materialIndices) {
   }
 
   return primitiveInfo;
-}
-
-function makeLeafNode(primitives, bounds) {
-  return {
-    primitives,
-    bounds
-  };
-}
-
-function makeInteriorNode(splitAxis, child0, child1) {
-  return {
-    child0,
-    child1,
-    bounds: new Box3().union(child0.bounds).union(child1.bounds),
-    splitAxis,
-  };
 }
 
 function recursiveBuild(primitiveInfo, start, end) {
@@ -177,84 +219,42 @@ function recursiveBuild(primitiveInfo, start, end) {
   }
 }
 
-export function bvhAccel(geometry, materialIndices) {
-  const primitiveInfo = makePrimitiveInfo(geometry, materialIndices);
-  const node = recursiveBuild(primitiveInfo, 0, primitiveInfo.length);
-
-  return node;
+function makeLeafNode(primitives, bounds) {
+  return {
+    primitives,
+    bounds
+  };
 }
 
-export function flattenBvh(bvh) {
-  const flat = [];
-  const isBounds = [];
-
-  const splitAxisMap = {
-    x: 0,
-    y: 1,
-    z: 2
+function makeInteriorNode(splitAxis, child0, child1) {
+  return {
+    child0,
+    child1,
+    bounds: new Box3().union(child0.bounds).union(child1.bounds),
+    splitAxis,
   };
+}
 
-  let maxDepth = 1;
-  const traverse = (node, depth = 1) => {
+function maximumExtent(box3) {
+  box3.getSize(size);
+  if (size.x > size.z) {
+    return size.x > size.y ? 'x' : 'y';
+  } else {
+    return size.z > size.y ? 'z' : 'y';
+  }
+}
 
-    maxDepth = Math.max(depth, maxDepth);
+function boxOffset(box3, dim, v) {
+  let offset = v[dim] - box3.min[dim];
 
-    if (node.primitives) {
-      for (let i = 0; i < node.primitives.length; i++) {
-        const p = node.primitives[i];
-        flat.push(
-          p.indices[0], p.indices[1], p.indices[2], node.primitives.length,
-          p.faceNormal.x, p.faceNormal.y, p.faceNormal.z, p.materialIndex
-        );
-        isBounds.push(false);
-      }
-    } else {
-      const bounds = node.bounds;
-
-      flat.push(
-        bounds.min.x, bounds.min.y, bounds.min.z, splitAxisMap[node.splitAxis],
-        bounds.max.x, bounds.max.y, bounds.max.z, null // pointer to second shild
-      );
-
-      const i = flat.length - 1;
-      isBounds.push(true);
-
-      traverse(node.child0, depth + 1);
-      flat[i] = flat.length / 4; // pointer to second child
-      traverse(node.child1, depth + 1);
-    }
-  };
-
-  traverse(bvh);
-
-  const buffer = new ArrayBuffer(4 * flat.length);
-  const floatView = new Float32Array(buffer);
-  const intView = new Int32Array(buffer);
-
-  for (let i = 0; i < isBounds.length; i++) {
-    let k = 8 * i;
-
-    if (isBounds[i]) {
-      floatView[k] = flat[k];
-      floatView[k + 1] = flat[k + 1];
-      floatView[k + 2] = flat[k + 2];
-      intView[k + 3] = flat[k + 3];
-    } else {
-      intView[k] = flat[k];
-      intView[k + 1] = flat[k + 1];
-      intView[k + 2] = flat[k + 2];
-      intView[k + 3] = -flat[k + 3]; // negative signals to shader that this node is a triangle
-    }
-
-    floatView[k + 4] = flat[k + 4];
-    floatView[k + 5] = flat[k + 5];
-    floatView[k + 6] = flat[k + 6];
-    intView[k + 7] = flat[k + 7];
+  if (box3.max[dim] > box3.min[dim]){
+    offset /= box3.max[dim] - box3.min[dim];
   }
 
-  return {
-    maxDepth,
-    count: flat.length / 4,
-    buffer: floatView
-  };
+  return offset;
+}
+
+function surfaceArea(box3) {
+  box3.getSize(size);
+  return 2 * (size.x * size.z + size.x * size.y + size.z * size.y);
 }

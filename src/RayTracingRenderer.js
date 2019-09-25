@@ -1,5 +1,5 @@
 import { loadExtensions } from './renderer/glUtil';
-import { makeSceneSampler } from './renderer/sceneSampler';
+import { makeRenderingPipeline } from './renderer/renderingPipeline';
 import * as THREE from 'three';
 
 const glRequiredExtensions = [
@@ -10,7 +10,7 @@ const glOptionalExtensions = [
   'OES_texture_float_linear', // enables gl.LINEAR texture filtering for float textures,
 ];
 
-function RayTracingRenderer(params = {}) {
+export function RayTracingRenderer(params = {}) {
   const canvas = params.canvas || document.createElement('canvas');
 
   const gl = canvas.getContext('webgl2', {
@@ -21,11 +21,11 @@ function RayTracingRenderer(params = {}) {
     powerPreference: 'high-performance',
     failIfMajorPerformanceCaveat: true
   });
+
   loadExtensions(gl, glRequiredExtensions);
   const optionalExtensions = loadExtensions(gl, glOptionalExtensions);
 
-  // private properties
-  let sceneSampler = null;
+  let pipeline = null;
   const size = new THREE.Vector2();
   let renderTime = 22;
   let pixelRatio = 1;
@@ -54,9 +54,9 @@ function RayTracingRenderer(params = {}) {
 
     const bounces = module.bounces;
 
-    sceneSampler = makeSceneSampler({gl, optionalExtensions, scene, toneMappingParams, bounces});
+    pipeline = makeRenderingPipeline({gl, optionalExtensions, scene, toneMappingParams, bounces});
 
-    sceneSampler.onSampleRendered = (...args) => {
+    pipeline.onSampleRendered = (...args) => {
       if (module.onSampleRendered) {
         module.onSampleRendered(...args);
       }
@@ -68,8 +68,8 @@ function RayTracingRenderer(params = {}) {
   }
 
   function restartTimer() {
-    if (sceneSampler) {
-      sceneSampler.restartTimer();
+    if (pipeline) {
+      pipeline.restartTimer();
     }
   }
 
@@ -83,8 +83,8 @@ function RayTracingRenderer(params = {}) {
       canvas.style.height = `${ size.height }px`;
     }
 
-    if (sceneSampler) {
-      sceneSampler.setSize(size.width * pixelRatio, size.height * pixelRatio);
+    if (pipeline) {
+      pipeline.setSize(size.width * pixelRatio, size.height * pixelRatio);
     }
   };
 
@@ -108,8 +108,8 @@ function RayTracingRenderer(params = {}) {
 
   module.setRenderTime = (time) => {
     renderTime = time;
-    if (sceneSampler) {
-      sceneSampler.setRenderTime(time);
+    if (pipeline) {
+      pipeline.setRenderTime(time);
     }
   };
 
@@ -118,14 +118,14 @@ function RayTracingRenderer(params = {}) {
   };
 
   module.getTotalSamplesRendered = () => {
-    if (sceneSampler) {
-      return sceneSampler.getTotalSamplesRendered();
+    if (pipeline) {
+      return pipeline.getTotalSamplesRendered();
     }
   };
 
   module.sendToScreen = () => {
-    if (sceneSampler) {
-      sceneSampler.hdrBufferToScreen();
+    if (pipeline) {
+      pipeline.hdrBufferToScreen();
     }
   };
 
@@ -151,14 +151,14 @@ function RayTracingRenderer(params = {}) {
     if (module.renderToScreen) {
       if(module.maxHardwareUsage) {
         // render new sample for the entire screen
-        sceneSampler.drawFull(camera);
+        pipeline.drawFull(camera);
       } else {
         // render new sample for a tiled subset of the screen
-        sceneSampler.drawTile(camera);
+        pipeline.drawTile(camera);
       }
 
     } else {
-      sceneSampler.drawOffscreenTile(camera);
+      pipeline.drawOffscreenTile(camera);
     }
   };
 
@@ -170,7 +170,7 @@ function RayTracingRenderer(params = {}) {
 
   module.dispose = () => {
     document.removeEventListener('visibilitychange', restartTimer);
-    sceneSampler = false;
+    pipeline = false;
   };
 
   return module;
@@ -195,5 +195,3 @@ RayTracingRenderer.isSupported = () => {
 
   return true;
 };
-
-export { RayTracingRenderer };

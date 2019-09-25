@@ -32,7 +32,7 @@ export function initializeEnvMap(environmentLights) {
     }
     envImage.data.forEach((datum, index, arr) => {
       arr[index] = datum * environmentLight.intensity;
-    }); 
+    });
   } else { // initialize blank map
     envImage = generateBlankMap(DEFAULT_MAP_RESOLUTION.width, DEFAULT_MAP_RESOLUTION.height);
   }
@@ -78,7 +78,7 @@ export function addDirectionalLightToEnvMap(light, image) {
   const sphericalCoords = new THREE.Spherical();
   const lightDirection = light.position.clone().sub(light.target.position);
   sphericalCoords.setFromVector3(lightDirection);
-  sphericalCoords.theta = (Math.PI / 2) - sphericalCoords.theta;
+  sphericalCoords.theta = (Math.PI * 3 / 2) - sphericalCoords.theta;
   sphericalCoords.makeSafe();
   return addLightAtCoordinates(light, image, sphericalCoords);
 }

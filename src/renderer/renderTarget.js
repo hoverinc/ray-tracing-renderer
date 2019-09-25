@@ -1,5 +1,13 @@
 import { makeTexture } from "./texture";
 
+export function makeRenderTargetFloat(gl, linearFiltering) {
+  return makeRenderTarget(gl, 'float', linearFiltering);
+}
+
+export function makeRenderTargetByte(gl, linearFiltering) {
+  return makeRenderTarget(gl, 'byte', linearFiltering);
+}
+
 export function makeRenderTarget(gl, storage, linearFiltering) {
   const framebuffer = gl.createFramebuffer();
   let texture;
@@ -35,7 +43,7 @@ export function makeRenderTarget(gl, storage, linearFiltering) {
     gl.blitFramebuffer(0, 0, width, height, 0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight, gl.COLOR_BUFFER_BIT, gl.NEAREST);
   }
 
-  return Object.freeze({
+  return {
     setSize,
     bind,
     unbind,
@@ -49,13 +57,5 @@ export function makeRenderTarget(gl, storage, linearFiltering) {
     get height() {
       return height;
     },
-  });
-}
-
-export function makeRenderTargetFloat(gl, linearFiltering) {
-  return makeRenderTarget(gl, 'float', linearFiltering);
-}
-
-export function makeRenderTargetByte(gl, linearFiltering) {
-  return makeRenderTarget(gl, 'byte', linearFiltering);
+  };
 }
