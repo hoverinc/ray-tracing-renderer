@@ -52,7 +52,7 @@ export function getAttributes(gl, program) {
   for (let i = 0; i < count; i++) {
     const { name } = gl.getActiveAttrib(program, i);
     if (name) {
-      attributes[name] = i;
+      attributes[name] = gl.getAttribLocation(program, name);
     }
   }
 

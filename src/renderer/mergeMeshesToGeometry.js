@@ -1,5 +1,4 @@
 import { BufferGeometry, BufferAttribute } from 'three';
-import { addFlatGeometryIndices } from './addGeometryIndices';
 
 export function mergeMeshesToGeometry(meshes) {
 
@@ -10,7 +9,7 @@ export function mergeMeshesToGeometry(meshes) {
   const materialIndexMap = new Map();
 
   for (const mesh of meshes) {
-    const geometry = mesh.geometry.clone();
+    const geometry = cloneBufferGeometry(mesh.geometry, ['position', 'normal', 'uv']);
 
     const index = geometry.getIndex();
     if (!index) {
@@ -50,11 +49,11 @@ export function mergeMeshesToGeometry(meshes) {
   };
 }
 
-
 function mergeGeometry(geometryAndMaterialIndex, vertexCount, indexCount) {
   const position = new BufferAttribute(new Float32Array(3 * vertexCount), 3, false);
   const normal = new BufferAttribute(new Float32Array(3 * vertexCount), 3, false);
   const uv = new BufferAttribute(new Float32Array(2 * vertexCount), 2, false);
+  const meshId = new BufferAttribute(new Int32Array(vertexCount), 1, false);
   const index = new BufferAttribute(new Uint32Array(indexCount), 1, false);
 
   const materialIndices = [];
@@ -63,27 +62,74 @@ function mergeGeometry(geometryAndMaterialIndex, vertexCount, indexCount) {
   bg.addAttribute('position', position);
   bg.addAttribute('normal', normal);
   bg.addAttribute('uv', uv);
+  bg.addAttribute('meshId', meshId);
   bg.setIndex(index);
 
-  let vertexIndex = 0;
-  let indexIndex = 0;
+  let currentVertex = 0;
+  let currentIndex = 0;
+  let currentMeshId = 0;
 
   for (const { geometry, materialIndex } of geometryAndMaterialIndex) {
-    bg.merge(geometry, vertexIndex);
+    const vertexCount = geometry.getAttribute('position').count;
+    bg.merge(geometry, currentVertex);
+
+    for (let i = 0; i < vertexCount; i++) {
+      meshId.setX(currentVertex + i, currentMeshId);
+    }
 
     const meshIndex = geometry.getIndex();
-    for (let k = 0; k < meshIndex.count; k++) {
-      index.setX(indexIndex + k, vertexIndex + meshIndex.getX(k));
+    for (let i = 0; i < meshIndex.count; i++) {
+      index.setX(currentIndex + i, currentVertex + meshIndex.getX(i));
     }
 
     const triangleCount = meshIndex.count / 3;
-    for (let k = 0; k < triangleCount; k++) {
+    for (let i = 0; i < triangleCount; i++) {
       materialIndices.push(materialIndex);
     }
 
-    vertexIndex += geometry.getAttribute('position').count;
-    indexIndex += meshIndex.count;
+    currentVertex += vertexCount;
+    currentIndex += meshIndex.count;
+    currentMeshId++;
   }
 
   return { geometry: bg, materialIndices };
+}
+
+// Similar to buffergeometry.clone(), except we only copy
+// specific attributes instead of everything
+function cloneBufferGeometry(bufferGeometry, attributes) {
+  const newGeometry = new BufferGeometry();
+
+  for (const name of attributes) {
+    const attrib = bufferGeometry.getAttribute(name);
+    if (attrib) {
+      newGeometry.addAttribute(name, attrib.clone());
+    }
+  }
+
+  const index = bufferGeometry.getIndex();
+  if (index) {
+    newGeometry.setIndex(index);
+  }
+
+  return newGeometry;
+}
+
+function addFlatGeometryIndices(geometry) {
+  const position = geometry.getAttribute('position');
+
+  if (!position) {
+    console.warn('No position attribute');
+    return;
+  }
+
+  const index = new Uint32Array(position.count);
+
+  for (let i = 0; i < index.length; i++) {
+    index[i] = i;
+  }
+
+  geometry.setIndex(new BufferAttribute(index, 1, false));
+
+  return geometry;
 }

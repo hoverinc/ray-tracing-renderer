@@ -10,13 +10,13 @@ import sampleGlass from './chunks/sampleGlassSpecular.glsl';
 // import sampleGlass from './chunks/sampleGlassMicrofacet.glsl';
 import { unrollLoop, addDefines } from '../glslUtil';
 
-export default function(params) {
+export default function(defines) {
   return `#version 300 es
 
 precision mediump float;
 precision mediump int;
 
-${addDefines(params)}
+${addDefines(defines)}
 
 #define PI 3.14159265359
 #define TWOPI 6.28318530718
@@ -100,15 +100,15 @@ ivec4 fetchData(isampler2D s, int i, int columnsLog2) {
   return texelFetch(s, unpackTexel(i, columnsLog2), 0);
 }
 
-${textureLinear(params)}
-${intersect(params)}
-${random(params)}
-${envmap(params)}
-${bsdf(params)}
-${sample(params)}
-${sampleMaterial(params)}
-${sampleGlass(params)}
-${sampleShadowCatcher(params)}
+${textureLinear(defines)}
+${intersect(defines)}
+${random(defines)}
+${envmap(defines)}
+${bsdf(defines)}
+${sample(defines)}
+${sampleMaterial(defines)}
+${sampleGlass(defines)}
+${sampleShadowCatcher(defines)}
 
 struct Path {
   Ray ray;

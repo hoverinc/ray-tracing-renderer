@@ -42,7 +42,7 @@ export function makeRenderingPipeline(params) {
     gBufferShader.draw(camera);
     rt.unbind();
 
-    toneMapShader.draw({ texture: rt.texture.normal });
+    toneMapShader.draw({ texture: rt.texture.position });
   }
 
   function setSize(width, height) {
@@ -52,6 +52,7 @@ export function makeRenderingPipeline(params) {
 
   return {
     drawFull,
+    drawTile: drawFull,
     setSize,
     setRenderTime() {},
     restartTimer() {},

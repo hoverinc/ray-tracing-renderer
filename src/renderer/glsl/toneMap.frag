@@ -12,7 +12,7 @@ out vec4 fragColor;
 
 uniform sampler2D image;
 
-${textureLinear(params)}
+// ${textureLinear(params)}
 
 // Tonemapping functions from THREE.js
 
@@ -42,7 +42,8 @@ vec3 acesFilmic( vec3 color ) {
 }
 
 void main() {
-  vec4 tex = textureLinear(image, vCoord);
+  // vec4 tex = textureLinear(image, vCoord);
+  vec4 tex = texture(image, vCoord);
 
   // alpha channel stores the number of samples progressively rendered
   // divide the sum of light by alpha to obtain average contribution of light
@@ -56,6 +57,9 @@ void main() {
   // light = ${params.toneMapping}(light); // tone mapping
 
   vec3 light = 0.5 * tex.rgb + 0.5;
+
+  // int id = floatBitsToInt(tex.b);
+  // vec3 light = vec3(0.05 * float(id));
 
   light = pow(light, vec3(1.0 / 2.2)); // gamma correction
 
