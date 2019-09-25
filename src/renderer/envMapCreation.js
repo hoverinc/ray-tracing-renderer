@@ -69,23 +69,24 @@ function addLightAtCoordinates(light, image, originCoords) {
   // default softness for standard directional lights is 0.01, i.e. a hard shadow
   const softness = light.softness || 0.01;
 
+  // angle from center of light at which no more contributions are projected
   const threshold = findThreshold(originCoords, softness);
-  // functional trick to keep the conditional check out of the loop
-  const noLongerAnOptimization = threshold > Math.PI / 8;
-  const intensityFromAngleFunction = noLongerAnOptimization ? getIntensityFromAngleDifferential : getIntensityFromAngleDifferentialThresholded;
+  // if too few texels are rejected by the threshold then the time to evaluate it is no longer worth it
+  const useThreshold = threshold < Math.PI / 5;
+  // functional trick to keep the conditional check out of the main loop
+  const intensityFromAngleFunction = useThreshold ? getIntensityFromAngleDifferentialThresholded : getIntensityFromAngleDifferential;
 
   let encounteredX = false;
   let encounteredY = false;
-
-  let currentCoords,
-      falloff,
+  let currentCoords = new THREE.Spherical();
+  let falloff,
       intensity,
       bufferIndex;
 
   for (let i = 0; i < xTexels; i++) {
     for (let j = 0; j < yTexels; j++) {
       bufferIndex = j * width + i;
-      currentCoords = equirectangularToSpherical(i, j, width, height);
+      currentCoords = equirectangularToSpherical(i, j, width, height, currentCoords);
       falloff = intensityFromAngleFunction(originCoords, currentCoords, softness, threshold);
 
       if(falloff > 0) {
@@ -159,10 +160,8 @@ function getFalloffAtAngle(angle, softness) {
   return falloff;
 }
 
-export function equirectangularToSpherical(x, y, width, height) {
-  const TWOPI = 2.0 * Math.PI;
-  const theta = (TWOPI * x) / width;
-  const phi = (Math.PI * y) / height;
-  const sphericalCoords = new THREE.Spherical(1.0, phi, theta);
-  return sphericalCoords;
+export function equirectangularToSpherical(x, y, width, height, target) {
+  target.phi = (Math.PI * y) / height;
+  target.theta = (2.0 * Math.PI * x) / width;
+  return target;
 }
