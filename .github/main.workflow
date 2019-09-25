@@ -1,4 +1,4 @@
-workflow "test" {
+workflow "check" {
   on = "push"
 }
 
