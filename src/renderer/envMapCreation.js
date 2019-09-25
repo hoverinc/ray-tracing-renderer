@@ -70,9 +70,12 @@ function addLightAtCoordinates(light, image, originCoords) {
   const softness = light.softness || 0.01;
 
   const threshold = findThreshold(originCoords, softness);
+  // functional trick to keep the conditional check out of the loop
+  const noLongerAnOptimization = threshold > Math.PI / 8;
+  const intensityFromAngleFunction = noLongerAnOptimization ? getIntensityFromAngleDifferential : getIntensityFromAngleDifferentialThresholded;
+
   let encounteredX = false;
   let encounteredY = false;
-  let passedX = false;
 
   let currentCoords,
       falloff,
@@ -83,10 +86,8 @@ function addLightAtCoordinates(light, image, originCoords) {
     for (let j = 0; j < yTexels; j++) {
       bufferIndex = j * width + i;
       currentCoords = equirectangularToSpherical(i, j, width, height);
-      falloff = getIntensityFromAngleDifferential(originCoords, currentCoords, softness, threshold);
-      if(encounteredX && falloff == 0) {
-        passedX = true;
-      }
+      falloff = intensityFromAngleFunction(originCoords, currentCoords, softness, threshold);
+
       if(falloff > 0) {
         encounteredX = true;
         encounteredY = true;
@@ -96,13 +97,11 @@ function addLightAtCoordinates(light, image, originCoords) {
       floatBuffer[bufferIndex * 3] += intensity * light.color.r;
       floatBuffer[bufferIndex * 3 + 1] += intensity * light.color.g;
       floatBuffer[bufferIndex * 3 + 2] += intensity * light.color.b;
-
     }
     if(!encounteredX && encounteredY) {
       // the entire light has been added
       return floatBuffer;
     }
-    passedX = false;
     encounteredX = false;
   }
   return floatBuffer;
@@ -115,20 +114,25 @@ function findThreshold(originCoords, softness) {
     const angle = i * step;
     const falloff = getFalloffAtAngle(angle, softness);
     if (falloff <= 0.0001) {
+      console.log("THRESHOLD",angle);
       return angle;
     }
   }
 }
 
-function getIntensityFromAngleDifferential(originCoords, currentCoords, softness, threshold) {
-  if (threshold < Math.PI / 8) {
-    let deltaPhi = getAngleDelta(originCoords.phi, currentCoords.phi);
-    let deltaTheta =  getAngleDelta(originCoords.theta, currentCoords.theta);
+function getIntensityFromAngleDifferentialThresholded(originCoords, currentCoords, softness, threshold) {
+  let deltaPhi = getAngleDelta(originCoords.phi, currentCoords.phi);
+  let deltaTheta =  getAngleDelta(originCoords.theta, currentCoords.theta);
 
-    if(deltaTheta > threshold && deltaPhi > threshold) {
-      return 0;
-    }
+  if(deltaTheta > threshold && deltaPhi > threshold) {
+    return 0;
   }
+  const angle = angleBetweenSphericals(originCoords, currentCoords);
+  const falloffCoeficient = getFalloffAtAngle(angle, softness);
+  return falloffCoeficient;
+}
+
+function getIntensityFromAngleDifferential(originCoords, currentCoords, softness) {
   const angle = angleBetweenSphericals(originCoords, currentCoords);
   const falloffCoeficient = getFalloffAtAngle(angle, softness);
   return falloffCoeficient;
