@@ -115,7 +115,6 @@ function findThreshold(originCoords, softness) {
     const angle = i * step;
     const falloff = getFalloffAtAngle(angle, softness);
     if (falloff <= 0.0001) {
-      console.log("THRESHOLD",angle);
       return angle;
     }
   }
