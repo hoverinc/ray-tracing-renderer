@@ -10,7 +10,7 @@ export function makeFramebuffer(params) {
   } = params;
 
   const framebuffer = gl.createFramebuffer();
-  let colorTexture;
+  let texture;
 
   let width = 0;
   let height = 0;
@@ -30,9 +30,9 @@ export function makeFramebuffer(params) {
     height = Math.floor(h);
 
     if (renderTarget) {
-      colorTexture = initSingleTexture(gl, width, height, linearFiltering, renderTarget);
+      texture = initSingleTexture(gl, width, height, linearFiltering, renderTarget);
     } else if (renderTargets) {
-      colorTexture = initMultipleTextures(gl, width, height, linearFiltering, renderTargets);
+      texture = initMultipleTextures(gl, width, height, linearFiltering, renderTargets);
     } else {
       console.error('makeFramebuffer must contain a renderTarget or renderTargets parameter');
     }
@@ -62,7 +62,7 @@ export function makeFramebuffer(params) {
     },
     setSize,
     get texture() {
-      return colorTexture;
+      return texture;
     },
     unbind,
     get width() {

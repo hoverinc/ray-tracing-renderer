@@ -31,12 +31,12 @@ export function makeToneMapShader(params) {
   const program = createProgram(gl, fullscreenQuad.vertexShader, fragmentShader);
 
   const uniforms = getUniforms(gl, program);
-  const bindImage = textureAllocator.reserveSlot();
+  const image = textureAllocator.reserveSlot();
 
   function draw({ texture }) {
     gl.useProgram(program);
 
-    bindImage(uniforms.image, texture);
+    image.bind(uniforms.image, texture);
 
     fullscreenQuad.draw();
   }

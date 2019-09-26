@@ -119,13 +119,7 @@ struct Path {
   bool abort;
 };
 
-void bounce(inout Path path, int i) {
-  if (path.abort) {
-    return;
-  }
-
-  SurfaceInteraction si = intersectScene(path.ray);
-
+void sampleSurface(inout Path path, SurfaceInteraction si, int i) {
   if (!si.hit) {
     if (path.specularBounce) {
       path.li += path.beta * sampleEnvmapFromDirection(path.ray.d);
@@ -161,9 +155,27 @@ void bounce(inout Path path, int i) {
   }
 }
 
+void primarySample(inout Path path) {
+  if (path.abort) {
+    return;
+  }
+
+  SurfaceInteraction si = surfaceInteractionFromBuffer();
+  sampleSurface(path, si, 1);
+}
+
+void secondarySample(inout Path path, int i) {
+  if (path.abort) {
+    return;
+  }
+
+  SurfaceInteraction si = intersectScene(path.ray);
+  sampleSurface(path, si, i);
+}
+
 // Path tracing integrator as described in
 // http://www.pbr-book.org/3ed-2018/Light_Transport_I_Surface_Reflection/Path_Tracing.html#
-vec4 integrator(inout Ray ray) {
+vec4 integrator(Ray ray) {
   Path path;
   path.ray = ray;
   path.li = vec3(0);
@@ -172,13 +184,12 @@ vec4 integrator(inout Ray ray) {
   path.specularBounce = true;
   path.abort = false;
 
-  // Manually unroll for loop.
-  // Some hardware fails to interate over a GLSL loop, so we provide this workaround
+  primarySample(path);
 
-  ${unrollLoop('i', 1, params.BOUNCES + 1, 1, `
   // equivelant to
   // for (int i = 1; i < params.bounces + 1, i += 1)
-    bounce(path, i);
+  ${unrollLoop('i', 2, defines.BOUNCES + 1, 1, `
+    secondarySample(path, i);
   `)}
 
   return vec4(path.li, path.alpha);
@@ -187,29 +198,16 @@ vec4 integrator(inout Ray ray) {
 void main() {
   initRandom();
 
-  vec2 vCoordAntiAlias = vCoord + pixelSize * (randomSampleVec2() - 0.5);
+  Ray ray;
+  vec3 origin = camera.transform[3].xyz;
+  vec3 direction = mat3(camera.transform) * normalize(vec3(vCoord - 0.5, -1.0) * vec3(camera.aspect, 1.0, camera.fov));
+  initRay(ray, origin, direction);
 
-  vec3 direction = normalize(vec3(vCoordAntiAlias - 0.5, -1.0) * vec3(camera.aspect, 1.0, camera.fov));
+  vec4 liAndAlpha = integrator(ray);
 
-  // Thin lens model with depth-of-field
-  // http://www.pbr-book.org/3ed-2018/Camera_Models/Projective_Camera_Models.html#TheThinLensModelandDepthofField
-  vec2 lensPoint = camera.aperture * sampleCircle(randomSampleVec2());
-  vec3 focusPoint = -direction * camera.focus / direction.z; // intersect ray direction with focus plane
-
-  vec3 origin = vec3(lensPoint, 0.0);
-  direction = normalize(focusPoint - origin);
-
-  origin = vec3(camera.transform * vec4(origin, 1.0));
-  direction = mat3(camera.transform) * direction;
-
-  Ray cam;
-  initRay(cam, origin, direction);
-
-  vec4 liAndAlpha = integrator(cam);
-
-  if (!(liAndAlpha.x < INF && liAndAlpha.x > -EPS)) {
-    liAndAlpha = vec4(0, 0, 0, 1);
-  }
+  // if (!(liAndAlpha.x < INF && liAndAlpha.x > -EPS)) {
+  //   liAndAlpha = vec4(0, 0, 0, 1);
+  // }
 
   fragColor = liAndAlpha;
 

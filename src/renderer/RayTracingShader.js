@@ -6,25 +6,25 @@ import { bvhAccel, flattenBvh } from './bvhAccel';
 import { envmapDistribution } from './envmapDistribution';
 import { generateEnvMapFromSceneComponents } from './envMapCreation';
 import { getTexturesFromMaterials, mergeTexturesFromMaterials } from './texturesFromMaterials';
-import { makeTexture } from './texture';
+import { makeTexture } from './Texture';
 import { uploadBuffers } from './uploadBuffers';
 import { ThinMaterial, ThickMaterial, ShadowCatcherMaterial } from '../constants';
 import { clamp } from './util';
-import { makeStratifiedSamplerCombined } from './stratifiedSamplerCombined';
+import { makeStratifiedSamplerCombined } from './StratifiedSamplerCombined';
 
 //Important TODO: Refactor this file to get rid of duplicate and confusing code
 
 export function makeRayTracingShader({
-    bounces, // number of global illumination bounces
+    bounces, // number of global illumination bounces,
+    decomposedScene,
     fullscreenQuad,
     gl,
+    mergedMeshes,
     optionalExtensions,
-    scene,
     textureAllocator,
   }) {
 
   bounces = clamp(bounces, 1, 6);
-
   const samplingDimensions = [];
   samplingDimensions.push(2, 2); // anti aliasing, depth of field
   for (let i = 0; i < bounces; i++) {
@@ -38,7 +38,7 @@ export function makeRayTracingShader({
   }
 
   const { program, uniforms } = makeProgramFromScene({
-    bounces, fullscreenQuad, gl, optionalExtensions, samplingDimensions, scene, textureAllocator
+    bounces, decomposedScene, fullscreenQuad, gl, mergedMeshes, optionalExtensions, samplingDimensions, textureAllocator
   });
 
   function setSize(width, height) {
@@ -48,6 +48,7 @@ export function makeRayTracingShader({
 
   // noiseImage is a 32-bit PNG image
   function setNoise(noiseImage) {
+    gl.useProgram(program);
     textureAllocator.bind(uniforms.noise, makeTexture(gl, {
       data: noiseImage,
       minFilter: gl.NEAREST,
@@ -93,6 +94,16 @@ export function makeRayTracingShader({
     gl.uniform1f(uniforms.useStratifiedSampling, stratifiedSampling ? 1.0 : 0.0);
   }
 
+  const positionBuffer = textureAllocator.reserveSlot();
+  const normalBuffer = textureAllocator.reserveSlot();
+  const uvAndMeshIdBuffer = textureAllocator.reserveSlot();
+  function gBufferInput({ position, normal, uvAndMeshId }) {
+    gl.useProgram(program);
+    positionBuffer.bind(uniforms.positionBuffer, position);
+    normalBuffer.bind(uniforms.normalBuffer, normal);
+    uvAndMeshIdBuffer.bind(uniforms.uvAndMeshIdBuffer, uvAndMeshId);
+  }
+
   function draw() {
     gl.useProgram(program);
     fullscreenQuad.draw();
@@ -102,6 +113,7 @@ export function makeRayTracingShader({
 
   return {
     draw,
+    gBufferInput,
     nextSeed,
     setCamera,
     setNoise,
@@ -112,22 +124,20 @@ export function makeRayTracingShader({
 }
 function makeProgramFromScene({
     bounces,
+    decomposedScene,
     fullscreenQuad,
     gl,
+    mergedMeshes,
     optionalExtensions,
     samplingDimensions,
-    scene,
     textureAllocator
   }) {
   const { OES_texture_float_linear } = optionalExtensions;
 
-  const { meshes, directionalLights, environmentLights } = decomposeScene(scene);
-  if (meshes.length === 0) {
-    throw 'RayTracingRenderer: Scene contains no renderable meshes.';
-  }
+  const { directionalLights, environmentLights } = decomposedScene;
 
   // merge meshes in scene to a single, static geometry
-  const { geometry, materials, materialIndices } = mergeMeshesToGeometry(meshes);
+  const { geometry, materials, materialIndices } = mergedMeshes;
 
   // extract textures shared by meshes in scene
   const maps = getTexturesFromMaterials(materials, ['map', 'normalMap']);

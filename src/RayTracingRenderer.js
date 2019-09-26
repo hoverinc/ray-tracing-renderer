@@ -16,7 +16,7 @@ export function RayTracingRenderer(params = {}) {
   const gl = canvas.getContext('webgl2', {
     alpha: false,
     stencil: false,
-    antialias: true,
+    antialias: false,
     powerPreference: 'high-performance',
     failIfMajorPerformanceCaveat: true
   });

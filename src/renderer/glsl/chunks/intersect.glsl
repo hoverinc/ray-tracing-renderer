@@ -7,6 +7,11 @@ uniform sampler2D normals;
 uniform sampler2D uvs;
 uniform sampler2D bvh;
 
+// G-Buffers
+uniform sampler2D positionBuffer;
+uniform sampler2D normalBuffer;
+uniform sampler2D uvAndMeshIdBuffer;
+
 uniform Materials {
   vec4 colorAndMaterialType[NUM_MATERIALS];
   vec4 roughnessMetalnessNormalScale[NUM_MATERIALS];
@@ -42,7 +47,74 @@ struct Triangle {
   vec3 p2;
 };
 
-void surfaceInteractionFromIntersection(inout SurfaceInteraction si, Triangle tri, vec3 barycentric, ivec3 index, vec3 faceNormal, int materialIndex) {
+SurfaceInteraction surfaceInteractionFromBuffer() {
+  SurfaceInteraction si;
+  si.position = texture(positionBuffer, vCoord).xyz;
+  si.normal = texture(normalBuffer, vCoord).xyz;
+  si.faceNormal = si.normal;
+
+  si.hit = dot(si.normal, si.normal) > 0.0;
+  if (!si.hit) {
+    return si;
+  }
+
+  vec3 uvAndMeshId = texture(uvAndMeshIdBuffer, vCoord).xyz;
+
+  vec2 uv = uvAndMeshId.xy;
+  int materialIndex = floatBitsToInt(uvAndMeshId.z);
+
+  si.color = materials.colorAndMaterialType[materialIndex].xyz;
+  si.roughness = materials.roughnessMetalnessNormalScale[materialIndex].x;
+  si.metalness = materials.roughnessMetalnessNormalScale[materialIndex].y;
+  si.materialType = int(materials.colorAndMaterialType[materialIndex].w);
+
+  #ifdef NUM_DIFFUSE_MAPS
+    int diffuseMapIndex = materials.diffuseNormalRoughnessMetalnessMapIndex[materialIndex].x;
+    if (diffuseMapIndex >= 0) {
+      si.color *= texture(diffuseMap, vec3(uv * materials.diffuseNormalMapSize[diffuseMapIndex].xy, diffuseMapIndex)).rgb;
+    }
+  #endif
+
+  #ifdef NUM_NORMAL_MAPS
+    int normalMapIndex = materials.diffuseNormalRoughnessMetalnessMapIndex[materialIndex].y;
+    if (normalMapIndex >= 0) {
+      vec2 duv02 = dFdx(uv);
+      vec2 duv12 = dFdy(uv);
+      vec3 dp02 = dFdx(si.position);
+      vec3 dp12 = dFdy(si.position);
+
+      vec3 dp12perp = cross(dp12, si.normal);
+      vec3 dp02perp = cross(si.normal, dp02);
+      vec3 dpdu = dp12perp * duv02.x + dp02perp * duv12.x;
+      vec3 dpdv = dp12perp * duv02.y + dp02perp * duv12.y;
+      float invmax = inversesqrt(max(dot(dpdu, dpdu), dot(dpdv, dpdv)));
+      dpdu *= invmax;
+      dpdv *= invmax;
+
+      vec3 n = 2.0 * texture(normalMap, vec3(uv * materials.diffuseNormalMapSize[normalMapIndex].zw, normalMapIndex)).rgb - 1.0;
+      n.xy *= materials.roughnessMetalnessNormalScale[materialIndex].zw;
+
+      mat3 tbn = mat3(dpdu, dpdv, si.normal);
+
+      si.normal = normalize(tbn * n);
+    }
+  #endif
+
+  #ifdef NUM_PBR_MAPS
+    int roughnessMapIndex = materials.diffuseNormalRoughnessMetalnessMapIndex[materialIndex].z;
+    int metalnessMapIndex = materials.diffuseNormalRoughnessMetalnessMapIndex[materialIndex].w;
+    if (roughnessMapIndex >= 0) {
+      si.roughness *= texture(pbrMap, vec3(uv * materials.pbrMapSize[roughnessMapIndex].xy, roughnessMapIndex)).g;
+    }
+    if (metalnessMapIndex >= 0) {
+      si.metalness *= texture(pbrMap, vec3(uv * materials.pbrMapSize[metalnessMapIndex].xy, metalnessMapIndex)).b;
+    }
+  #endif
+
+  return si;
+}
+
+void surfaceInteractionFromTriangle(inout SurfaceInteraction si, Triangle tri, vec3 barycentric, ivec3 index, vec3 faceNormal, int materialIndex) {
   si.hit = true;
   si.faceNormal = faceNormal;
   si.position = barycentric.x * tri.p0 + barycentric.y * tri.p1 + barycentric.z * tri.p2;
@@ -134,6 +206,9 @@ void surfaceInteractionFromIntersection(inout SurfaceInteraction si, Triangle tr
       si.metalness *= texture(pbrMap, vec3(uv * materials.pbrMapSize[metalnessMapIndex].xy, metalnessMapIndex)).b;
     }
   #endif
+
+  si.roughness = clamp(si.roughness, 0.03, 1.0);
+  si.metalness = clamp(si.metalness, 0.0, 1.0);
 }
 
 struct TriangleIntersect {
@@ -291,7 +366,7 @@ SurfaceInteraction intersectScene(inout Ray ray) {
         ray.tMax = hit.t;
         int materialIndex = floatBitsToInt(r2.w);
         vec3 faceNormal = r2.xyz;
-        surfaceInteractionFromIntersection(si, tri, hit.barycentric, index, faceNormal, materialIndex);
+        surfaceInteractionFromTriangle(si, tri, hit.barycentric, index, faceNormal, materialIndex);
       }
     }
   }

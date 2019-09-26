@@ -72,12 +72,8 @@ function setAttribute(gl, location, bufferAttribute) {
 
   if (array instanceof Float32Array) {
     gl.vertexAttribPointer(location, itemSize, gl.FLOAT, false, 0, 0);
-    // gl.vertexAttrib4f(location, 0, 0, 0, 0);
   } else if (array instanceof Int32Array) {
     gl.vertexAttribIPointer(location, itemSize, gl.INT, 0, 0);
-    // gl.vertexAttribI4ui(location, 0, 0, 0, 0);
-    // gl.vertexAttrib4f(location, 0, 0, 0, 0);
-
   } else {
     throw 'Unsupported buffer type';
   }
