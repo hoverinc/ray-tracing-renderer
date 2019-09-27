@@ -1,11 +1,11 @@
-import { makeFullscreenQuad } from './fullscreenQuad';
-import { makeRayTracingShader } from './rayTracingShader';
-import { makeToneMapShader } from './toneMapShader';
+import { makeFullscreenQuad } from './FullscreenQuad';
+import { makeRayTracingShader } from './RayTracingShader';
+import { makeToneMapShader } from './ToneMapShader';
 import { makeRenderTargetFloat } from './renderTarget';
 import { numberArraysEqual, clamp } from './util';
-import { makeTileRender } from './tileRender';
+import { makeTileRender } from './TileRender';
 import { LensCamera } from '../LensCamera';
-import { makeTextureAllocator } from './textureAllocator';
+import { makeTextureAllocator } from './TextureAllocator';
 import noiseBase64 from './texture/noise';
 
 // Important TODO: Refactor this file to get rid of duplicate and confusing code

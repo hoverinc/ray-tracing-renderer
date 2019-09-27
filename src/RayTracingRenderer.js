@@ -1,5 +1,5 @@
 import { loadExtensions } from './renderer/glUtil';
-import { makeRenderingPipeline } from './renderer/renderingPipeline';
+import { makeRenderingPipeline } from './renderer/RenderingPipeline';
 import * as THREE from 'three';
 
 const glRequiredExtensions = [

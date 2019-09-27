@@ -1,4 +1,4 @@
-import { makeTexture } from "./texture";
+import { makeTexture } from "./Texture";
 
 export function makeRenderTargetFloat(gl, linearFiltering) {
   return makeRenderTarget(gl, 'float', linearFiltering);
