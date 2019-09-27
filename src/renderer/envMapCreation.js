@@ -151,9 +151,15 @@ function angleBetweenSphericals(originCoords, currentCoords) {
   return originVector.angleTo(currentVector);
 }
 
+  // TODO: possibly clean this up and optimize it
+  //
+  // This function was arrived at through experimentation, it provides good 
+  // looking results with percieved softness that scale relatively linearly with
+  //  the softness value in the 0 - 1 range
+  //
+  // For now it doesn't incur too much of a performance penalty because for most of our use cases (lights without too much softness)
+  // the threshold cutoff in getIntensityFromAngleDifferential stops us from running it too many times
 function getFalloffAtAngle(angle, softness) {
-  // TODO: clean this up and optimize it
-  // For now it doesn't matter too much because of the threshold cutoff in getIntensityFromAngleDifferential
   const softnessCoeficient = Math.pow(2, 14.5 * Math.max(0.001, (1.0 - clamp(softness, 0.0, 1.0))));
   const falloff = Math.pow(softnessCoeficient, 1.1) * Math.pow(8, softnessCoeficient * -1 * (Math.pow(angle, 1.8)));
   return falloff;
