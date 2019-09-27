@@ -2,17 +2,29 @@ import { clamp } from './util';
 
 export function makeTexture(gl, params) {
   let {
+    width = null,
+    height = null,
+
+    // A single HTMLImageElement, ImageData, or TypedArray,
+    // Or an array of any of these objects. In this case an Array Texture will be created
+    data = null,
+
+    // Number of channels, [1-4]. If left blank, the the function will decide the number of channels automatically from the data
+    channels = null,
+
+    // Either 'byte' or 'float'
+    // If left empty, the function will decide the format automatically from the data
+    storage = null,
+
+    // Reverse the texture across the y-axis.
+    flipY = false,
+
+    // sampling properties
+    gammaCorrection = false,
     wrapS = gl.REPEAT,
     wrapT = gl.REPEAT,
     minFilter = gl.LINEAR,
     magFilter = gl.LINEAR,
-    gammaCorrection = false,
-    width = null,
-    height = null,
-    channels = null,
-    storage = null,
-    data = null,
-    flipY = false
   } = params;
 
   width = width || data.width || 0;
@@ -23,7 +35,7 @@ export function makeTexture(gl, params) {
   let target;
   let dataArray;
 
-  // if data is a JS array but not a TypedArray, assume data is an array of TypedArrays and create a GL Array Texture
+  // if data is a JS array but not a TypedArray, assume data is an array of images and create a GL Array Texture
   if (Array.isArray(data)) {
     dataArray = data;
     data = dataArray[0];
@@ -83,7 +95,7 @@ export function makeTexture(gl, params) {
       gl.RGBA32F
     ][channels - 1];
   } else {
-    console.error('Texture of unknown type:', data);
+    console.error('Texture of unknown type:', storage || data);
   }
 
   if (dataArray) {
