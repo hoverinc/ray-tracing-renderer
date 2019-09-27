@@ -198,16 +198,16 @@ vec4 integrator(Ray ray) {
 void main() {
   initRandom();
 
-  Ray ray;
+  Ray cam;
   vec3 origin = camera.transform[3].xyz;
   vec3 direction = mat3(camera.transform) * normalize(vec3(vCoord - 0.5, -1.0) * vec3(camera.aspect, 1.0, camera.fov));
-  initRay(ray, origin, direction);
+  initRay(cam, origin, direction);
 
-  vec4 liAndAlpha = integrator(ray);
+  vec4 liAndAlpha = integrator(cam);
 
-  // if (!(liAndAlpha.x < INF && liAndAlpha.x > -EPS)) {
-  //   liAndAlpha = vec4(0, 0, 0, 1);
-  // }
+  if (!(liAndAlpha.x < INF && liAndAlpha.x > -EPS)) {
+    liAndAlpha = vec4(0, 0, 0, 1);
+  }
 
   fragColor = liAndAlpha;
 
