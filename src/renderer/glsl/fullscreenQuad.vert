@@ -1,4 +1,4 @@
-export default function(params) {
+export default function() {
   return `#version 300 es
 
 layout(location = 0) in vec2 position;

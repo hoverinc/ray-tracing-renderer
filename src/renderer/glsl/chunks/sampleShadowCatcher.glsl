@@ -1,4 +1,4 @@
-export default function (params) {
+export default function (defines) {
   return `
 
 #ifdef USE_SHADOW_CATCHER
