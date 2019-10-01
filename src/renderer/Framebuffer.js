@@ -2,13 +2,12 @@ import { makeTexture } from "./Texture";
 
 export function makeFramebuffer(params) {
   const {
-    depth = false, // use depth buffer
     gl,
     linearFiltering = false, // linearly filter textures
 
-    // supply one but not both of these parameters
-    renderTarget, // single render target: { storage: 'byte' | 'float' }
-    renderTargets, // multiple render targets: RenderTargets object
+    // A single render target in the form { storage: 'byte' | 'float' }
+    // Or multiple render targets pass as a RenderTargets object
+    renderTarget
   } = params;
 
   const framebuffer = gl.createFramebuffer();
@@ -31,12 +30,10 @@ export function makeFramebuffer(params) {
     width = Math.floor(w);
     height = Math.floor(h);
 
-    if (renderTarget) {
-      texture = initSingleTexture(gl, width, height, linearFiltering, renderTarget);
-    } else if (renderTargets) {
-      texture = initMultipleTextures(gl, width, height, linearFiltering, renderTargets);
+    if (Array.isArray(renderTarget)) {
+      texture = initMultipleTextures(gl, width, height, linearFiltering, renderTarget);
     } else {
-      console.error('makeFramebuffer must contain a renderTarget or renderTargets parameter');
+      texture = initSingleTexture(gl, width, height, linearFiltering, renderTarget);
     }
 
     this.unbind();
