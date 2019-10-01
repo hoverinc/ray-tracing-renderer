@@ -76,22 +76,24 @@ function addLightAtCoordinates(light, image, originCoords) {
   // functional trick to keep the conditional check out of the main loop
   const intensityFromAngleFunction = useThreshold ? getIntensityFromAngleDifferentialThresholded : getIntensityFromAngleDifferential;
 
-  let encounteredX = false;
-  let encounteredY = false;
+  let encounteredInThisRow = false;
+  let begunAddingContributions = false;
   let currentCoords = new THREE.Spherical();
   let falloff,
       intensity,
       bufferIndex;
 
+  // Iterates over each row from top to bottom
   for (let i = 0; i < xTexels; i++) {
+    // Iterates over each texel in row
     for (let j = 0; j < yTexels; j++) {
       bufferIndex = j * width + i;
       currentCoords = equirectangularToSpherical(i, j, width, height, currentCoords);
       falloff = intensityFromAngleFunction(originCoords, currentCoords, softness, threshold);
 
       if(falloff > 0) {
-        encounteredX = true;
-        encounteredY = true;
+        encounteredInThisRow = true;
+        begunAddingContributions = true;
       }
       intensity = light.intensity * falloff;
 
@@ -99,11 +101,13 @@ function addLightAtCoordinates(light, image, originCoords) {
       floatBuffer[bufferIndex * 3 + 1] += intensity * light.color.g;
       floatBuffer[bufferIndex * 3 + 2] += intensity * light.color.b;
     }
-    if(!encounteredX && encounteredY) {
-      // the entire light has been added
+    // First row to not add a contribution since adding began
+    // This means the entire light has been added and we can exit early
+    if(!encounteredInThisRow && begunAddingContributions) {
       return floatBuffer;
     }
-    encounteredX = false;
+    // reset for next row
+    encounteredInThisRow = false;
   }
   return floatBuffer;
 }
