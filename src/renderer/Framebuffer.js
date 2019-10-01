@@ -6,7 +6,7 @@ export function makeFramebuffer(params) {
     linearFiltering = false, // linearly filter textures
 
     // A single render target in the form { storage: 'byte' | 'float' }
-    // Or multiple render targets pass as a RenderTargets object
+    // Or multiple render targets passed as a RenderTargets object
     renderTarget
   } = params;
 
