@@ -143,13 +143,16 @@ export function getAngleDelta(angleA, angleB) {
   return diff > Math.PI ? (2 * Math.PI - diff) : diff;
 }
 
-function angleBetweenSphericals(originCoords, currentCoords) {
+const angleBetweenSphericals = function() {
   const originVector = new THREE.Vector3();
-  originVector.setFromSpherical(originCoords);
   const currentVector = new THREE.Vector3();
-  currentVector.setFromSpherical(currentCoords);
-  return originVector.angleTo(currentVector);
-}
+  const getAngle = function(originCoords, currentCoords) {
+    originVector.setFromSpherical(originCoords);
+    currentVector.setFromSpherical(currentCoords);
+    return originVector.angleTo(currentVector);
+  }
+  return getAngle;
+}();
 
   // TODO: possibly clean this up and optimize it
   //
