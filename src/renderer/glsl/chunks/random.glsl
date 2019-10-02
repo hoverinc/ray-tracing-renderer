@@ -1,4 +1,4 @@
-export default function(params) {
+export default function(defines) {
   return `
 
 // Noise texture used to generate a different random number for each pixel.

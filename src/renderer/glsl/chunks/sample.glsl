@@ -1,4 +1,4 @@
-export default function(params) {
+export default function(defines) {
   return `
 
 // https://graphics.pixar.com/library/OrthonormalB/paper.pdf

@@ -1,6 +1,6 @@
 import textureLinear from './chunks/textureLinear.glsl';
 
-export default function(params) {
+export default function(defines) {
   return `#version 300 es
 
 precision mediump float;
@@ -12,7 +12,7 @@ out vec4 fragColor;
 
 uniform sampler2D image;
 
-${textureLinear(params)}
+${textureLinear(defines)}
 
 // Tonemapping functions from THREE.js
 
@@ -25,7 +25,7 @@ vec3 reinhard(vec3 color) {
 }
 // http://filmicworlds.com/blog/filmic-tonemapping-operators/
 #define uncharted2Helper(x) max(((x * (0.15 * x + 0.10 * 0.50) + 0.20 * 0.02) / (x * (0.15 * x + 0.50) + 0.20 * 0.30)) - 0.02 / 0.30, vec3(0.0))
-const vec3 uncharted2WhitePoint = 1.0 / uncharted2Helper(vec3(${params.whitePoint}));
+const vec3 uncharted2WhitePoint = 1.0 / uncharted2Helper(vec3(${defines.whitePoint}));
 vec3 uncharted2( vec3 color ) {
   // John Hable's filmic operator from Uncharted 2 video game
   return clamp(uncharted2Helper(color) * uncharted2WhitePoint, vec3(0.0), vec3(1.0));
@@ -51,9 +51,9 @@ void main() {
   // dividing by alpha normalizes the brightness of the shadow catcher to match the background envmap.
   vec3 light = tex.rgb / tex.a;
 
-  light *= ${params.exposure}; // exposure
+  light *= ${defines.exposure}; // exposure
 
-  light = ${params.toneMapping}(light); // tone mapping
+  light = ${defines.toneMapping}(light); // tone mapping
 
   light = pow(light, vec3(1.0 / 2.2)); // gamma correction
 

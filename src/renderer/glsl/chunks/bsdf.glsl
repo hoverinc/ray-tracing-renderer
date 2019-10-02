@@ -1,4 +1,4 @@
-export default function(params) {
+export default function(defines) {
   return `
 
 // Computes the exact value of the Fresnel factor

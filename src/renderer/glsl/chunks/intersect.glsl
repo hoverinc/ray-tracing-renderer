@@ -1,4 +1,4 @@
-export default function(params) {
+export default function(defines) {
   return `
 
 uniform highp isampler2D indices;
@@ -16,7 +16,7 @@ uniform Materials {
   #endif
 
   #if defined(NUM_DIFFUSE_MAPS) || defined(NUM_NORMAL_MAPS)
-    vec4 diffuseNormalMapSize[${Math.max(params.NUM_DIFFUSE_MAPS, params.NUM_NORMAL_MAPS)}];
+    vec4 diffuseNormalMapSize[${Math.max(defines.NUM_DIFFUSE_MAPS, defines.NUM_NORMAL_MAPS)}];
   #endif
 
   #if defined(NUM_PBR_MAPS)
