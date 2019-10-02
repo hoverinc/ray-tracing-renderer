@@ -16,7 +16,7 @@ RayTracingRenderer is the *early alpha stage* of development. Features are incom
 * [Latest ES5 Build](https://raw.githubusercontent.com/hoverinc/ray-tracing-renderer/master/build/RayTracingRenderer.es5.js)
 
 Or if you use npm, run
-`npm install git+ssh://github.com/hoverinc/three.js-ray-tracing-renderer`
+`npm install ray-tracing-renderer`
 
 Ray Tracing Renderer relies on WebGL2, and any browser supporting WebGL2 also supports ES6. Thus, you should only use the ES5 build if the renderer inside your appliaction is *optional*, and your application must support older browsers.
 
