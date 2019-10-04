@@ -6,11 +6,11 @@ import { bvhAccel, flattenBvh } from './bvhAccel';
 import { envmapDistribution } from './envmapDistribution';
 import { generateEnvMapFromSceneComponents } from './envMapCreation';
 import { getTexturesFromMaterials, mergeTexturesFromMaterials } from './texturesFromMaterials';
-import { makeTexture } from './texture';
+import { makeTexture } from './Texture';
 import { uploadBuffers } from './uploadBuffers';
 import { ThinMaterial, ThickMaterial, ShadowCatcherMaterial } from '../constants';
 import { clamp } from './util';
-import { makeStratifiedSamplerCombined } from './stratifiedSamplerCombined';
+import { makeStratifiedSamplerCombined } from './StratifiedSamplerCombined';
 
 //Important TODO: Refactor this file to get rid of duplicate and confusing code
 

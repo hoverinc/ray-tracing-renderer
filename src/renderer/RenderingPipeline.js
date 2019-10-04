@@ -1,11 +1,11 @@
-import { makeFullscreenQuad } from './fullscreenQuad';
-import { makeRayTracingShader } from './rayTracingShader';
-import { makeToneMapShader } from './toneMapShader';
-import { makeRenderTargetFloat } from './renderTarget';
+import { makeFullscreenQuad } from './FullscreenQuad';
+import { makeRayTracingShader } from './RayTracingShader';
+import { makeToneMapShader } from './ToneMapShader';
+import { makeFramebuffer } from './Framebuffer';
 import { numberArraysEqual, clamp } from './util';
-import { makeTileRender } from './tileRender';
+import { makeTileRender } from './TileRender';
 import { LensCamera } from '../LensCamera';
-import { makeTextureAllocator } from './textureAllocator';
+import { makeTextureAllocator } from './TextureAllocator';
 import noiseBase64 from './texture/noise';
 
 // Important TODO: Refactor this file to get rid of duplicate and confusing code
@@ -34,8 +34,18 @@ export function makeRenderingPipeline({
 
   const useLinearFiltering = optionalExtensions.OES_texture_float_linear;
 
-  const hdrBuffer = makeRenderTargetFloat(gl); // full resolution buffer representing the rendered scene with HDR lighting
-  const hdrPreviewBuffer = makeRenderTargetFloat(gl, useLinearFiltering); // lower resolution buffer used for the first frame
+  // full resolution buffer representing the rendered scene with HDR lighting
+  const hdrBuffer = makeFramebuffer({
+    gl,
+    renderTarget: { storage: 'float' }
+  });
+
+  // lower resolution buffer used for the first frame
+  const hdrPreviewBuffer = makeFramebuffer({
+    gl,
+    renderTarget: { storage: 'float' },
+    useLinearFiltering
+  });
 
   // used to sample only a portion of the scene to the HDR Buffer to prevent the GPU from locking up from excessive computation
   const tileRender = makeTileRender(gl);

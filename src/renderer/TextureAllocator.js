@@ -19,8 +19,10 @@ export function makeTextureAllocator(gl) {
 
   function reserveSlot() {
     const unit = nextUnit++;
-    return (uniform, textureObj) => {
-      bindGl(uniform, textureObj, unit);
+    return {
+      bind(uniform, textureObj) {
+        bindGl(uniform, textureObj, unit);
+      }
     };
   }
 

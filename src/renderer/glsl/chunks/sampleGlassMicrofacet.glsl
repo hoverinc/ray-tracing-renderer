@@ -3,7 +3,7 @@
 // Walter Et al. (2007) - Microfacet Models for Refraction through Rough Surfaces
 // https://www.cs.cornell.edu/~srm/publications/EGSR07-btdf.html
 
-export default function(params) {
+export default function(defines) {
   return `
 #ifdef USE_GLASS
 
