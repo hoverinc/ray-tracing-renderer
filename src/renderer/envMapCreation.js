@@ -141,8 +141,7 @@ function getIntensityFromAngleDifferentialThresholded(originCoords, currentCoord
   }
 
   const angle = angleBetweenSphericals(originCoords, currentCoords);
-  const falloffCoefficient = getFalloffAtAngle(angle, softness);
-  return falloffCoefficient;
+  return getFalloffAtAngle(angle, softness);
 }
 
 function getIntensityFromAngleDifferential(originCoords, currentCoords, softness) {
