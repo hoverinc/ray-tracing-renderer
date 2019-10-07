@@ -6,6 +6,7 @@ import { numberArraysEqual, clamp } from './util';
 import { makeTileRender } from './TileRender';
 import { LensCamera } from '../LensCamera';
 import { makeTextureAllocator } from './TextureAllocator';
+import * as THREE from 'three';
 import noiseBase64 from './texture/noise';
 
 // Important TODO: Refactor this file to get rid of duplicate and confusing code
@@ -35,7 +36,12 @@ export function makeRenderingPipeline({
   const useLinearFiltering = optionalExtensions.OES_texture_float_linear;
 
   // full resolution buffer representing the rendered scene with HDR lighting
-  const hdrBuffer = makeFramebuffer({
+  let hdrBuffer = makeFramebuffer({
+    gl,
+    renderTarget: { storage: 'float' }
+  });
+
+  let historyBuffer = makeFramebuffer({
     gl,
     renderTarget: { storage: 'float' }
   });
@@ -50,7 +56,8 @@ export function makeRenderingPipeline({
   // used to sample only a portion of the scene to the HDR Buffer to prevent the GPU from locking up from excessive computation
   const tileRender = makeTileRender(gl);
 
-  const lastCamera = new LensCamera();
+  // const lastCamera = new LensCamera();
+  let lastCamera;
 
   // how many samples to render with uniform noise before switching to stratified noise
   const numUniformSamples = 6;
@@ -63,6 +70,9 @@ export function makeRenderingPipeline({
 
   let sampleRenderedCallback = () => {};
 
+  rayTracingShader.setStrataCount(strataCount);
+  rayTracingShader.useStratifiedSampling(true);
+
   function clear() {
     hdrBuffer.bind();
     gl.clear(gl.COLOR_BUFFER_BIT);
@@ -73,9 +83,9 @@ export function makeRenderingPipeline({
   }
 
   function initFirstSample(camera) {
-    lastCamera.copy(camera);
     rayTracingShader.setCamera(camera);
     rayTracingShader.useStratifiedSampling(false);
+    lastCamera.copy(camera);
     clear();
   }
 
@@ -99,14 +109,14 @@ export function makeRenderingPipeline({
   }
 
   function addSampleToBuffer(buffer) {
-    gl.blendEquation(gl.FUNC_ADD);
-    gl.blendFunc(gl.ONE, gl.ONE);
-    gl.enable(gl.BLEND);
+    // gl.blendEquation(gl.FUNC_ADD);
+    // gl.blendFunc(gl.ONE, gl.ONE);
+    // gl.enable(gl.BLEND);
     buffer.bind();
     gl.viewport(0, 0, buffer.width, buffer.height);
     rayTracingShader.draw();
     buffer.unbind();
-    gl.disable(gl.BLEND);
+    // gl.disable(gl.BLEND);
   }
 
   function newSampleToBuffer(buffer) {
@@ -198,26 +208,35 @@ export function makeRenderingPipeline({
   function drawFull(camera) {
     if (!ready) {
       return;
-    } else if (!camerasEqual(camera, lastCamera)) {
-      initFirstSample(camera);
     }
 
-    sampleCount++;
+    if (!lastCamera) {
+      lastCamera = camera.clone();
+    }
 
-    updateSeed();
+    rayTracingShader.setCamera(camera);
+    rayTracingShader.setHistory(lastCamera, historyBuffer);
+
+    rayTracingShader.nextSeed();
     addSampleToBuffer(hdrBuffer);
     hdrBufferToScreen();
+
+    const temp = historyBuffer;
+    historyBuffer = hdrBuffer;
+    hdrBuffer = temp;
+    lastCamera.copy(camera);
   }
 
   function setSize(width, height) {
     rayTracingShader.setSize(width, height);
     hdrBuffer.setSize(width, height);
+    historyBuffer.setSize(width, height);
     tileRender.setSize(width, height);
     clear();
   }
 
   return {
-    drawTile,
+    drawTile: drawFull,
     drawOffscreenTile,
     drawFull,
     restartTimer: tileRender.restartTimer,

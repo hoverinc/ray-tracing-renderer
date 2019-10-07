@@ -37,6 +37,8 @@ export function makeRayTracingShader({
     }
   }
 
+  let samples;
+
   const { program, uniforms } = makeProgramFromScene({
     bounces, fullscreenQuad, gl, optionalExtensions, samplingDimensions, scene, textureAllocator
   });
@@ -65,7 +67,14 @@ export function makeRayTracingShader({
     gl.uniform1f(uniforms['camera.aperture'], camera.aperture || 0);
   }
 
-  let samples;
+  const historyBufferLocation = textureAllocator.reserveSlot();
+
+  function setHistory(camera, historyBuffer) {
+    gl.useProgram(program);
+    gl.uniformMatrix4fv(uniforms.historyCameraInv, false, camera.matrixWorldInverse.elements);
+    gl.uniformMatrix4fv(uniforms.historyCameraProj, false, camera.projectionMatrix.elements);
+    historyBufferLocation.bind(uniforms.historyBuffer, historyBuffer.texture);
+  }
 
   function nextSeed() {
     gl.useProgram(program);
@@ -104,6 +113,7 @@ export function makeRayTracingShader({
     draw,
     nextSeed,
     setCamera,
+    setHistory,
     setNoise,
     setSize,
     setStrataCount,

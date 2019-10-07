@@ -71,7 +71,10 @@ struct Camera {
 };
 
 uniform Camera camera;
+uniform mat4 historyCameraInv;
+uniform mat4 historyCameraProj;
 uniform vec2 pixelSize; // 1 / screenResolution
+uniform sampler2D historyBuffer;
 
 in vec2 vCoord;
 
@@ -119,12 +122,12 @@ struct Path {
   bool abort;
 };
 
-void bounce(inout Path path, int i) {
+void bounce(inout Path path, int i, inout SurfaceInteraction si) {
   if (path.abort) {
     return;
   }
 
-  SurfaceInteraction si = intersectScene(path.ray);
+  si = intersectScene(path.ray);
 
   if (!si.hit) {
     if (path.specularBounce) {
@@ -163,7 +166,7 @@ void bounce(inout Path path, int i) {
 
 // Path tracing integrator as described in
 // http://www.pbr-book.org/3ed-2018/Light_Transport_I_Surface_Reflection/Path_Tracing.html#
-vec4 integrator(inout Ray ray) {
+vec4 integrator(inout Ray ray, inout SurfaceInteraction si) {
   Path path;
   path.ray = ray;
   path.li = vec3(0);
@@ -172,13 +175,16 @@ vec4 integrator(inout Ray ray) {
   path.specularBounce = true;
   path.abort = false;
 
+  bounce(path, 1, si);
+
+
   // Manually unroll for loop.
   // Some hardware fails to interate over a GLSL loop, so we provide this workaround
-
-  ${unrollLoop('i', 1, defines.BOUNCES + 1, 1, `
+  SurfaceInteraction indirectSi;
+  ${unrollLoop('i', 2, defines.BOUNCES + 1, 1, `
   // equivelant to
   // for (int i = 1; i < defines.bounces + 1, i += 1)
-    bounce(path, i);
+    bounce(path, i, indirectSi);
   `)}
 
   return vec4(path.li, path.alpha);
@@ -193,25 +199,38 @@ void main() {
 
   // Thin lens model with depth-of-field
   // http://www.pbr-book.org/3ed-2018/Camera_Models/Projective_Camera_Models.html#TheThinLensModelandDepthofField
-  vec2 lensPoint = camera.aperture * sampleCircle(randomSampleVec2());
-  vec3 focusPoint = -direction * camera.focus / direction.z; // intersect ray direction with focus plane
+  // vec2 lensPoint = camera.aperture * sampleCircle(randomSampleVec2());
+  // vec3 focusPoint = -direction * camera.focus / direction.z; // intersect ray direction with focus plane
 
-  vec3 origin = vec3(lensPoint, 0.0);
-  direction = normalize(focusPoint - origin);
+  // vec3 origin = vec3(lensPoint, 0.0);
+  // direction = normalize(focusPoint - origin);
 
-  origin = vec3(camera.transform * vec4(origin, 1.0));
+  // origin = vec3(camera.transform * vec4(origin, 1.0));
+  // direction = mat3(camera.transform) * direction;
+
+  vec3 origin = camera.transform[3].xyz;
   direction = mat3(camera.transform) * direction;
 
   Ray cam;
   initRay(cam, origin, direction);
 
-  vec4 liAndAlpha = integrator(cam);
+  SurfaceInteraction si;
+
+  vec4 liAndAlpha = integrator(cam, si);
 
   if (!(liAndAlpha.x < INF && liAndAlpha.x > -EPS)) {
     liAndAlpha = vec4(0, 0, 0, 1);
   }
 
-  fragColor = liAndAlpha;
+  if (si.hit) {
+    vec4 historyCoord = (historyCameraProj * historyCameraInv * vec4(si.position, 1.0));
+    historyCoord.xy /= historyCoord.w;
+
+    const float newContrib = 0.05;
+    fragColor = newContrib * liAndAlpha + (1.0 - newContrib) * texture(historyBuffer, 0.5 * historyCoord.xy + 0.5);
+  } else {
+    fragColor = liAndAlpha;
+  }
 
   // Stratified Sampling Sample Count Test
   // ---------------
