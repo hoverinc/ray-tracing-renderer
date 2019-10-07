@@ -1,9 +1,9 @@
 import { DirectionalLight }  from 'three';
 
 export class SoftDirectionalLight extends DirectionalLight {
-  constructor(...args) {
-    super(...args);
-    this.softness = 0.0;
+  constructor(color, intensity, softness = 0) {
+    super(color, intensity);
+    this.softness = softness;
   }
 
   copy(source) {
