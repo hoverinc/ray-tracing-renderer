@@ -34,4 +34,19 @@ describe('getAngleDelta', () => {
     const angleB = (2 * Math.PI) - (Math.PI / 8);
     expect(getAngleDelta(angleA, angleB)).toBeCloseTo(Math.PI / 4);
   });
+  test('handles 0 delta case properly', () => {
+    const angleA = Math.PI;
+    const angleB = Math.PI;
+    expect(getAngleDelta(angleA, angleB)).toBeCloseTo(0);
+  });
+  test('handles close angles properly', () => {
+    const angleA = 0.0;
+    const angleB = 0.1;
+    expect(getAngleDelta(angleA, angleB)).toBeCloseTo(0.1);
+  });
+  test('handles 180 degree angle properly', () => {
+    const angleA = 0.0;
+    const angleB = Math.PI;
+    expect(getAngleDelta(angleA, angleB)).toBeCloseTo(Math.PI);
+  });
 });
