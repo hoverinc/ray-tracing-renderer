@@ -10,7 +10,7 @@ export function makeFramebuffer(params) {
     // Or multiple render targets passed as a RenderTargets object
     renderTarget
   } = params;
-  console.log(renderTarget);
+
   const framebuffer = gl.createFramebuffer();
   let texture;
 
