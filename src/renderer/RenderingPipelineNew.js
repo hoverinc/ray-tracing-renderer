@@ -1,5 +1,5 @@
 import { decomposeScene } from './decomposeScene';
-import { makeFramebuffer } from './FrameBuffer';
+import { makeFramebuffer } from './Framebuffer';
 import { makeFullscreenQuad } from './FullscreenQuad';
 import { makeGBufferShader } from './GBufferShader';
 import { mergeMeshesToGeometry } from './mergeMeshesToGeometry';
@@ -8,7 +8,7 @@ import { makeRayTracingShader } from './RayTracingShader';
 import { PerspectiveCamera } from 'three';
 import { makeTextureAllocator } from './TextureAllocator';
 import { makeToneMapShader } from './ToneMapShader';
-import { numberArraysEqual, clamp } from './util';
+import { numberArraysEqual } from './util';
 
 
 export function makeRenderingPipeline(params) {
@@ -43,7 +43,7 @@ export function makeRenderingPipeline(params) {
   const gBuffer = makeFramebuffer({
     depth: true,
     gl,
-    renderTargets: gBufferShader.renderTargets
+    renderTarget: gBufferShader.renderTargets
   });
 
   const hdrBuffer = makeFramebuffer({

@@ -1,7 +1,8 @@
-import { makeTexture } from "./Texture";
+import { makeDepthTexture, makeTexture } from "./Texture";
 
 export function makeFramebuffer(params) {
   const {
+    depth = false, // use depth buffer
     gl,
     linearFiltering = false, // linearly filter textures
 
@@ -9,7 +10,7 @@ export function makeFramebuffer(params) {
     // Or multiple render targets passed as a RenderTargets object
     renderTarget
   } = params;
-
+  console.log(renderTarget);
   const framebuffer = gl.createFramebuffer();
   let texture;
 
@@ -30,10 +31,18 @@ export function makeFramebuffer(params) {
     width = Math.floor(w);
     height = Math.floor(h);
 
-    if (Array.isArray(renderTarget)) {
+    if (Array.isArray(renderTarget.targets)) {
       texture = initMultipleTextures(gl, width, height, linearFiltering, renderTarget);
     } else {
       texture = initSingleTexture(gl, width, height, linearFiltering, renderTarget);
+    }
+
+    if (depth) {
+      const depthTexture = makeDepthTexture(gl, {
+        width,
+        height
+      });
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, depthTexture.target, depthTexture.texture, 0);
     }
 
     this.unbind();
