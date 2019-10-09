@@ -2855,7 +2855,7 @@ void main() {
       if (child instanceof THREE$1.DirectionalLight) {
         directionalLights.push(child);
       }
-      if (child instanceof THREE$1.EnvironmentLight) {
+      if (child instanceof EnvironmentLight) {
         if (environmentLights.length > 1) {
           console.warn(environmentLights, 'only one environment light can be used per scene');
         }
@@ -3765,8 +3765,8 @@ void main() {
     return true;
   };
 
-  /* global THREE */
-  if (THREE) {
+  if (window.THREE) {
+    /* global THREE */
     THREE.LensCamera = LensCamera;
     THREE.SoftDirectionalLight = SoftDirectionalLight;
     THREE.EnvironmentLight = EnvironmentLight;
