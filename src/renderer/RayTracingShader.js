@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import fragString from './glsl/rayTrace.frag';
+import { EnvironmentLight } from '../EnvironmentLight';
 import { createShader, createProgram, getUniforms } from './glUtil';
 import { mergeMeshesToGeometry } from './mergeMeshesToGeometry';
 import { bvhAccel, flattenBvh } from './bvhAccel';
@@ -266,7 +267,7 @@ function decomposeScene(scene) {
     if (child instanceof THREE.DirectionalLight) {
       directionalLights.push(child);
     }
-    if (child instanceof THREE.EnvironmentLight) {
+    if (child instanceof EnvironmentLight) {
       if (environmentLights.length > 1) {
         console.warn(environmentLights, 'only one environment light can be used per scene');
       }

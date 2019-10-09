@@ -35,7 +35,7 @@ const renderer = new THREE.RayTracingRenderer();
 #### As a module
 If you installed via npm, simply import the renderer as follows.
 ```javascript
-import { RayTracingRenderer } from 'three.js-ray-tracing-renderer'
+import { RayTracingRenderer } from 'ray-tracing-renderer'
 ```
 Or if you downloaded the renderer as a file,
 ```javascript
