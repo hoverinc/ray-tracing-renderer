@@ -27,9 +27,9 @@
   }
 
   class SoftDirectionalLight extends THREE$1.DirectionalLight {
-    constructor(...args) {
-      super(...args);
-      this.softness = 0.0;
+    constructor(color, intensity, softness = 0) {
+      super(color, intensity);
+      this.softness = softness;
     }
 
     copy(source) {
@@ -218,7 +218,7 @@
     }
   }
 
-  function vertString(params) {
+  function vertString() {
     return `#version 300 es
 
 layout(location = 0) in vec2 position;
@@ -257,7 +257,7 @@ void main() {
 
   // Manually performs linear filtering if the extension OES_texture_float_linear is not supported
 
-  function textureLinear(params) {
+  function textureLinear(defines) {
     return `
 
   vec4 textureLinear(sampler2D map, vec2 uv) {
@@ -282,7 +282,7 @@ void main() {
 `;
   }
 
-  function intersect(params) {
+  function intersect(defines) {
     return `
 
 uniform highp isampler2D indices;
@@ -300,7 +300,7 @@ uniform Materials {
   #endif
 
   #if defined(NUM_DIFFUSE_MAPS) || defined(NUM_NORMAL_MAPS)
-    vec4 diffuseNormalMapSize[${Math.max(params.NUM_DIFFUSE_MAPS, params.NUM_NORMAL_MAPS)}];
+    vec4 diffuseNormalMapSize[${Math.max(defines.NUM_DIFFUSE_MAPS, defines.NUM_NORMAL_MAPS)}];
   #endif
 
   #if defined(NUM_PBR_MAPS)
@@ -647,7 +647,7 @@ bool intersectSceneShadow(inout Ray ray) {
 `;
   }
 
-  function random(params) {
+  function random(defines) {
     return `
 
 // Noise texture used to generate a different random number for each pixel.
@@ -712,7 +712,7 @@ vec2 randomSampleVec2() {
   // Sample the environment map using a cumulative distribution function as described in
   // http://www.pbr-book.org/3ed-2018/Light_Transport_I_Surface_Reflection/Sampling_Light_Sources.html#InfiniteAreaLights
 
-  function envmap(params) {
+  function envmap(defines) {
     return `
 
 uniform sampler2D envmap;
@@ -819,7 +819,7 @@ vec3 sampleEnvmapFromDirection(vec3 d) {
 `;
   }
 
-  function bsdf(params) {
+  function bsdf(defines) {
     return `
 
 // Computes the exact value of the Fresnel factor
@@ -916,7 +916,7 @@ vec3 materialBrdf(SurfaceInteraction si, vec3 viewDir, vec3 lightDir, float cosT
 `;
   }
 
-  function sample(params) {
+  function sample(defines) {
     return `
 
 // https://graphics.pixar.com/library/OrthonormalB/paper.pdf
@@ -978,7 +978,7 @@ float powerHeuristic(float f, float g) {
   // Estimate the direct lighting integral using multiple importance sampling
   // http://www.pbr-book.org/3ed-2018/Light_Transport_I_Surface_Reflection/Direct_Lighting.html#EstimatingtheDirectLightingIntegral
 
-  function sampleMaterial(params) {
+  function sampleMaterial(defines) {
     return `
 
 vec3 importanceSampleLight(SurfaceInteraction si, vec3 viewDir, bool lastBounce, vec2 random) {
@@ -1099,7 +1099,7 @@ vec3 sampleMaterial(SurfaceInteraction si, int bounce, inout Ray ray, inout vec3
 `;
   }
 
-  function sampleShadowCatcher (params) {
+  function sampleShadowCatcher (defines) {
     return `
 
 #ifdef USE_SHADOW_CATCHER
@@ -1232,7 +1232,7 @@ vec3 sampleShadowCatcher(SurfaceInteraction si, int bounce, inout Ray ray, inout
 `;
   }
 
-  function sampleGlass (params) {
+  function sampleGlass (defines) {
     return `
 
 #ifdef USE_GLASS
@@ -1297,13 +1297,13 @@ vec3 sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Ray ray, inout
     return defines;
   }
 
-  function fragString(params) {
+  function fragString(defines) {
     return `#version 300 es
 
 precision mediump float;
 precision mediump int;
 
-${addDefines(params)}
+${addDefines(defines)}
 
 #define PI 3.14159265359
 #define TWOPI 6.28318530718
@@ -1388,7 +1388,7 @@ ivec4 fetchData(isampler2D s, int i, int columnsLog2) {
 }
 
 ${textureLinear()}
-${intersect(params)}
+${intersect(defines)}
 ${random()}
 ${envmap()}
 ${bsdf()}
@@ -1462,9 +1462,9 @@ vec4 integrator(inout Ray ray) {
   // Manually unroll for loop.
   // Some hardware fails to interate over a GLSL loop, so we provide this workaround
 
-  ${unrollLoop('i', 1, params.BOUNCES + 1, 1, `
+  ${unrollLoop('i', 1, defines.BOUNCES + 1, 1, `
   // equivelant to
-  // for (int i = 1; i < params.bounces + 1, i += 1)
+  // for (int i = 1; i < defines.bounces + 1, i += 1)
     bounce(path, i);
   `)}
 
@@ -1522,25 +1522,6 @@ void main() {
 `;
   }
 
-  function addFlatGeometryIndices(geometry) {
-    const position = geometry.getAttribute('position');
-
-    if (!position) {
-      console.warn('No position attribute');
-      return;
-    }
-
-    const index = new Uint32Array(position.count);
-
-    for (let i = 0; i < index.length; i++) {
-      index[i] = i;
-    }
-
-    geometry.setIndex(new THREE$1.BufferAttribute(index, 1, false));
-
-    return geometry;
-  }
-
   function mergeMeshesToGeometry(meshes) {
 
     let vertexCount = 0;
@@ -1550,7 +1531,7 @@ void main() {
     const materialIndexMap = new Map();
 
     for (const mesh of meshes) {
-      const geometry = mesh.geometry.clone();
+      const geometry = cloneBufferGeometry(mesh.geometry, ['position', 'normal', 'uv']);
 
       const index = geometry.getIndex();
       if (!index) {
@@ -1561,6 +1542,8 @@ void main() {
 
       if (!geometry.getAttribute('normal')) {
         geometry.computeVertexNormals();
+      } else {
+        geometry.normalizeNormals();
       }
 
       vertexCount += geometry.getAttribute('position').count;
@@ -1588,7 +1571,6 @@ void main() {
     };
   }
 
-
   function mergeGeometry(geometryAndMaterialIndex, vertexCount, indexCount) {
     const position = new THREE$1.BufferAttribute(new Float32Array(3 * vertexCount), 3, false);
     const normal = new THREE$1.BufferAttribute(new Float32Array(3 * vertexCount), 3, false);
@@ -1603,27 +1585,67 @@ void main() {
     bg.addAttribute('uv', uv);
     bg.setIndex(index);
 
-    let vertexIndex = 0;
-    let indexIndex = 0;
+    let currentVertex = 0;
+    let currentIndex = 0;
 
     for (const { geometry, materialIndex } of geometryAndMaterialIndex) {
-      bg.merge(geometry, vertexIndex);
+      const vertexCount = geometry.getAttribute('position').count;
+      bg.merge(geometry, currentVertex);
 
       const meshIndex = geometry.getIndex();
-      for (let k = 0; k < meshIndex.count; k++) {
-        index.setX(indexIndex + k, vertexIndex + meshIndex.getX(k));
+      for (let i = 0; i < meshIndex.count; i++) {
+        index.setX(currentIndex + i, currentVertex + meshIndex.getX(i));
       }
 
       const triangleCount = meshIndex.count / 3;
-      for (let k = 0; k < triangleCount; k++) {
+      for (let i = 0; i < triangleCount; i++) {
         materialIndices.push(materialIndex);
       }
 
-      vertexIndex += geometry.getAttribute('position').count;
-      indexIndex += meshIndex.count;
+      currentVertex += vertexCount;
+      currentIndex += meshIndex.count;
     }
 
     return { geometry: bg, materialIndices };
+  }
+
+  // Similar to buffergeometry.clone(), except we only copy
+  // specific attributes instead of everything
+  function cloneBufferGeometry(bufferGeometry, attributes) {
+    const newGeometry = new THREE$1.BufferGeometry();
+
+    for (const name of attributes) {
+      const attrib = bufferGeometry.getAttribute(name);
+      if (attrib) {
+        newGeometry.addAttribute(name, attrib.clone());
+      }
+    }
+
+    const index = bufferGeometry.getIndex();
+    if (index) {
+      newGeometry.setIndex(index);
+    }
+
+    return newGeometry;
+  }
+
+  function addFlatGeometryIndices(geometry) {
+    const position = geometry.getAttribute('position');
+
+    if (!position) {
+      console.warn('No position attribute');
+      return;
+    }
+
+    const index = new Uint32Array(position.count);
+
+    for (let i = 0; i < index.length; i++) {
+      index[i] = i;
+    }
+
+    geometry.setIndex(new THREE$1.BufferAttribute(index, 1, false));
+
+    return geometry;
   }
 
   // Reorders the elements in the range [first, last) in such a way that
@@ -1998,19 +2020,27 @@ void main() {
 
   // Convert image data from the RGBE format to a 32-bit floating point format
   // See https://www.cg.tuwien.ac.at/research/theses/matkovic/node84.html for a description of the RGBE format
-  function rgbeToFloat(buffer) {
+  // Optional multiplier argument for performance optimization
+  function rgbeToFloat(buffer, intensity = 1) {
     const texels = buffer.length / 4;
     const floatBuffer = new Float32Array(texels * 3);
 
+    const expTable = [];
+    for (let i = 0; i < 255; i++) {
+      expTable[i] = intensity * Math.pow(2, i - 128) / 255;
+    }
+
     for (let i = 0; i < texels; i++) {
+
       const r = buffer[4 * i];
       const g = buffer[4 * i + 1];
       const b = buffer[4 * i + 2];
       const a = buffer[4 * i + 3];
-      const e = 2 ** (a - 128);
-      floatBuffer[3 * i] = r * e / 255;
-      floatBuffer[3 * i + 1] = g * e / 255;
-      floatBuffer[3 * i + 2] = b * e / 255;
+      const e = expTable[a];
+
+      floatBuffer[3 * i] = r * e;
+      floatBuffer[3 * i + 1] = g * e;
+      floatBuffer[3 * i + 2] = b * e;
     }
 
     return floatBuffer;
@@ -2040,6 +2070,8 @@ void main() {
     return true;
   }
 
+  // Convert image data from the RGBE format to a 32-bit floating point format
+
   const DEFAULT_MAP_RESOLUTION = {
     width: 4096,
     height: 2048,
@@ -2055,20 +2087,21 @@ void main() {
 
   function initializeEnvMap(environmentLights) {
     let envImage;
+
     // Initialize map from environment light if present
     if (environmentLights.length > 0) {
       // TODO: support multiple environment lights (what if they have different resolutions?)
       const environmentLight = environmentLights[0];
+
       envImage = {
         width: environmentLight.map.image.width,
         height: environmentLight.map.image.height,
         data: environmentLight.map.image.data,
       };
-      envImage.data = rgbeToFloat(envImage.data);
-      envImage.data.forEach((datum, index, arr) => {
-        arr[index] = datum * environmentLight.intensity;
-      });
-    } else { // initialize blank map
+
+      envImage.data = rgbeToFloat(envImage.data, environmentLight.intensity);
+    } else {
+      // initialize blank map
       envImage = generateBlankMap(DEFAULT_MAP_RESOLUTION.width, DEFAULT_MAP_RESOLUTION.height);
     }
 
@@ -2078,7 +2111,6 @@ void main() {
   function generateBlankMap(width, height) {
     const texels = width * height;
     const floatBuffer = new Float32Array(texels * 3);
-    floatBuffer.fill(0.0);
 
     return {
       width: width,
@@ -2090,63 +2122,134 @@ void main() {
   function addDirectionalLightToEnvMap(light, image) {
     const sphericalCoords = new THREE$1.Spherical();
     const lightDirection = light.position.clone().sub(light.target.position);
+
     sphericalCoords.setFromVector3(lightDirection);
     sphericalCoords.theta = (Math.PI * 3 / 2) - sphericalCoords.theta;
     sphericalCoords.makeSafe();
+
     return addLightAtCoordinates(light, image, sphericalCoords);
   }
 
   // Perform modifications on env map to match input scene
-  function addLightAtCoordinates(light, image, originSphericalCoords) {
+  function addLightAtCoordinates(light, image, originCoords) {
     const floatBuffer = image.data;
     const width = image.width;
     const height = image.height;
+    const xTexels = floatBuffer.length / (3 * height);
+    const yTexels = floatBuffer.length / (3 * width);
 
-    const xTexels = (floatBuffer.length / (3 * height));
-    const yTexels = (floatBuffer.length / (3 * width));
-    // default softness for standard directional lights is 0.95
-    const softness = ("softness" in light && light.softness !== null) ? light.softness : 0.45;
+    // default softness for standard directional lights is 0.01, i.e. a hard shadow
+    const softness = light.softness || 0.01;
+
+    // angle from center of light at which no more contributions are projected
+    const threshold = findThreshold(softness);
+
+    // if too few texels are rejected by the threshold then the time to evaluate it is no longer worth it
+    const useThreshold = threshold < Math.PI / 5;
+
+    // functional trick to keep the conditional check out of the main loop
+    const intensityFromAngleFunction = useThreshold ? getIntensityFromAngleDifferentialThresholded : getIntensityFromAngleDifferential;
+
+    let begunAddingContributions = false;
+    let currentCoords = new THREE$1.Spherical();
+
+    // Iterates over each row from top to bottom
     for (let i = 0; i < xTexels; i++) {
+
+      let encounteredInThisRow = false;
+
+      // Iterates over each texel in row
       for (let j = 0; j < yTexels; j++) {
         const bufferIndex = j * width + i;
-        const currentSphericalCoords = equirectangularToSpherical(i, j, width, height);
-        const falloff = getIntensityFromAngleDifferential(originSphericalCoords, currentSphericalCoords, softness);
+        currentCoords = equirectangularToSpherical(i, j, width, height, currentCoords);
+        const falloff = intensityFromAngleFunction(originCoords, currentCoords, softness, threshold);
+
+        if(falloff > 0) {
+          encounteredInThisRow = true;
+          begunAddingContributions = true;
+        }
+
         const intensity = light.intensity * falloff;
 
         floatBuffer[bufferIndex * 3] += intensity * light.color.r;
         floatBuffer[bufferIndex * 3 + 1] += intensity * light.color.g;
         floatBuffer[bufferIndex * 3 + 2] += intensity * light.color.b;
       }
+
+      // First row to not add a contribution since adding began
+      // This means the entire light has been added and we can exit early
+      if(!encounteredInThisRow && begunAddingContributions) {
+        return floatBuffer;
+      }
     }
+
     return floatBuffer;
+  }
+
+  function findThreshold(softness) {
+    const step = Math.PI / 128;
+    const maxSteps = (2.0 * Math.PI) / step;
+
+    for (let i = 0; i < maxSteps; i++) {
+      const angle = i * step;
+      const falloff = getFalloffAtAngle(angle, softness);
+      if (falloff <= 0.0001) {
+        return angle;
+      }
+    }
+  }
+
+  function getIntensityFromAngleDifferentialThresholded(originCoords, currentCoords, softness, threshold) {
+    const deltaPhi = getAngleDelta(originCoords.phi, currentCoords.phi);
+    const deltaTheta =  getAngleDelta(originCoords.theta, currentCoords.theta);
+
+    if(deltaTheta > threshold && deltaPhi > threshold) {
+      return 0;
+    }
+
+    const angle = angleBetweenSphericals(originCoords, currentCoords);
+    return getFalloffAtAngle(angle, softness);
   }
 
   function getIntensityFromAngleDifferential(originCoords, currentCoords, softness) {
     const angle = angleBetweenSphericals(originCoords, currentCoords);
-    const falloffCoeficient = getFalloffAtAngle(angle, softness);
-    return falloffCoeficient;
+    return getFalloffAtAngle(angle, softness);
   }
 
-  function angleBetweenSphericals(originCoords, currentCoords) {
+  function getAngleDelta(angleA, angleB) {
+    const diff = Math.abs(angleA - angleB) % (2 * Math.PI);
+    return diff > Math.PI ? (2 * Math.PI - diff) : diff;
+  }
+
+  const angleBetweenSphericals = function() {
     const originVector = new THREE$1.Vector3();
-    originVector.setFromSpherical(originCoords);
     const currentVector = new THREE$1.Vector3();
-    currentVector.setFromSpherical(currentCoords);
-    return originVector.angleTo(currentVector);
-  }
 
+    return (originCoords, currentCoords) => {
+      originVector.setFromSpherical(originCoords);
+      currentVector.setFromSpherical(currentCoords);
+      return originVector.angleTo(currentVector);
+    };
+  }();
+
+    // TODO: possibly clean this up and optimize it
+    //
+    // This function was arrived at through experimentation, it provides good
+    // looking results with percieved softness that scale relatively linearly with
+    //  the softness value in the 0 - 1 range
+    //
+    // For now it doesn't incur too much of a performance penalty because for most of our use cases (lights without too much softness)
+    // the threshold cutoff in getIntensityFromAngleDifferential stops us from running it too many times
   function getFalloffAtAngle(angle, softness) {
-    const softnessCoeficient = Math.pow(2, 14.5 * Math.max(0.001, (1.0 - clamp(softness, 0.0, 1.0))));
-    const falloff = Math.pow(softnessCoeficient, 1.1) * Math.pow(8, softnessCoeficient * -1 * (Math.pow(angle, 1.8)));
+    const softnessCoefficient = Math.pow(2, 14.5 * Math.max(0.001, 1.0 - clamp(softness, 0.0, 1.0)));
+    const falloff = Math.pow(softnessCoefficient, 1.1) * Math.pow(8, -softnessCoefficient * Math.pow(angle, 1.8));
     return falloff;
   }
 
-  function equirectangularToSpherical(x, y, width, height) {
-    const TWOPI = 2.0 * Math.PI;
-    const theta = (TWOPI * x) / width;
-    const phi = (Math.PI * y) / height;
-    const sphericalCoords = new THREE$1.Spherical(1.0, phi, theta);
-    return sphericalCoords;
+  function equirectangularToSpherical(x, y, width, height, target) {
+    target.phi = (Math.PI * y) / height;
+    target.theta = (2.0 * Math.PI * x) / width;
+    return target;
   }
 
   // retrieve textures used by meshes, grouping textures from meshes shared by *the same* mesh property
@@ -2206,17 +2309,29 @@ void main() {
 
   function makeTexture(gl, params) {
     let {
+      width = null,
+      height = null,
+
+      // A single HTMLImageElement, ImageData, or TypedArray,
+      // Or an array of any of these objects. In this case an Array Texture will be created
+      data = null,
+
+      // Number of channels, [1-4]. If left blank, the the function will decide the number of channels automatically from the data
+      channels = null,
+
+      // Either 'byte' or 'float'
+      // If left empty, the function will decide the format automatically from the data
+      storage = null,
+
+      // Reverse the texture across the y-axis.
+      flipY = false,
+
+      // sampling properties
+      gammaCorrection = false,
       wrapS = gl.REPEAT,
       wrapT = gl.REPEAT,
       minFilter = gl.LINEAR,
       magFilter = gl.LINEAR,
-      gammaCorrection = false,
-      width = null,
-      height = null,
-      channels = null,
-      storage = null,
-      data = null,
-      flipY = false
     } = params;
 
     width = width || data.width || 0;
@@ -2227,7 +2342,7 @@ void main() {
     let target;
     let dataArray;
 
-    // if data is a JS array but not a TypedArray, assume data is an array of TypedArrays and create a GL Array Texture
+    // if data is a JS array but not a TypedArray, assume data is an array of images and create a GL Array Texture
     if (Array.isArray(data)) {
       dataArray = data;
       data = dataArray[0];
@@ -2287,7 +2402,7 @@ void main() {
         gl.RGBA32F
       ][channels - 1];
     } else {
-      console.error('Texture of unknown type:', data);
+      console.error('Texture of unknown type:', storage || data);
     }
 
     if (dataArray) {
@@ -2740,7 +2855,7 @@ void main() {
       if (child instanceof THREE$1.DirectionalLight) {
         directionalLights.push(child);
       }
-      if (child instanceof THREE$1.EnvironmentLight) {
+      if (child instanceof EnvironmentLight) {
         if (environmentLights.length > 1) {
           console.warn(environmentLights, 'only one environment light can be used per scene');
         }
@@ -2834,7 +2949,7 @@ void main() {
       && (texture.map.encoding === THREE$1.RGBEEncoding || texture.map.encoding === THREE$1.LinearEncoding);
   }
 
-  function fragString$1(params) {
+  function fragString$1(defines) {
     return `#version 300 es
 
 precision mediump float;
@@ -2859,7 +2974,7 @@ vec3 reinhard(vec3 color) {
 }
 // http://filmicworlds.com/blog/filmic-tonemapping-operators/
 #define uncharted2Helper(x) max(((x * (0.15 * x + 0.10 * 0.50) + 0.20 * 0.02) / (x * (0.15 * x + 0.50) + 0.20 * 0.30)) - 0.02 / 0.30, vec3(0.0))
-const vec3 uncharted2WhitePoint = 1.0 / uncharted2Helper(vec3(${params.whitePoint}));
+const vec3 uncharted2WhitePoint = 1.0 / uncharted2Helper(vec3(${defines.whitePoint}));
 vec3 uncharted2( vec3 color ) {
   // John Hable's filmic operator from Uncharted 2 video game
   return clamp(uncharted2Helper(color) * uncharted2WhitePoint, vec3(0.0), vec3(1.0));
@@ -2885,9 +3000,9 @@ void main() {
   // dividing by alpha normalizes the brightness of the shadow catcher to match the background envmap.
   vec3 light = tex.rgb / tex.a;
 
-  light *= ${params.exposure}; // exposure
+  light *= ${defines.exposure}; // exposure
 
-  light = ${params.toneMapping}(light); // tone mapping
+  light = ${defines.toneMapping}(light); // tone mapping
 
   light = pow(light, vec3(1.0 / 2.2)); // gamma correction
 
@@ -2905,13 +3020,14 @@ void main() {
     [THREE$1.ACESFilmicToneMapping]: 'acesFilmic'
   };
 
-  function makeToneMapShader({
+  function makeToneMapShader(params) {
+    const {
+      fullscreenQuad,
       gl,
       optionalExtensions,
-      fullscreenQuad,
       textureAllocator,
       toneMappingParams
-    }) {
+    } = params;
 
     const { OES_texture_float_linear } = optionalExtensions;
     const { toneMapping, whitePoint, exposure } = toneMappingParams;
@@ -2925,12 +3041,12 @@ void main() {
     const program = createProgram(gl, fullscreenQuad.vertexShader, fragmentShader);
 
     const uniforms = getUniforms(gl, program);
-    const bindFramebuffer = textureAllocator.reserveSlot();
+    const image = textureAllocator.reserveSlot();
 
     function draw({ texture }) {
       gl.useProgram(program);
 
-      bindFramebuffer(uniforms.image, texture);
+      image.bind(uniforms.image, texture);
 
       fullscreenQuad.draw();
     }
@@ -2940,30 +3056,21 @@ void main() {
     };
   }
 
-  function makeRenderTargetFloat(gl, linearFiltering) {
-    return makeRenderTarget(gl, 'float', linearFiltering);
-  }
+  function makeFramebuffer(params) {
+    const {
+      gl,
+      linearFiltering = false, // linearly filter textures
 
-  function makeRenderTarget(gl, storage, linearFiltering) {
+      // A single render target in the form { storage: 'byte' | 'float' }
+      // Or multiple render targets passed as a RenderTargets object
+      renderTarget
+    } = params;
+
     const framebuffer = gl.createFramebuffer();
     let texture;
+
     let width = 0;
     let height = 0;
-
-    function setSize(w, h) {
-      width = Math.floor(w);
-      height = Math.floor(h);
-      texture = makeTexture(gl, {
-        width,
-        height,
-        storage,
-        minFilter: linearFiltering ? gl.LINEAR : gl.NEAREST,
-        magFilter: linearFiltering ? gl.LINEAR : gl.NEAREST,
-        channels: 4
-      });
-      gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
-      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, texture.target, texture.texture, 0);
-    }
 
     function bind() {
       gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
@@ -2973,6 +3080,21 @@ void main() {
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     }
 
+    function setSize(w, h) {
+      this.bind();
+
+      width = Math.floor(w);
+      height = Math.floor(h);
+
+      if (Array.isArray(renderTarget)) {
+        texture = initMultipleTextures(gl, width, height, linearFiltering, renderTarget);
+      } else {
+        texture = initSingleTexture(gl, width, height, linearFiltering, renderTarget);
+      }
+
+      this.unbind();
+    }
+
     function copyToScreen() {
       gl.bindFramebuffer(gl.READ_FRAMEBUFFER, framebuffer);
       gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null);
@@ -2980,20 +3102,59 @@ void main() {
     }
 
     return {
-      setSize,
       bind,
-      unbind,
       copyToScreen,
-      get texture() {
-        return texture;
-      },
-      get width() {
-        return width;
-      },
       get height() {
         return height;
       },
+      setSize,
+      get texture() {
+        return texture;
+      },
+      unbind,
+      get width() {
+        return width;
+      },
     };
+  }
+
+  function initSingleTexture(gl, width, height, linearFiltering, { storage }) {
+    const texture = makeTexture(gl, {
+      width,
+      height,
+      storage,
+      minFilter: linearFiltering ? gl.LINEAR : gl.NEAREST,
+      magFilter: linearFiltering ? gl.LINEAR : gl.NEAREST,
+      channels: 4
+    });
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, texture.target, texture.texture, 0);
+
+    return texture;
+  }
+
+  function initMultipleTextures(gl, width, height, linearFiltering, renderTargets) {
+    const texture = {};
+    const drawBuffers = [];
+
+    for (const { name, storage, index } of renderTargets.targets) {
+      const t = makeTexture(gl, {
+        width,
+        height,
+        storage,
+        minFilter: linearFiltering ? gl.LINEAR : gl.NEAREST,
+        magFilter: linearFiltering ? gl.LINEAR : gl.NEAREST,
+        channels: 4
+      });
+
+      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0 + index, t.target, t.texture, 0);
+
+      texture[name] = t;
+      drawBuffers.push(gl.COLOR_ATTACHMENT0 + index);
+    }
+
+    gl.drawBuffers(drawBuffers);
+
+    return texture;
   }
 
   // TileRender is based on the concept of a compute shader's work group.
@@ -3167,8 +3328,10 @@ void main() {
 
     function reserveSlot() {
       const unit = nextUnit++;
-      return (uniform, textureObj) => {
-        bindGl(uniform, textureObj, unit);
+      return {
+        bind(uniform, textureObj) {
+          bindGl(uniform, textureObj, unit);
+        }
       };
     }
 
@@ -3206,8 +3369,18 @@ void main() {
 
     const useLinearFiltering = optionalExtensions.OES_texture_float_linear;
 
-    const hdrBuffer = makeRenderTargetFloat(gl); // full resolution buffer representing the rendered scene with HDR lighting
-    const hdrPreviewBuffer = makeRenderTargetFloat(gl, useLinearFiltering); // lower resolution buffer used for the first frame
+    // full resolution buffer representing the rendered scene with HDR lighting
+    const hdrBuffer = makeFramebuffer({
+      gl,
+      renderTarget: { storage: 'float' }
+    });
+
+    // lower resolution buffer used for the first frame
+    const hdrPreviewBuffer = makeFramebuffer({
+      gl,
+      renderTarget: { storage: 'float' },
+      useLinearFiltering
+    });
 
     // used to sample only a portion of the scene to the HDR Buffer to prevent the GPU from locking up from excessive computation
     const tileRender = makeTileRender(gl);
@@ -3592,8 +3765,8 @@ void main() {
     return true;
   };
 
-  /* global THREE */
-  if (THREE) {
+  if (window.THREE) {
+    /* global THREE */
     THREE.LensCamera = LensCamera;
     THREE.SoftDirectionalLight = SoftDirectionalLight;
     THREE.EnvironmentLight = EnvironmentLight;
