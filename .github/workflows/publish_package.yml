@@ -8,7 +8,7 @@ jobs:
       - uses: actions/setup-node@v1
         with:
           node-version: 10.15.3
-      - run: npm test
+      - run: npm install && npm test
 
   publish-npm:
     needs: build
