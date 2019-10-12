@@ -1,6 +1,7 @@
 import textureLinear from './chunks/textureLinear.glsl';
+import { renderTargetInputs } from '../glslUtil.js';
 
-export default function(defines) {
+export default function({ renderTargets, defines }) {
   return `#version 300 es
 
 precision mediump float;
@@ -10,7 +11,8 @@ in vec2 vCoord;
 
 out vec4 fragColor;
 
-uniform sampler2D image;
+uniform mediump sampler2DArray image;
+${renderTargetInputs(renderTargets)}
 
 ${textureLinear(defines)}
 
@@ -42,7 +44,7 @@ vec3 acesFilmic( vec3 color ) {
 }
 
 void main() {
-  vec4 tex = textureLinear(image, vCoord);
+  vec4 tex = texture(image, renderTarget_light(vCoord));
 
   // alpha channel stores the number of samples progressively rendered
   // divide the sum of light by alpha to obtain average contribution of light

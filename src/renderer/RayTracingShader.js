@@ -1,18 +1,17 @@
-import * as THREE from 'three';
-import fragString from './glsl/rayTrace.frag';
-import { createShader, createProgram, getUniforms } from './glUtil';
-import { mergeMeshesToGeometry } from './mergeMeshesToGeometry';
 import { bvhAccel, flattenBvh } from './bvhAccel';
-import { envmapDistribution } from './envmapDistribution';
-import { generateEnvMapFromSceneComponents } from './envMapCreation';
-import { getTexturesFromMaterials, mergeTexturesFromMaterials } from './texturesFromMaterials';
-import { makeTexture } from './Texture';
-import { uploadBuffers } from './uploadBuffers';
 import { ThinMaterial, ThickMaterial, ShadowCatcherMaterial } from '../constants';
-import { clamp } from './util';
+import { generateEnvMapFromSceneComponents } from './envMapCreation';
+import { envmapDistribution } from './envmapDistribution';
+import { createShader, createProgram, getUniforms } from './glUtil';
+import fragString from './glsl/rayTrace.frag';
+import { mergeMeshesToGeometry } from './mergeMeshesToGeometry';
+import { makeRenderTargets } from './RenderTargets';
 import { makeStratifiedSamplerCombined } from './StratifiedSamplerCombined';
-
-//Important TODO: Refactor this file to get rid of duplicate and confusing code
+import { makeTexture } from './Texture';
+import { getTexturesFromMaterials, mergeTexturesFromMaterials } from './texturesFromMaterials';
+import * as THREE from 'three';
+import { uploadBuffers } from './uploadBuffers';
+import { clamp } from './util';
 
 export function makeRayTracingShader({
     bounces, // number of global illumination bounces
@@ -37,10 +36,15 @@ export function makeRayTracingShader({
     }
   }
 
+  const renderTargets = {
+    names: ['light', 'position'],
+    storage: 'float'
+  };
+
   let samples;
 
   const { program, uniforms } = makeProgramFromScene({
-    bounces, fullscreenQuad, gl, optionalExtensions, samplingDimensions, scene, textureAllocator
+    bounces, fullscreenQuad, gl, optionalExtensions, renderTargets, samplingDimensions, scene, textureAllocator
   });
 
   function setSize(width, height) {
@@ -112,6 +116,7 @@ export function makeRayTracingShader({
   return {
     draw,
     nextSeed,
+    renderTargets,
     setCamera,
     setHistory,
     setNoise,
@@ -125,6 +130,7 @@ function makeProgramFromScene({
     fullscreenQuad,
     gl,
     optionalExtensions,
+    renderTargets,
     samplingDimensions,
     scene,
     textureAllocator
@@ -152,20 +158,23 @@ function makeProgramFromScene({
   const useShadowCatcher = materials.some(m => m.shadowCatcher);
 
   const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragString({
-    OES_texture_float_linear,
-    BVH_COLUMNS: textureDimensionsFromArray(flattenedBvh.count).columnsLog,
-    INDEX_COLUMNS: textureDimensionsFromArray(numTris).columnsLog,
-    VERTEX_COLUMNS: textureDimensionsFromArray(geometry.attributes.position.count).columnsLog,
-    STACK_SIZE: flattenedBvh.maxDepth,
-    NUM_TRIS: numTris,
-    NUM_MATERIALS: materials.length,
-    NUM_DIFFUSE_MAPS: maps.map.textures.length,
-    NUM_NORMAL_MAPS: maps.normalMap.textures.length,
-    NUM_PBR_MAPS: pbrMap.textures.length,
-    BOUNCES: bounces,
-    USE_GLASS: useGlass,
-    USE_SHADOW_CATCHER: useShadowCatcher,
-    SAMPLING_DIMENSIONS: samplingDimensions.reduce((a, b) => a + b)
+    renderTargets,
+    defines: {
+      OES_texture_float_linear,
+      BVH_COLUMNS: textureDimensionsFromArray(flattenedBvh.count).columnsLog,
+      INDEX_COLUMNS: textureDimensionsFromArray(numTris).columnsLog,
+      VERTEX_COLUMNS: textureDimensionsFromArray(geometry.attributes.position.count).columnsLog,
+      STACK_SIZE: flattenedBvh.maxDepth,
+      NUM_TRIS: numTris,
+      NUM_MATERIALS: materials.length,
+      NUM_DIFFUSE_MAPS: maps.map.textures.length,
+      NUM_NORMAL_MAPS: maps.normalMap.textures.length,
+      NUM_PBR_MAPS: pbrMap.textures.length,
+      BOUNCES: bounces,
+      USE_GLASS: useGlass,
+      USE_SHADOW_CATCHER: useShadowCatcher,
+      SAMPLING_DIMENSIONS: samplingDimensions.reduce((a, b) => a + b)
+    }
   }));
 
   const program = createProgram(gl, fullscreenQuad.vertexShader, fragmentShader);

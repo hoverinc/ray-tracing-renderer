@@ -15,6 +15,7 @@ export function makeToneMapShader(params) {
     fullscreenQuad,
     gl,
     optionalExtensions,
+    renderTargets,
     textureAllocator,
     toneMappingParams
   } = params;
@@ -23,10 +24,13 @@ export function makeToneMapShader(params) {
   const { toneMapping, whitePoint, exposure } = toneMappingParams;
 
   const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragString({
-    OES_texture_float_linear,
-    toneMapping: toneMapFunctions[toneMapping] || 'linear',
-    whitePoint: whitePoint.toExponential(), // toExponential allows integers to be represented as GLSL floats
-    exposure: exposure.toExponential()
+    renderTargets,
+    defines: {
+      OES_texture_float_linear,
+      toneMapping: toneMapFunctions[toneMapping] || 'linear',
+      whitePoint: whitePoint.toExponential(), // toExponential allows integers to be represented as GLSL floats
+      exposure: exposure.toExponential()
+    }
   }));
   const program = createProgram(gl, fullscreenQuad.vertexShader, fragmentShader);
 

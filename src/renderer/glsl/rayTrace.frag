@@ -8,15 +8,18 @@ import sampleMaterial from './chunks/sampleMaterial.glsl';
 import sampleShadowCatcher from './chunks/sampleShadowCatcher.glsl';
 import sampleGlass from './chunks/sampleGlassSpecular.glsl';
 // import sampleGlass from './chunks/sampleGlassMicrofacet.glsl';
-import { unrollLoop, addDefines } from '../glslUtil';
+import { unrollLoop, addDefines, renderTargetInputs, renderTargetOutputs } from '../glslUtil';
 
-export default function(defines) {
+export default function({ renderTargets, defines }) {
   return `#version 300 es
 
 precision mediump float;
 precision mediump int;
 
 ${addDefines(defines)}
+
+${renderTargetInputs(renderTargets)}
+${renderTargetOutputs(renderTargets)}
 
 #define PI 3.14159265359
 #define TWOPI 6.28318530718
@@ -71,14 +74,13 @@ struct Camera {
 };
 
 uniform Camera camera;
+uniform vec2 pixelSize; // 1 / screenResolution
+
 uniform mat4 historyCameraInv;
 uniform mat4 historyCameraProj;
-uniform vec2 pixelSize; // 1 / screenResolution
-uniform sampler2D historyBuffer;
+uniform mediump sampler2DArray historyBuffer;
 
 in vec2 vCoord;
-
-out vec4 fragColor;
 
 void initRay(inout Ray ray, vec3 origin, vec3 direction) {
   ray.o = origin;
@@ -194,6 +196,7 @@ void main() {
   initRandom();
 
   vec2 vCoordAntiAlias = vCoord + pixelSize * (randomSampleVec2() - 0.5);
+  // vCoordAntiAlias = vCoord;
 
   vec3 direction = normalize(vec3(vCoordAntiAlias - 0.5, -1.0) * vec3(camera.aspect, 1.0, camera.fov));
 
@@ -224,13 +227,25 @@ void main() {
 
   if (si.hit) {
     vec4 historyCoord = (historyCameraProj * historyCameraInv * vec4(si.position, 1.0));
-    historyCoord.xy /= historyCoord.w;
+    vec2 hCoord = 0.5 * historyCoord.xy / historyCoord.w + 0.5;
 
-    const float newContrib = 0.05;
-    fragColor = newContrib * liAndAlpha + (1.0 - newContrib) * texture(historyBuffer, 0.5 * historyCoord.xy + 0.5);
+    vec3 historyPos = texture(historyBuffer, renderTarget_position(hCoord)).xyz;
+
+    vec3 d = historyPos - si.position;
+    float error = abs(dot(d, d));
+
+    if (error > 1.0) {
+      renderTarget_light = liAndAlpha;
+    } else {
+      float newContrib = 0.05;
+      renderTarget_light = newContrib * liAndAlpha + (1.0 - newContrib) * texture(historyBuffer, renderTarget_light(hCoord));
+    }
   } else {
-    fragColor = liAndAlpha;
+    renderTarget_light = liAndAlpha;
   }
+
+  renderTarget_position = vec4(si.position, 1.0);
+
 
   // Stratified Sampling Sample Count Test
   // ---------------

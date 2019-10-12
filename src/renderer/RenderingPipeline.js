@@ -22,9 +22,16 @@ export function makeRenderingPipeline({
   let ready = false;
 
   const fullscreenQuad = makeFullscreenQuad(gl);
+
   const textureAllocator = makeTextureAllocator(gl);
+
   const rayTracingShader = makeRayTracingShader({gl, optionalExtensions, fullscreenQuad, textureAllocator, scene, bounces});
-  const toneMapShader = makeToneMapShader({gl, optionalExtensions, fullscreenQuad, textureAllocator, toneMappingParams});
+
+  const renderTargets = rayTracingShader.renderTargets;
+
+  const toneMapShader = makeToneMapShader({
+    fullscreenQuad, gl, optionalExtensions,  renderTargets, textureAllocator, toneMappingParams
+  });
 
   const noiseImage = new Image();
   noiseImage.src = noiseBase64;
@@ -38,12 +45,12 @@ export function makeRenderingPipeline({
   // full resolution buffer representing the rendered scene with HDR lighting
   let hdrBuffer = makeFramebuffer({
     gl,
-    renderTarget: { storage: 'float' }
+    renderTarget: renderTargets
   });
 
   let historyBuffer = makeFramebuffer({
     gl,
-    renderTarget: { storage: 'float' }
+    renderTarget: renderTargets
   });
 
   // lower resolution buffer used for the first frame
@@ -224,6 +231,7 @@ export function makeRenderingPipeline({
     const temp = historyBuffer;
     historyBuffer = hdrBuffer;
     hdrBuffer = temp;
+
     lastCamera.copy(camera);
   }
 

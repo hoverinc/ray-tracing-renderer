@@ -22,3 +22,27 @@ export function addDefines(params) {
 
   return defines;
 }
+
+export function renderTargetOutputs(renderTargets) {
+  let outputs = '';
+
+  const names = renderTargets.names;
+
+  for (let i = 0; i < names.length; i++) {
+    outputs += `layout(location = ${i}) out vec4 renderTarget_${names[i]};\n`;
+  }
+
+  return outputs;
+}
+
+export function renderTargetInputs(renderTargets) {
+  let inputs = '';
+
+  const names = renderTargets.names;
+
+  for (let i = 0; i < names.length; i++) {
+    inputs += `#define renderTarget_${names[i]}(coord) vec3(coord, ${i}.0)\n`;
+  }
+
+  return inputs;
+}
