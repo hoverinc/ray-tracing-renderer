@@ -23,7 +23,7 @@ export function addDefines(params) {
   return defines;
 }
 
-export function renderTargetOutputs(renderTargets) {
+export function renderTargetSet(renderTargets) {
   let outputs = '';
 
   const names = renderTargets.names;
@@ -35,13 +35,15 @@ export function renderTargetOutputs(renderTargets) {
   return outputs;
 }
 
-export function renderTargetInputs(renderTargets) {
+export function renderTargetGet(texture, renderTargets) {
   let inputs = '';
+
+  inputs += `uniform mediump sampler2DArray ${texture};\n`;
 
   const names = renderTargets.names;
 
   for (let i = 0; i < names.length; i++) {
-    inputs += `#define renderTarget_${names[i]}(coord) vec3(coord, ${i}.0)\n`;
+    inputs += `#define ${texture}_${names[i]}(coord) texture(${texture}, vec3(coord, ${i}.0))\n`;
   }
 
   return inputs;

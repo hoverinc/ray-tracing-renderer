@@ -8,7 +8,7 @@ import sampleMaterial from './chunks/sampleMaterial.glsl';
 import sampleShadowCatcher from './chunks/sampleShadowCatcher.glsl';
 import sampleGlass from './chunks/sampleGlassSpecular.glsl';
 // import sampleGlass from './chunks/sampleGlassMicrofacet.glsl';
-import { unrollLoop, addDefines, renderTargetInputs, renderTargetOutputs } from '../glslUtil';
+import { unrollLoop, addDefines, renderTargetGet, renderTargetSet } from '../glslUtil';
 
 export default function({ renderTargets, defines }) {
   return `#version 300 es
@@ -18,8 +18,8 @@ precision mediump int;
 
 ${addDefines(defines)}
 
-${renderTargetInputs(renderTargets)}
-${renderTargetOutputs(renderTargets)}
+${renderTargetGet('historyBuffer', renderTargets)}
+${renderTargetSet(renderTargets)}
 
 #define PI 3.14159265359
 #define TWOPI 6.28318530718
@@ -78,7 +78,6 @@ uniform vec2 pixelSize; // 1 / screenResolution
 
 uniform mat4 historyCameraInv;
 uniform mat4 historyCameraProj;
-uniform mediump sampler2DArray historyBuffer;
 
 in vec2 vCoord;
 
@@ -229,7 +228,8 @@ void main() {
     vec4 historyCoord = (historyCameraProj * historyCameraInv * vec4(si.position, 1.0));
     vec2 hCoord = 0.5 * historyCoord.xy / historyCoord.w + 0.5;
 
-    vec3 historyPos = texture(historyBuffer, renderTarget_position(hCoord)).xyz;
+    // vec3 historyPos = texture(historyBuffer, renderTarget_position(hCoord)).xyz;
+    vec3 historyPos = historyBuffer_position(hCoord).xyz;
 
     vec3 d = historyPos - si.position;
     float error = abs(dot(d, d));
@@ -238,7 +238,7 @@ void main() {
       renderTarget_light = liAndAlpha;
     } else {
       float newContrib = 0.05;
-      renderTarget_light = newContrib * liAndAlpha + (1.0 - newContrib) * texture(historyBuffer, renderTarget_light(hCoord));
+      renderTarget_light = newContrib * liAndAlpha + (1.0 - newContrib) * historyBuffer_light(hCoord);
     }
   } else {
     renderTarget_light = liAndAlpha;
