@@ -191,11 +191,26 @@ vec4 integrator(inout Ray ray, inout SurfaceInteraction si) {
   return vec4(path.li, path.alpha);
 }
 
+vec4 reproject(SurfaceInteraction si, ivec2 hTexel, ivec2 size) {
+  vec3 historyNormal = texelFetch(historyBuffer, ivec3(hTexel, historyBuffer_normal), 0).xyz;
+
+  vec3 d = historyNormal - si.normal;
+  float error = abs(dot(d, d));
+
+  bool invalid = error > 0.1 || any(lessThan(hTexel, ivec2(0))) || any(greaterThan(hTexel, size));
+
+  if (invalid) {
+    return vec4(-1.0);
+  } else {
+    return texelFetch(historyBuffer, ivec3(hTexel, historyBuffer_light), 0);
+  }
+}
+
 void main() {
   initRandom();
-
-  vec2 vCoordAntiAlias = vCoord + pixelSize * (randomSampleVec2() - 0.5);
-  // vCoordAntiAlias = vCoord;
+  vec2 antialias = pixelSize * (randomSampleVec2() - 0.5);
+  vec2 vCoordAntiAlias = vCoord + antialias;
+  // vec2 vCoordAntiAlias = vCoord;
 
   vec3 direction = normalize(vec3(vCoordAntiAlias - 0.5, -1.0) * vec3(camera.aspect, 1.0, camera.fov));
 
@@ -226,25 +241,57 @@ void main() {
 
   if (si.hit) {
     vec4 historyCoord = (historyCameraProj * historyCameraInv * vec4(si.position, 1.0));
-    vec2 hCoord = 0.5 * historyCoord.xy / historyCoord.w + 0.5;
+    vec2 hCoord = 0.5 * historyCoord.xy / historyCoord.w + 0.5 - antialias;
 
-    // vec3 historyPos = texture(historyBuffer, renderTarget_position(hCoord)).xyz;
-    vec3 historyPos = historyBuffer_position(hCoord).xyz;
+    ivec2 size = textureSize(historyBuffer, 0).xy;
+    vec2 sizef = vec2(size);
 
-    vec3 d = historyPos - si.position;
-    float error = abs(dot(d, d));
+    vec2 hTexelf = hCoord * sizef - 0.5;
+    vec2 f = fract(hTexelf);
+    ivec2 hTexel = ivec2(hTexelf);
 
-    if (error > 1.0) {
-      renderTarget_light = liAndAlpha;
+    vec4 s0 = reproject(si, hTexel + ivec2(0, 0), size);
+    vec4 s1 = reproject(si, hTexel + ivec2(1, 0), size);
+    vec4 s2 = reproject(si, hTexel + ivec2(0, 1), size);
+    vec4 s3 = reproject(si, hTexel + ivec2(1, 1), size);
+
+    vec4 s;
+    float sum = 0.0;
+    float w;
+
+    if (s0.a != -1.0) {
+      w = (1.0 - f.x) * (1.0 - f.y);
+      s += s0 * w;
+      sum += w;
+    }
+    if (s1.a != -1.0) {
+      w = f.x * (1.0 - f.y);
+      s += s1 * w;
+      sum += w;
+    }
+    if (s2.a != -1.0) {
+      w = (1.0 - f.x) * f.y;
+      s +=  s2 * w;
+      sum += w;
+    }
+    if (s3.a != -1.0) {
+      w = f.x * f.y;
+      s += s3 * w;
+      sum += w;
+    }
+
+    if (sum > 0.001) {
+      s /= sum;
+      float newContrib = 0.02;
+      renderTarget_light = newContrib * liAndAlpha + (1.0 - newContrib) * s;
     } else {
-      float newContrib = 0.05;
-      renderTarget_light = newContrib * liAndAlpha + (1.0 - newContrib) * historyBuffer_light(hCoord);
+      renderTarget_light = liAndAlpha;
     }
   } else {
     renderTarget_light = liAndAlpha;
   }
 
-  renderTarget_position = vec4(si.position, 1.0);
+  renderTarget_normal = vec4(si.normal, 1.0);
 
 
   // Stratified Sampling Sample Count Test

@@ -5,7 +5,6 @@ import { envmapDistribution } from './envmapDistribution';
 import { createShader, createProgram, getUniforms } from './glUtil';
 import fragString from './glsl/rayTrace.frag';
 import { mergeMeshesToGeometry } from './mergeMeshesToGeometry';
-import { makeRenderTargets } from './RenderTargets';
 import { makeStratifiedSamplerCombined } from './StratifiedSamplerCombined';
 import { makeTexture } from './Texture';
 import { getTexturesFromMaterials, mergeTexturesFromMaterials } from './texturesFromMaterials';
@@ -37,7 +36,7 @@ export function makeRayTracingShader({
   }
 
   const renderTargets = {
-    names: ['light', 'position'],
+    names: ['light', 'normal'],
     storage: 'float'
   };
 

@@ -40,24 +40,27 @@ export function makeRenderingPipeline({
     ready = true;
   };
 
-  const useLinearFiltering = optionalExtensions.OES_texture_float_linear;
+  const linearFiltering = optionalExtensions.OES_texture_float_linear;
 
   // full resolution buffer representing the rendered scene with HDR lighting
   let hdrBuffer = makeFramebuffer({
     gl,
-    renderTarget: renderTargets
+    renderTarget: renderTargets,
+    linearFiltering: true
+
   });
 
   let historyBuffer = makeFramebuffer({
     gl,
-    renderTarget: renderTargets
+    renderTarget: renderTargets,
+    linearFiltering: true
   });
 
   // lower resolution buffer used for the first frame
   const hdrPreviewBuffer = makeFramebuffer({
     gl,
     renderTarget: { storage: 'float' },
-    useLinearFiltering
+    linearFiltering
   });
 
   // used to sample only a portion of the scene to the HDR Buffer to prevent the GPU from locking up from excessive computation

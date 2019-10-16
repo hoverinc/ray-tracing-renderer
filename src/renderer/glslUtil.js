@@ -43,7 +43,8 @@ export function renderTargetGet(texture, renderTargets) {
   const names = renderTargets.names;
 
   for (let i = 0; i < names.length; i++) {
-    inputs += `#define ${texture}_${names[i]}(coord) texture(${texture}, vec3(coord, ${i}.0))\n`;
+    // inputs += `#define ${texture}_${names[i]}(coord) texture(${texture}, vec3(coord, ${i}.0))\n`;
+    inputs += `#define ${texture}_${names[i]} ${i}\n`;
   }
 
   return inputs;

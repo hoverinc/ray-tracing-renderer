@@ -43,7 +43,7 @@ vec3 acesFilmic( vec3 color ) {
 }
 
 void main() {
-  vec4 tex = image_light(vCoord);
+  vec4 tex = texture(image, vec3(vCoord, image_light));
 
   // alpha channel stores the number of samples progressively rendered
   // divide the sum of light by alpha to obtain average contribution of light
