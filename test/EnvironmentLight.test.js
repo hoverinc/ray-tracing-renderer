@@ -12,11 +12,17 @@ describe('constructor', () => {
   });
 
   test('initializes "map" with the parameter provided', () => {
-    expect(new EnvironmentLight().map).toBe(undefined);
+    expect(light.map).toBe(undefined);
     expect(new EnvironmentLight(5).map).toBe(5);
   });
 
-  test('creates en instance where "isEnvironmentLight=true"', () => {
+  test('initializes "color" and "intensity" of the base class', () => {
+    const lightWithParams = new EnvironmentLight(null, 0x555555, 0.5);
+    expect(lightWithParams.color.getHex()).toBe(0x555555);
+    expect(lightWithParams.intensity).toBe(0.5);
+  });
+
+  test('creates an instance where "isEnvironmentLight == true"', () => {
     expect(light.isEnvironmentLight).toBe(true);
   });
 });
