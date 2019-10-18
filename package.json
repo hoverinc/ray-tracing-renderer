@@ -6,7 +6,8 @@
   "scripts": {
     "build": "./node_modules/.bin/rollup -c",
     "dev": "./node_modules/.bin/rollup -cw --environment DEV & ./node_modules/.bin/http-server",
-    "test": "./node_modules/jest/bin/jest.js"
+    "test": "./node_modules/jest/bin/jest.js",
+    "release": "./scripts/release.sh"
   },
   "author": "HOVER Inc",
   "license": "MIT",
@@ -16,6 +17,7 @@
     "babel-jest": "^24.8.0",
     "http-server": "^0.11.1",
     "jest": "^24.8.0",
+    "release-it": "^12.4.3",
     "rollup": "^1.19.2",
     "rollup-plugin-babel": "^4.3.3",
     "rollup-plugin-node-resolve": "^5.2.0",

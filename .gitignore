@@ -2,6 +2,9 @@
 
 node_modules
 
+# file with envinronment variables
+.env
+
 # demo/test scenes
 demos/
 test-scene/
