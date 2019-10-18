@@ -42,6 +42,7 @@
     constructor(map, ...args) {
       super(...args);
       this.map = map;
+      this.isEnvironmentLight = true;
     }
 
     copy(source) {
@@ -2842,20 +2843,20 @@ void main() {
     const directionalLights = [];
     const environmentLights = [];
     scene.traverse(child => {
-      if (child instanceof THREE$1.Mesh) {
+      if (child.isMesh) {
         if (!child.geometry || !child.geometry.getAttribute('position')) {
           console.warn(child, 'must have a geometry property with a position attribute');
         }
-        else if (!(child.material instanceof THREE$1.MeshStandardMaterial)) {
+        else if (!(child.material.isMeshStandardMaterial)) {
           console.warn(child, 'must use MeshStandardMaterial in order to be rendered.');
         } else {
           meshes.push(child);
         }
       }
-      if (child instanceof THREE$1.DirectionalLight) {
+      if (child.isDirectionalLight) {
         directionalLights.push(child);
       }
-      if (child instanceof EnvironmentLight) {
+      if (child.isEnvironmentLight) {
         if (environmentLights.length > 1) {
           console.warn(environmentLights, 'only one environment light can be used per scene');
         }
