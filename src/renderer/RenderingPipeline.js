@@ -80,7 +80,7 @@ export function makeRenderingPipeline({
 
   let sampleRenderedCallback = () => {};
 
-  rayTracingShader.setStrataCount(strataCount);
+  rayTracingShader.setStrataCount(1);
   rayTracingShader.useStratifiedSampling(true);
 
   function clear() {

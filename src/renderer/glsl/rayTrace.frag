@@ -197,7 +197,7 @@ vec4 reproject(SurfaceInteraction si, ivec2 hTexel, ivec2 size) {
   vec3 d = historyNormal - si.normal;
   float error = abs(dot(d, d));
 
-  bool invalid = error > 0.1 || any(lessThan(hTexel, ivec2(0))) || any(greaterThan(hTexel, size));
+  bool invalid = error > 0.001 || any(lessThan(hTexel, ivec2(0))) || any(greaterThan(hTexel, size));
 
   if (invalid) {
     return vec4(-1.0);
@@ -209,8 +209,8 @@ vec4 reproject(SurfaceInteraction si, ivec2 hTexel, ivec2 size) {
 void main() {
   initRandom();
   vec2 antialias = pixelSize * (randomSampleVec2() - 0.5);
-  vec2 vCoordAntiAlias = vCoord + antialias;
-  // vec2 vCoordAntiAlias = vCoord;
+  // vec2 vCoordAntiAlias = vCoord + antialias;
+  vec2 vCoordAntiAlias = vCoord;
 
   vec3 direction = normalize(vec3(vCoordAntiAlias - 0.5, -1.0) * vec3(camera.aspect, 1.0, camera.fov));
 
@@ -241,7 +241,7 @@ void main() {
 
   if (si.hit) {
     vec4 historyCoord = (historyCameraProj * historyCameraInv * vec4(si.position, 1.0));
-    vec2 hCoord = 0.5 * historyCoord.xy / historyCoord.w + 0.5 - antialias;
+    vec2 hCoord = 0.5 * historyCoord.xy / historyCoord.w + 0.5;
 
     ivec2 size = textureSize(historyBuffer, 0).xy;
     vec2 sizef = vec2(size);
@@ -280,12 +280,15 @@ void main() {
       sum += w;
     }
 
-    if (sum > 0.001) {
+    if (sum > 0.0) {
       s /= sum;
       float newContrib = 0.02;
-      renderTarget_light = newContrib * liAndAlpha + (1.0 - newContrib) * s;
+      // renderTarget_light = newContrib * liAndAlpha + (1.0 - newContrib) * s;
+      renderTarget_light = 0.98 * s + liAndAlpha;
+
     } else {
       renderTarget_light = liAndAlpha;
+      // renderTarget_light = vec4(0, 0, 0, 1);
     }
   } else {
     renderTarget_light = liAndAlpha;
