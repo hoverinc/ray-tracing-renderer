@@ -1,0 +1,4 @@
+# files to ignore when you install the library as an npm package
+
+# folder with sample scenes & 3D models
+scenes/
