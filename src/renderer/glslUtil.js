@@ -29,7 +29,7 @@ export function renderTargetSet(renderTargets) {
   const names = renderTargets.names;
 
   for (let i = 0; i < names.length; i++) {
-    outputs += `layout(location = ${i}) out vec4 renderTarget_${names[i]};\n`;
+    outputs += `layout(location = ${i}) out vec4 out_${names[i]};\n`;
   }
 
   return outputs;
@@ -43,7 +43,6 @@ export function renderTargetGet(texture, renderTargets) {
   const names = renderTargets.names;
 
   for (let i = 0; i < names.length; i++) {
-    // inputs += `#define ${texture}_${names[i]}(coord) texture(${texture}, vec3(coord, ${i}.0))\n`;
     inputs += `#define ${texture}_${names[i]} ${i}\n`;
   }
 

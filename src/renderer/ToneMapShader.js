@@ -1,5 +1,6 @@
 import fragString from './glsl/toneMap.frag';
 import { createShader, createProgram, getUniforms } from './glUtil';
+import { rayTracingRenderTargets } from './RayTracingShader.js';
 import * as THREE from 'three';
 
 const toneMapFunctions = {
@@ -15,7 +16,6 @@ export function makeToneMapShader(params) {
     fullscreenQuad,
     gl,
     optionalExtensions,
-    renderTargets,
     textureAllocator,
     toneMappingParams
   } = params;
@@ -24,7 +24,7 @@ export function makeToneMapShader(params) {
   const { toneMapping, whitePoint, exposure } = toneMappingParams;
 
   const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragString({
-    renderTargets,
+    rayTracingRenderTargets,
     defines: {
       OES_texture_float_linear,
       toneMapping: toneMapFunctions[toneMapping] || 'linear',
@@ -37,7 +37,7 @@ export function makeToneMapShader(params) {
   const uniforms = getUniforms(gl, program);
   const image = textureAllocator.reserveSlot();
 
-  function draw({ texture }) {
+  function draw(texture) {
     gl.useProgram(program);
 
     image.bind(uniforms.image, texture);

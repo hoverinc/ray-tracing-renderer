@@ -1,7 +1,7 @@
 import textureLinear from './chunks/textureLinear.glsl';
 import { renderTargetGet } from '../glslUtil.js';
 
-export default function({ renderTargets, defines }) {
+export default function({ rayTracingRenderTargets, defines }) {
   return `#version 300 es
 
 precision mediump float;
@@ -11,7 +11,7 @@ in vec2 vCoord;
 
 out vec4 fragColor;
 
-${renderTargetGet('image', renderTargets)}
+${renderTargetGet('image', rayTracingRenderTargets)}
 
 ${textureLinear(defines)}
 

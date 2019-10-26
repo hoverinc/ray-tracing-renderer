@@ -10,7 +10,7 @@ import sampleGlass from './chunks/sampleGlassSpecular.glsl';
 // import sampleGlass from './chunks/sampleGlassMicrofacet.glsl';
 import { unrollLoop, addDefines, renderTargetGet, renderTargetSet } from '../glslUtil';
 
-export default function({ renderTargets, defines }) {
+export default function({ rayTracingRenderTargets, defines }) {
   return `#version 300 es
 
 precision mediump float;
@@ -18,8 +18,8 @@ precision mediump int;
 
 ${addDefines(defines)}
 
-${renderTargetGet('historyBuffer', renderTargets)}
-${renderTargetSet(renderTargets)}
+${renderTargetGet('historyBuffer', rayTracingRenderTargets)}
+${renderTargetSet(rayTracingRenderTargets)}
 
 #define PI 3.14159265359
 #define TWOPI 6.28318530718
@@ -178,7 +178,6 @@ vec4 integrator(inout Ray ray, inout SurfaceInteraction si) {
 
   bounce(path, 1, si);
 
-
   // Manually unroll for loop.
   // Some hardware fails to interate over a GLSL loop, so we provide this workaround
   SurfaceInteraction indirectSi;
@@ -239,7 +238,7 @@ void main() {
     liAndAlpha = vec4(0, 0, 0, 1);
   }
 
-  if (si.hit) {
+ if (si.hit) {
     vec4 historyCoord = (historyCameraProj * historyCameraInv * vec4(si.position, 1.0));
     vec2 hCoord = 0.5 * historyCoord.xy / historyCoord.w + 0.5;
 
@@ -283,18 +282,20 @@ void main() {
     if (sum > 0.0) {
       s /= sum;
       float newContrib = 0.02;
-      // renderTarget_light = newContrib * liAndAlpha + (1.0 - newContrib) * s;
-      renderTarget_light = 0.98 * s + liAndAlpha;
+      // out_light = newContrib * liAndAlpha + (1.0 - newContrib) * s;
+      out_light = 0.98 * s + liAndAlpha;
 
     } else {
-      renderTarget_light = liAndAlpha;
-      // renderTarget_light = vec4(0, 0, 0, 1);
+      out_light = liAndAlpha;
+      // out_light = vec4(0, 0, 0, 1);
     }
   } else {
-    renderTarget_light = liAndAlpha;
+    out_light = liAndAlpha;
   }
 
-  renderTarget_normal = vec4(si.normal, 1.0);
+  // out_light = liAndAlpha;
+  out_normal = vec4(si.normal, 1.0);
+  out_position = vec4(si.position, 1.0);
 
 
   // Stratified Sampling Sample Count Test

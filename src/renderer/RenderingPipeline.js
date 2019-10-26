@@ -1,11 +1,12 @@
 import { makeFullscreenQuad } from './FullscreenQuad';
-import { makeRayTracingShader } from './RayTracingShader';
+import { makeRayTracingShader, rayTracingRenderTargets } from './RayTracingShader';
 import { makeToneMapShader } from './ToneMapShader';
 import { makeFramebuffer } from './Framebuffer';
 import { numberArraysEqual, clamp } from './util';
 import { makeTileRender } from './TileRender';
 import { LensCamera } from '../LensCamera';
 import { makeTextureAllocator } from './TextureAllocator';
+import { makeReprojectShader } from './ReprojectShader';
 import * as THREE from 'three';
 import noiseBase64 from './texture/noise';
 
@@ -25,12 +26,12 @@ export function makeRenderingPipeline({
 
   const textureAllocator = makeTextureAllocator(gl);
 
-  const rayTracingShader = makeRayTracingShader({gl, optionalExtensions, fullscreenQuad, textureAllocator, scene, bounces});
+  const rayTracingShader = makeRayTracingShader({bounces, fullscreenQuad, gl, optionalExtensions, scene, textureAllocator});
 
-  const renderTargets = rayTracingShader.renderTargets;
+  // const reprojectShader = makeReprojectShader({ fullscreenQuad, gl });
 
   const toneMapShader = makeToneMapShader({
-    fullscreenQuad, gl, optionalExtensions,  renderTargets, textureAllocator, toneMappingParams
+    fullscreenQuad, gl, optionalExtensions, textureAllocator, toneMappingParams
   });
 
   const noiseImage = new Image();
@@ -45,23 +46,23 @@ export function makeRenderingPipeline({
   // full resolution buffer representing the rendered scene with HDR lighting
   let hdrBuffer = makeFramebuffer({
     gl,
-    renderTarget: renderTargets,
+    renderTarget: rayTracingRenderTargets,
     linearFiltering: true
 
   });
 
   let historyBuffer = makeFramebuffer({
     gl,
-    renderTarget: renderTargets,
+    renderTarget: rayTracingRenderTargets,
     linearFiltering: true
   });
 
   // lower resolution buffer used for the first frame
-  const hdrPreviewBuffer = makeFramebuffer({
-    gl,
-    renderTarget: { storage: 'float' },
-    linearFiltering
-  });
+  // const hdrPreviewBuffer = makeFramebuffer({
+  //   gl,
+  //   renderTarget: { storage: 'float' },
+  //   linearFiltering
+  // });
 
   // used to sample only a portion of the scene to the HDR Buffer to prevent the GPU from locking up from excessive computation
   const tileRender = makeTileRender(gl);
@@ -140,9 +141,7 @@ export function makeRenderingPipeline({
     newSampleToBuffer(hdrPreviewBuffer);
 
     gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
-    toneMapShader.draw({
-      texture: hdrPreviewBuffer.texture,
-    });
+    toneMapShader.draw(hdrPreviewBuffer.texture);
   }
 
   function renderTile(x, y, width, height) {
@@ -154,9 +153,7 @@ export function makeRenderingPipeline({
 
   function hdrBufferToScreen() {
     gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
-    toneMapShader.draw({
-      texture: hdrBuffer.texture,
-    });
+    toneMapShader.draw(hdrBuffer.texture);
   }
 
   function updateSeed() {

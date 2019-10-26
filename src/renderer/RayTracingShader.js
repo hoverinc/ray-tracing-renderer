@@ -12,6 +12,11 @@ import * as THREE from 'three';
 import { uploadBuffers } from './uploadBuffers';
 import { clamp } from './util';
 
+export const rayTracingRenderTargets = {
+  names: ['light', 'normal', 'position'],
+  storage: 'float'
+};
+
 export function makeRayTracingShader({
     bounces, // number of global illumination bounces
     fullscreenQuad,
@@ -35,15 +40,10 @@ export function makeRayTracingShader({
     }
   }
 
-  const renderTargets = {
-    names: ['light', 'normal'],
-    storage: 'float'
-  };
-
   let samples;
 
   const { program, uniforms } = makeProgramFromScene({
-    bounces, fullscreenQuad, gl, optionalExtensions, renderTargets, samplingDimensions, scene, textureAllocator
+    bounces, fullscreenQuad, gl, optionalExtensions, samplingDimensions, scene, textureAllocator
   });
 
   function setSize(width, height) {
@@ -69,6 +69,7 @@ export function makeRayTracingShader({
     gl.uniform1f(uniforms['camera.focus'], camera.focus || 0);
     gl.uniform1f(uniforms['camera.aperture'], camera.aperture || 0);
   }
+
 
   const historyBufferLocation = textureAllocator.reserveSlot();
 
@@ -115,7 +116,6 @@ export function makeRayTracingShader({
   return {
     draw,
     nextSeed,
-    renderTargets,
     setCamera,
     setHistory,
     setNoise,
@@ -129,7 +129,6 @@ function makeProgramFromScene({
     fullscreenQuad,
     gl,
     optionalExtensions,
-    renderTargets,
     samplingDimensions,
     scene,
     textureAllocator
@@ -157,7 +156,7 @@ function makeProgramFromScene({
   const useShadowCatcher = materials.some(m => m.shadowCatcher);
 
   const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragString({
-    renderTargets,
+    rayTracingRenderTargets,
     defines: {
       OES_texture_float_linear,
       BVH_COLUMNS: textureDimensionsFromArray(flattenedBvh.count).columnsLog,
