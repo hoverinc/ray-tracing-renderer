@@ -1,10 +1,18 @@
+# hidden config files
 .DS_Store
 
+# dependencies
 node_modules
 
-# file with envinronment variables
+# file with environment variables
 .env
 
 # demo/test scenes
 demos/
 test-scene/
+
+# ignore everything on the "scenes/" directory
+scenes/*
+
+# except for "scenes/materials"
+!scenes/materials
