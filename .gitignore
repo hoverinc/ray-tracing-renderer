@@ -14,5 +14,7 @@ test-scene/
 # ignore everything on the "scenes/" directory
 scenes/*
 
-# except for "scenes/materials"
+# except for "scenes/materials", "scenes/sample-models" and "scenes/envmaps"
 !scenes/materials
+!scenes/sample-models
+!scenes/envmaps
