@@ -28,7 +28,7 @@ export function makeRenderingPipeline({
 
   const rayTracingShader = makeRayTracingShader({bounces, fullscreenQuad, gl, optionalExtensions, scene, textureAllocator});
 
-  // const reprojectShader = makeReprojectShader({ fullscreenQuad, gl });
+  const reprojectShader = makeReprojectShader({ fullscreenQuad, gl, textureAllocator });
 
   const toneMapShader = makeToneMapShader({
     fullscreenQuad, gl, optionalExtensions, textureAllocator, toneMappingParams
@@ -47,15 +47,18 @@ export function makeRenderingPipeline({
   let hdrBuffer = makeFramebuffer({
     gl,
     renderTarget: rayTracingRenderTargets,
-    linearFiltering: true
-
   });
 
   let historyBuffer = makeFramebuffer({
     gl,
     renderTarget: rayTracingRenderTargets,
-    linearFiltering: true
   });
+
+  let reprojectBuffer = makeFramebuffer({
+    gl,
+    renderTarget: rayTracingRenderTargets,
+  });
+
 
   // lower resolution buffer used for the first frame
   // const hdrPreviewBuffer = makeFramebuffer({
@@ -219,27 +222,39 @@ export function makeRenderingPipeline({
 
     if (!lastCamera) {
       lastCamera = camera.clone();
+    } else if (!camerasEqual(camera, lastCamera)) {
+      sampleCount = 0;
+
+      let temp = historyBuffer;
+      historyBuffer = reprojectBuffer;
+      reprojectBuffer = temp;
     }
 
+    sampleCount++;
+
     rayTracingShader.setCamera(camera);
-    rayTracingShader.setHistory(lastCamera, historyBuffer);
 
     rayTracingShader.nextSeed();
     addSampleToBuffer(hdrBuffer);
-    hdrBufferToScreen();
 
-    const temp = historyBuffer;
-    historyBuffer = hdrBuffer;
-    hdrBuffer = temp;
+    reprojectShader.setPreviousCamera(lastCamera);
+
+    reprojectBuffer.bind();
+    reprojectShader.draw(hdrBuffer.texture, historyBuffer.texture);
+    reprojectBuffer.unbind();
+
+    gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+    toneMapShader.draw(reprojectBuffer.texture);
 
     lastCamera.copy(camera);
   }
 
   function setSize(width, height) {
     rayTracingShader.setSize(width, height);
+    tileRender.setSize(width, height);
     hdrBuffer.setSize(width, height);
     historyBuffer.setSize(width, height);
-    tileRender.setSize(width, height);
+    reprojectBuffer.setSize(width, height);
     clear();
   }
 

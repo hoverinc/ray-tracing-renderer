@@ -11,7 +11,8 @@ in vec2 vCoord;
 
 out vec4 fragColor;
 
-${renderTargetGet('image', rayTracingRenderTargets)}
+// uniform sampler2D image;
+${renderTargetGet('hdrBuffer', rayTracingRenderTargets)}
 
 ${textureLinear(defines)}
 
@@ -43,7 +44,7 @@ vec3 acesFilmic( vec3 color ) {
 }
 
 void main() {
-  vec4 tex = texture(image, vec3(vCoord, image_light));
+  vec4 tex = texture(hdrBuffer, vec3(vCoord, hdrBuffer_light));
 
   // alpha channel stores the number of samples progressively rendered
   // divide the sum of light by alpha to obtain average contribution of light
@@ -51,7 +52,6 @@ void main() {
   // in addition, alpha contains a scale factor for the shadow catcher material
   // dividing by alpha normalizes the brightness of the shadow catcher to match the background envmap.
   vec3 light = tex.rgb / tex.a;
-  // vec3 light = tex.rgb;
 
   light *= ${defines.exposure}; // exposure
 

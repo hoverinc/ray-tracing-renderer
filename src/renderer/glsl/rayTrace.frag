@@ -18,7 +18,6 @@ precision mediump int;
 
 ${addDefines(defines)}
 
-${renderTargetGet('historyBuffer', rayTracingRenderTargets)}
 ${renderTargetSet(rayTracingRenderTargets)}
 
 #define PI 3.14159265359
@@ -75,9 +74,6 @@ struct Camera {
 
 uniform Camera camera;
 uniform vec2 pixelSize; // 1 / screenResolution
-
-uniform mat4 historyCameraInv;
-uniform mat4 historyCameraProj;
 
 in vec2 vCoord;
 
@@ -190,21 +186,6 @@ vec4 integrator(inout Ray ray, inout SurfaceInteraction si) {
   return vec4(path.li, path.alpha);
 }
 
-vec4 reproject(SurfaceInteraction si, ivec2 hTexel, ivec2 size) {
-  vec3 historyNormal = texelFetch(historyBuffer, ivec3(hTexel, historyBuffer_normal), 0).xyz;
-
-  vec3 d = historyNormal - si.normal;
-  float error = abs(dot(d, d));
-
-  bool invalid = error > 0.001 || any(lessThan(hTexel, ivec2(0))) || any(greaterThan(hTexel, size));
-
-  if (invalid) {
-    return vec4(-1.0);
-  } else {
-    return texelFetch(historyBuffer, ivec3(hTexel, historyBuffer_light), 0);
-  }
-}
-
 void main() {
   initRandom();
   vec2 antialias = pixelSize * (randomSampleVec2() - 0.5);
@@ -238,62 +219,7 @@ void main() {
     liAndAlpha = vec4(0, 0, 0, 1);
   }
 
- if (si.hit) {
-    vec4 historyCoord = (historyCameraProj * historyCameraInv * vec4(si.position, 1.0));
-    vec2 hCoord = 0.5 * historyCoord.xy / historyCoord.w + 0.5;
-
-    ivec2 size = textureSize(historyBuffer, 0).xy;
-    vec2 sizef = vec2(size);
-
-    vec2 hTexelf = hCoord * sizef - 0.5;
-    vec2 f = fract(hTexelf);
-    ivec2 hTexel = ivec2(hTexelf);
-
-    vec4 s0 = reproject(si, hTexel + ivec2(0, 0), size);
-    vec4 s1 = reproject(si, hTexel + ivec2(1, 0), size);
-    vec4 s2 = reproject(si, hTexel + ivec2(0, 1), size);
-    vec4 s3 = reproject(si, hTexel + ivec2(1, 1), size);
-
-    vec4 s;
-    float sum = 0.0;
-    float w;
-
-    if (s0.a != -1.0) {
-      w = (1.0 - f.x) * (1.0 - f.y);
-      s += s0 * w;
-      sum += w;
-    }
-    if (s1.a != -1.0) {
-      w = f.x * (1.0 - f.y);
-      s += s1 * w;
-      sum += w;
-    }
-    if (s2.a != -1.0) {
-      w = (1.0 - f.x) * f.y;
-      s +=  s2 * w;
-      sum += w;
-    }
-    if (s3.a != -1.0) {
-      w = f.x * f.y;
-      s += s3 * w;
-      sum += w;
-    }
-
-    if (sum > 0.0) {
-      s /= sum;
-      float newContrib = 0.02;
-      // out_light = newContrib * liAndAlpha + (1.0 - newContrib) * s;
-      out_light = 0.98 * s + liAndAlpha;
-
-    } else {
-      out_light = liAndAlpha;
-      // out_light = vec4(0, 0, 0, 1);
-    }
-  } else {
-    out_light = liAndAlpha;
-  }
-
-  // out_light = liAndAlpha;
+  out_light = liAndAlpha;
   out_normal = vec4(si.normal, 1.0);
   out_position = vec4(si.position, 1.0);
 

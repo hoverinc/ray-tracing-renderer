@@ -118,7 +118,9 @@ export function makeTexture(gl, params) {
   } else {
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, flipY);
     gl.texStorage2D(target, 1, internalFormat, width, height);
-    gl.texSubImage2D(target, 0, 0, 0, width, height, format, type, data);
+    if (data) {
+      gl.texSubImage2D(target, 0, 0, 0, width, height, format, type, data);
+    }
   }
 
   // return state to default
