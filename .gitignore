@@ -6,7 +6,3 @@ node_modules
 
 # file with environment variables
 .env
-
-# demo/test scenes
-demos/
-test-scene/
