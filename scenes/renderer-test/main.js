@@ -1,11 +1,10 @@
-
 const renderer = new THREE.RayTracingRenderer();
 renderer.setPixelRatio(1.0);
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.5;
 renderer.toneMappingWhitePoint = 5;
-
 renderer.maxHardwareUsage = true;
+renderer.renderWhenOffFocus = false;
 
 document.body.appendChild(renderer.domElement);
 
@@ -17,7 +16,6 @@ stats.domElement.style.top = '0px';
 document.body.appendChild(stats.domElement);
 
 const camera = new THREE.LensCamera();
-camera.position.set(-4, 1, -10);
 camera.fov = 70;
 camera.aperture = 0.01;
 
@@ -64,11 +62,10 @@ function init() {
   scene.add(envLight);
 
   const model = new THREE.Object3D();
-  model.rotateY(Math.PI / 2);
+  model.rotateY(-Math.PI / 2);
 
-  // house model
   controls.target.set(0, 2, 0);
-  camera.position.set(-31, 21, 1);
+  camera.position.set(31, 21, -1);
 
   // smooth
   {
