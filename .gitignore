@@ -10,9 +10,3 @@ node_modules
 # demo/test scenes
 demos/
 test-scene/
-
-# ignore everything on the "scenes/" directory
-scenes/*
-
-# except for "scenes/materials"
-!scenes/materials
