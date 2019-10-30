@@ -1,13 +1,34 @@
 // targets is array of { name: string, storage: 'byte' | 'float'}
-export function makeRenderTargets(storage, names) {
+export function makeRenderTargets({storage, names}) {
+  const location = {};
+
+  for (let i = 0; i < names.length; i++) {
+    location[names[i]] = i;
+  }
+
   return {
+    isRenderTargets: true,
     storage,
     names,
-    glslHeader() {
-      let outputs = '';
-      for (const { name, index } of targets) {
-        outputs += `layout(location = ${index}) out vec4 renderTarget_${name};\n`;
+    location,
+    get(textureName) {
+      let inputs = '';
+
+      inputs += `uniform mediump sampler2DArray ${textureName};\n`;
+
+      for (let i = 0; i < names.length; i++) {
+        inputs += `#define ${textureName}_${names[i]} ${i}\n`;
       }
+
+      return inputs;
+    },
+    set() {
+      let outputs = '';
+
+      for (let i = 0; i < names.length; i++) {
+        outputs += `layout(location = ${i}) out vec4 out_${names[i]};\n`;
+      }
+
       return outputs;
     }
   };

@@ -8,7 +8,7 @@ import sampleMaterial from './chunks/sampleMaterial.glsl';
 import sampleShadowCatcher from './chunks/sampleShadowCatcher.glsl';
 import sampleGlass from './chunks/sampleGlassSpecular.glsl';
 // import sampleGlass from './chunks/sampleGlassMicrofacet.glsl';
-import { unrollLoop, addDefines, renderTargetGet, renderTargetSet } from '../glslUtil';
+import { unrollLoop, addDefines } from '../glslUtil';
 
 export default function({ rayTracingRenderTargets, defines }) {
   return `#version 300 es
@@ -18,7 +18,7 @@ precision mediump int;
 
 ${addDefines(defines)}
 
-${renderTargetSet(rayTracingRenderTargets)}
+${rayTracingRenderTargets.set()}
 
 #define PI 3.14159265359
 #define TWOPI 6.28318530718
@@ -221,7 +221,7 @@ void main() {
 
   out_light = liAndAlpha;
   out_normal = vec4(si.normal, 1.0);
-  out_position = vec4(si.position, 1.0);
+  out_position = vec4(si.position, si.hit);
 
 
   // Stratified Sampling Sample Count Test

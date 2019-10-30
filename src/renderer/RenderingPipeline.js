@@ -9,6 +9,7 @@ import { makeTextureAllocator } from './TextureAllocator';
 import { makeReprojectShader } from './ReprojectShader';
 import * as THREE from 'three';
 import noiseBase64 from './texture/noise';
+import { PerspectiveCamera } from 'three';
 
 // Important TODO: Refactor this file to get rid of duplicate and confusing code
 
@@ -59,6 +60,9 @@ export function makeRenderingPipeline({
     renderTarget: rayTracingRenderTargets,
   });
 
+  const clearToBlack = new Float32Array([0, 0, 0, 0]);
+  const numSamplesToReproject = 100;
+
 
   // lower resolution buffer used for the first frame
   // const hdrPreviewBuffer = makeFramebuffer({
@@ -70,8 +74,7 @@ export function makeRenderingPipeline({
   // used to sample only a portion of the scene to the HDR Buffer to prevent the GPU from locking up from excessive computation
   const tileRender = makeTileRender(gl);
 
-  // const lastCamera = new LensCamera();
-  let lastCamera;
+  const lastCamera = new PerspectiveCamera();
 
   // how many samples to render with uniform noise before switching to stratified noise
   const numUniformSamples = 6;
@@ -118,19 +121,24 @@ export function makeRenderingPipeline({
     return numberArraysEqual(cam1.matrixWorld.elements, cam2.matrixWorld.elements) &&
       cam1.aspect === cam2.aspect &&
       cam1.fov === cam2.fov &&
-      cam1.focus === cam2.focus &&
-      cam1.aperture === cam2.aperture;
+      cam1.focus === cam2.focus;
   }
 
   function addSampleToBuffer(buffer) {
-    // gl.blendEquation(gl.FUNC_ADD);
-    // gl.blendFunc(gl.ONE, gl.ONE);
-    // gl.enable(gl.BLEND);
     buffer.bind();
+
+    gl.blendEquation(gl.FUNC_ADD);
+    gl.blendFunc(gl.ONE, gl.ONE);
+    gl.enable(gl.BLEND);
+
+    gl.clearBufferfv(gl.COLOR, rayTracingRenderTargets.location.normal, clearToBlack);
+    gl.clearBufferfv(gl.COLOR, rayTracingRenderTargets.location.position, clearToBlack);
+
     gl.viewport(0, 0, buffer.width, buffer.height);
     rayTracingShader.draw();
+
+    gl.disable(gl.BLEND);
     buffer.unbind();
-    // gl.disable(gl.BLEND);
   }
 
   function newSampleToBuffer(buffer) {
@@ -220,24 +228,25 @@ export function makeRenderingPipeline({
       return;
     }
 
-    if (!lastCamera) {
-      lastCamera = camera.clone();
-    } else if (!camerasEqual(camera, lastCamera)) {
-      sampleCount = 0;
+    if (!camerasEqual(camera, lastCamera)) {
+      clear();
 
-      let temp = historyBuffer;
+      const temp = historyBuffer;
       historyBuffer = reprojectBuffer;
       reprojectBuffer = temp;
+
+      reprojectShader.setPreviousCamera(lastCamera);
+      rayTracingShader.setCamera(camera);
     }
 
     sampleCount++;
+    lastCamera.copy(camera);
 
-    rayTracingShader.setCamera(camera);
+    const reprojectAmount = clamp(1 - (sampleCount - 1) / numSamplesToReproject, 0, 1);
+    reprojectShader.setAmount(reprojectAmount);
 
     rayTracingShader.nextSeed();
     addSampleToBuffer(hdrBuffer);
-
-    reprojectShader.setPreviousCamera(lastCamera);
 
     reprojectBuffer.bind();
     reprojectShader.draw(hdrBuffer.texture, historyBuffer.texture);
@@ -245,8 +254,6 @@ export function makeRenderingPipeline({
 
     gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
     toneMapShader.draw(reprojectBuffer.texture);
-
-    lastCamera.copy(camera);
   }
 
   function setSize(width, height) {

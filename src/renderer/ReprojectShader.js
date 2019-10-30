@@ -1,7 +1,7 @@
-import { makeFramebuffer } from './Framebuffer';
 import fragString from './glsl/reproject.frag';
 import { createShader, createProgram, getUniforms } from './glUtil';
 import { rayTracingRenderTargets } from './RayTracingShader';
+import { clamp } from './util';
 import * as THREE from 'three';
 
 export function makeReprojectShader(params) {
@@ -24,11 +24,15 @@ export function makeReprojectShader(params) {
   const hdrBufferLocation = textureAllocator.reserveSlot();
   const historyBufferLocation = textureAllocator.reserveSlot();
 
-  function setPreviousCamera(camera, sampleCount) {
+  function setPreviousCamera(camera) {
     gl.useProgram(program);
     gl.uniformMatrix4fv(uniforms.historyCameraInv, false, camera.matrixWorldInverse.elements);
     gl.uniformMatrix4fv(uniforms.historyCameraProj, false, camera.projectionMatrix.elements);
-    // gl.uniform1f(uniforms.sampleCount, sampleCount);
+  }
+
+  function setAmount(amount) {
+    gl.useProgram(program);
+    gl.uniform1f(uniforms.amount, clamp(amount, 0, 1));
   }
 
   function draw(hdrBuffer, historyBuffer) {
@@ -42,6 +46,7 @@ export function makeReprojectShader(params) {
 
   return {
     draw,
+    setAmount,
     setPreviousCamera,
   };
 }

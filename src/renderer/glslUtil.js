@@ -22,29 +22,3 @@ export function addDefines(params) {
 
   return defines;
 }
-
-export function renderTargetSet(renderTargets) {
-  let outputs = '';
-
-  const names = renderTargets.names;
-
-  for (let i = 0; i < names.length; i++) {
-    outputs += `layout(location = ${i}) out vec4 out_${names[i]};\n`;
-  }
-
-  return outputs;
-}
-
-export function renderTargetGet(texture, renderTargets) {
-  let inputs = '';
-
-  inputs += `uniform mediump sampler2DArray ${texture};\n`;
-
-  const names = renderTargets.names;
-
-  for (let i = 0; i < names.length; i++) {
-    inputs += `#define ${texture}_${names[i]} ${i}\n`;
-  }
-
-  return inputs;
-}

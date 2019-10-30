@@ -4,6 +4,7 @@ import * as THREE from 'three';
 
 const glRequiredExtensions = [
   'EXT_color_buffer_float', // enables rendering to float buffers
+  'EXT_float_blend',
 ];
 
 const glOptionalExtensions = [

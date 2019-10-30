@@ -11,11 +11,12 @@ import { getTexturesFromMaterials, mergeTexturesFromMaterials } from './textures
 import * as THREE from 'three';
 import { uploadBuffers } from './uploadBuffers';
 import { clamp } from './util';
+import { makeRenderTargets } from './RenderTargets';
 
-export const rayTracingRenderTargets = {
-  names: ['light', 'normal', 'position'],
-  storage: 'float'
-};
+export const rayTracingRenderTargets = makeRenderTargets({
+  storage: 'float',
+  names: ['light', 'normal', 'position']
+});
 
 export function makeRayTracingShader({
     bounces, // number of global illumination bounces

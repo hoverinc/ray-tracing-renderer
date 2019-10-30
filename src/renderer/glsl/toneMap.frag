@@ -1,5 +1,4 @@
 import textureLinear from './chunks/textureLinear.glsl';
-import { renderTargetGet } from '../glslUtil.js';
 
 export default function({ rayTracingRenderTargets, defines }) {
   return `#version 300 es
@@ -12,7 +11,7 @@ in vec2 vCoord;
 out vec4 fragColor;
 
 // uniform sampler2D image;
-${renderTargetGet('hdrBuffer', rayTracingRenderTargets)}
+${rayTracingRenderTargets.get('hdrBuffer')}
 
 ${textureLinear(defines)}
 

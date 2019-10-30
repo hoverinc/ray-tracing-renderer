@@ -30,9 +30,11 @@ export function makeFramebuffer(params) {
     width = Math.floor(w);
     height = Math.floor(h);
 
-    if (Array.isArray(renderTarget.names)) {
+    if (renderTarget.isRenderTargets) {
+      // RenderTargets object
       texture = initArrayTexture(gl, width, height, linearFiltering, renderTarget);
     } else {
+      // single render target in the form { storage }
       texture = initTexture(gl, width, height, linearFiltering, renderTarget);
     }
 
