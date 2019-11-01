@@ -109,16 +109,21 @@ async function createModelFromData(data) {
 function updateCameraFromModel(camera, model) {
   const bounds = new THREE.Box3();
   const centroid = new THREE.Vector3();
+  bounds.setFromObject(model);
   bounds.getCenter(centroid);
-  bounds.expandByObject(model);
+
+  if (bounds.min.y < 0) {
+    model.position.set(0, -bounds.min.y * 0.5, 0);
+    bounds.setFromObject(model);
+  }
 
   const distance = bounds.min.distanceTo(bounds.max);
 
   // TODO: Why do we need this?
   // controls.target.set(centroid);
-
-  camera.position.set(0, (bounds.max.y - bounds.min.y) * 0.5, distance * 2.0);
-  camera.lookAt(centroid);
+  camera.position.set(0, (bounds.max.y - bounds.min.y) * 0.75, distance * 2.0);
+  controls.target.copy(centroid);
+  controls.update();
 
   console.log(`Camera at ${camera.position.toArray()}`);
 }
