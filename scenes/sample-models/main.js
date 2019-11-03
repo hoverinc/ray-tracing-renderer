@@ -1,25 +1,31 @@
 // TODO: Support multiple hdr maps
 const DEFAULT_ENV_MAP_PATH = '/scenes/envmaps/gray-background-with-dirlight.hdr';
 
-// TODO: Host files ourselves
-const MODEL_DATA = [
+// Sample models from BabylonJS: http://models.babylonjs.com/
+const BABYLON_JS_SAMPLE_MODELS = [
   {
     path: 'https://models.babylonjs.com/CornellBox/cornellBox.glb',
     name: 'Cornell Box',
+    license: 'https://creativecommons.org/licenses/by/4.0/',
   },
   {
     path: 'https://models.babylonjs.com/PBR_Spheres.glb',
     name: 'PBR Spheres',
+    license: 'https://creativecommons.org/licenses/by/4.0/',
   },
   {
     path: 'https://models.babylonjs.com/Lee-Perry-Smith-Head/head.glb',
     name: 'Lee Perry Smith Head',
+    license: 'https://creativecommons.org/licenses/by/4.0/',
   },
   {
     path: 'https://models.babylonjs.com/Georgia-Tech-Dragon/dragon.glb',
     name: 'Georgia Tech Dragon',
+    license: 'https://creativecommons.org/licenses/by/4.0/',
   },
 ];
+
+const MODEL_DATA = [...BABYLON_JS_SAMPLE_MODELS];
 
 const INITIAL_MODEL_DATA = MODEL_DATA[0];
 
