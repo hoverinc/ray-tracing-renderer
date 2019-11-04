@@ -26,10 +26,10 @@ const BABYLON_JS_SAMPLE_MODELS = [
 ];
 
 const MODEL_DATA = [...BABYLON_JS_SAMPLE_MODELS];
-
 const INITIAL_MODEL_DATA = MODEL_DATA[0];
 
 let currentModelLoaded = null;
+let groundMesh = null;
 
 const renderer = new THREE.RayTracingRenderer();
 
@@ -41,7 +41,7 @@ renderer.toneMappingExposure = 1.0;
 renderer.toneMappingWhitePoint = 5;
 
 renderer.renderWhenOffFocus = false;
-// renderer.renderToScreen = false;
+renderer.renderToScreen = true;
 
 document.body.appendChild(renderer.domElement);
 
@@ -72,9 +72,6 @@ function resize() {
   }
 }
 
-window.addEventListener('resize', resize);
-resize();
-
 const tick = () => {
   controls.update();
   camera.focus = controls.target.distanceTo(camera.position);
@@ -91,7 +88,7 @@ function load(loader, url) {
   });
 }
 
-function createGroundPlane() {
+function createGroundMesh() {
   const geo = new THREE.PlaneBufferGeometry(10000, 10000);
   const mat = new THREE.MeshStandardMaterial();
   mat.color.set(0xffffff);
@@ -103,25 +100,25 @@ function createGroundPlane() {
   mesh.rotateX(Math.PI / 2);
 
   return mesh;
-  scene.add(mesh);
 }
 
 async function createModelFromData(data) {
   const gltfData = await load(THREE.GLTFLoader, data.path);
-  const model = gltfData.scene;
-  return model;
+  const gltfScene = gltfData.scene;
+
+  return gltfScene;
+}
+
+function computeBoundingBoxFromModel(model) {
+  const bounds = new THREE.Box3();
+  bounds.setFromObject(model);
+  return bounds;
 }
 
 function updateCameraFromModel(camera, model) {
-  const bounds = new THREE.Box3();
+  const bounds = computeBoundingBoxFromModel(model);
   const centroid = new THREE.Vector3();
-  bounds.setFromObject(model);
   bounds.getCenter(centroid);
-
-  if (bounds.min.y < 0) {
-    model.position.set(0, -bounds.min.y * 0.5, 0);
-    bounds.setFromObject(model);
-  }
 
   const distance = bounds.min.distanceTo(bounds.max);
 
@@ -134,6 +131,16 @@ function updateCameraFromModel(camera, model) {
   console.log(`Camera at ${camera.position.toArray()}`);
 }
 
+function updateGroundMeshFromModel(groundMesh, model) {
+  const bounds = computeBoundingBoxFromModel(model);
+
+  const x = currentModelLoaded.position.x;
+  const y = bounds.min.y;
+  const z = currentModelLoaded.position.z;
+
+  groundMesh.position.set(x, y, z);
+}
+
 function updateSceneWithModel(model) {
   if (currentModelLoaded) {
     currentModelLoaded.parent.remove(currentModelLoaded);
@@ -143,6 +150,7 @@ function updateSceneWithModel(model) {
   renderer.needsUpdate = true;
   currentModelLoaded = model;
   updateCameraFromModel(camera, model);
+  updateGroundMeshFromModel(groundMesh, model);
 }
 
 async function selectModelFromName(name) {
@@ -154,13 +162,16 @@ async function selectModelFromName(name) {
 }
 
 async function init() {
+  window.addEventListener('resize', resize);
+  resize();
+
   const envMap = new THREE.RGBELoader().load(DEFAULT_ENV_MAP_PATH);
   const envLight = new THREE.EnvironmentLight(envMap);
 
+  groundMesh = createGroundMesh();
   selectModelFromName(INITIAL_MODEL_DATA.name)
   scene.add(envLight);
 
-  const groundMesh = createGroundPlane();
   scene.add(groundMesh);
   scene.add(camera);
 
