@@ -11,6 +11,10 @@ const glOptionalExtensions = [
 ];
 
 export function RayTracingRenderer(params = {}) {
+  { forceErrorOnInit } = params;
+  if (forceErrorOnInit) {
+    throw new Error(TEST_ERROR);
+  }
   const canvas = params.canvas || document.createElement('canvas');
 
   const gl = canvas.getContext('webgl2', {
