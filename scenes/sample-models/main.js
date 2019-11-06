@@ -125,6 +125,8 @@ function updateCameraFromModel(camera, model) {
   // TODO: Why do we need this?
   // controls.target.set(centroid);
   camera.position.set(0, (bounds.max.y - bounds.min.y) * 0.75, distance * 2.0);
+  camera.aperture = 0.01 * distance;
+
   controls.target.copy(centroid);
   controls.update();
 
