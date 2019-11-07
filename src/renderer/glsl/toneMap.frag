@@ -56,6 +56,8 @@ void main() {
 
   light = ${defines.toneMapping}(light); // tone mapping
 
+  // light = texture(hdrBuffer, vec3(vCoord, hdrBuffer_normal)).rgb;
+
   light = pow(light, vec3(1.0 / 2.2)); // gamma correction
 
   fragColor = vec4(light, 1.0);

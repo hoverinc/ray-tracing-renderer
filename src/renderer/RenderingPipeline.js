@@ -61,8 +61,7 @@ export function makeRenderingPipeline({
   });
 
   const clearToBlack = new Float32Array([0, 0, 0, 0]);
-  const numSamplesToReproject = 100;
-
+  const numSamplesToReproject = 64;
 
   // lower resolution buffer used for the first frame
   // const hdrPreviewBuffer = makeFramebuffer({

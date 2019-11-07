@@ -14,19 +14,25 @@ uniform mat4 historyCameraInv;
 uniform mat4 historyCameraProj;
 uniform float amount;
 
-vec4 getHistory(ivec2 hTexel, ivec2 size, vec3 position, vec3 normal) {
+float relativeError(float v, float vApprox) {
+  return abs((v - vApprox) / v);
+}
+
+vec4 getHistory(ivec2 hTexel, vec3 historyPositionLerp, vec3 historyPosition, vec3 position, vec3 normal, out float contrib) {
+  float error = relativeError(distance(historyPositionLerp, historyPosition), distance(position, historyPosition));
+  // float error = distance(history, position);
+
   vec3 historyNormal = texelFetch(historyBuffer, ivec3(hTexel, historyBuffer_normal), 0).xyz;
+  float normalError = distance(historyNormal, normal);
 
-  vec3 d = historyNormal - normal;
-  float error = abs(dot(d, d));
+  contrib = error > 0.05 || normalError > 0.05 ? 0.0 : 1.0;
 
-  bool invalid = error > 0.001 || any(lessThan(hTexel, ivec2(0))) || any(greaterThan(hTexel, size));
+  return texelFetch(historyBuffer, ivec3(hTexel, historyBuffer_light), 0);
+}
 
-  if (invalid) {
-    return vec4(-1.0);
-  } else {
-    return texelFetch(historyBuffer, ivec3(hTexel, historyBuffer_light), 0);
-  }
+vec2 reproject(vec3 position) {
+  vec4 historyCoord = (historyCameraProj * historyCameraInv * vec4(position, 1.0));
+  return 0.5 * historyCoord.xy / historyCoord.w + 0.5;
 }
 
 void main() {
@@ -40,56 +46,67 @@ void main() {
 
   vec4 history;
 
+  float width;
+  vec2 f;
+
   if (hit > 0.0) {
-    vec4 historyCoord = (historyCameraProj * historyCameraInv * vec4(position, 1.0));
-    vec2 hCoord = 0.5 * historyCoord.xy / historyCoord.w + 0.5;
+    vec2 hCoord = reproject(position);
 
     ivec2 size = textureSize(historyBuffer, 0).xy;
     vec2 sizef = vec2(size);
 
     vec2 hTexelf = hCoord * sizef - 0.5;
-    vec2 f = fract(hTexelf);
     ivec2 hTexel = ivec2(hTexelf);
+    f = fract(hTexelf);
 
-    vec4 s0 = getHistory(hTexel + ivec2(0, 0), size, position, normal);
-    vec4 s1 = getHistory(hTexel + ivec2(1, 0), size, position, normal);
-    vec4 s2 = getHistory(hTexel + ivec2(0, 1), size, position, normal);
-    vec4 s3 = getHistory(hTexel + ivec2(1, 1), size, position, normal);
+    ivec2 t0 = hTexel + ivec2(0, 0);
+    ivec2 t1 = hTexel + ivec2(1, 0);
+    ivec2 t2 = hTexel + ivec2(0, 1);
+    ivec2 t3 = hTexel + ivec2(1, 1);
+
+    vec3 h0 = texelFetch(historyBuffer, ivec3(t0, historyBuffer_position), 0).xyz;
+    vec3 h1 = texelFetch(historyBuffer, ivec3(t1, historyBuffer_position), 0).xyz;
+    vec3 h2 = texelFetch(historyBuffer, ivec3(t2, historyBuffer_position), 0).xyz;
+    vec3 h3 = texelFetch(historyBuffer, ivec3(t3, historyBuffer_position), 0).xyz;
+
+    vec3 historyPositionLerp = mix(mix(h0, h1, f.x), mix(h2, h3, f.x), f.y);
 
     float sum;
-    float w;
+    float weight;
+    vec4 reprojection;
+    float contrib;
 
     // bilinear filtering. reject invalid history and redistribute weight
-    if (s0.a != -1.0) {
-      w = (1.0 - f.x) * (1.0 - f.y);
-      history += s0 * w;
-      sum += w;
-    }
-    if (s1.a != -1.0) {
-      w = f.x * (1.0 - f.y);
-      history += s1 * w;
-      sum += w;
-    }
-    if (s2.a != -1.0) {
-      w = (1.0 - f.x) * f.y;
-      history +=  s2 * w;
-      sum += w;
-    }
-    if (s3.a != -1.0) {
-      w = f.x * f.y;
-      history += s3 * w;
-      sum += w;
-    }
+    reprojection = getHistory(t0, historyPositionLerp, h0, position, normal, contrib);
+    weight = contrib * (1.0 - f.x) * (1.0 - f.y);
+    history += reprojection * weight;
+    sum += weight;
+
+    reprojection = getHistory(t1, historyPositionLerp, h1, position, normal, contrib);
+    weight = contrib * f.x * (1.0 - f.y);
+    history += reprojection * weight;
+    sum += weight;
+
+    reprojection = getHistory(t2, historyPositionLerp, h2, position, normal, contrib);
+    weight = contrib * (1.0 - f.x) * f.y;
+    history += reprojection * weight;
+    sum += weight;
+
+    reprojection = getHistory(t3, historyPositionLerp, h3, position, normal, contrib);
+    weight = contrib * f.x * f.y;
+    history += reprojection * weight;
+    sum += weight;
 
     if (sum > 0.0) {
       history /= sum;
     } else {
       history = vec4(0.0);
     }
+
   }
 
-  out_light = amount * history + lightTex;
-  out_normal = normalTex;
+  out_light = amount * amount * history + lightTex;
+  out_normal = vec4(normal, 0.0);
   out_position = positionTex;
 }
 

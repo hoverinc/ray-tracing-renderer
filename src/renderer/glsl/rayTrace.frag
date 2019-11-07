@@ -57,6 +57,7 @@ struct SurfaceInteraction {
   bool hit;
   vec3 position;
   vec3 normal; // smoothed normal from the three triangle vertices
+  vec3 surfaceNormal; // smoothed normal without normal map
   vec3 faceNormal; // normal of the triangle
   vec3 color;
   float roughness;
@@ -220,7 +221,7 @@ void main() {
   }
 
   out_light = liAndAlpha;
-  out_normal = vec4(si.normal, 1.0);
+  out_normal = vec4(si.surfaceNormal, 1.0);
   out_position = vec4(si.position, si.hit);
 
 
