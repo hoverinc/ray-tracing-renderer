@@ -8,7 +8,7 @@ export function decomposeScene(scene) {
       if (!child.geometry || !child.geometry.getAttribute('position')) {
         console.warn(child, 'must have a geometry property with a position attribute');
       }
-      else if (!(child.material instanceof THREE.MeshStandardMaterial)) {
+      else if (!child.material instanceof THREE.MeshStandardMaterial) {
         console.warn(child, 'must use MeshStandardMaterial in order to be rendered.');
       } else {
         meshes.push(child);

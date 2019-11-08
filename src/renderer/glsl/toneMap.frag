@@ -61,7 +61,7 @@ void main() {
   // int id = floatBitsToInt(tex.b);
   // vec3 light = vec3(0.05 * float(id));
 
-  light = pow(light, vec3(1.0 / 2.2)); // gamma correction
+  // light = pow(light, vec3(1.0 / 2.2)); // gamma correction
 
   fragColor = vec4(light, 1.0);
 }

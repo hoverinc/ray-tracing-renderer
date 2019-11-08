@@ -74,7 +74,7 @@ function mergeGeometry(geometryAndMaterialIndex, vertexCount, indexCount) {
     bg.merge(geometry, currentVertex);
 
     for (let i = 0; i < vertexCount; i++) {
-      meshId.setX(currentVertex + i, currentMeshId);
+      meshId.setX(currentVertex + i, materialIndex);
     }
 
     const meshIndex = geometry.getIndex();

@@ -8,6 +8,7 @@ uniform sampler2D uvs;
 uniform sampler2D bvh;
 
 // G-Buffers
+uniform sampler2D albedoBuffer;
 uniform sampler2D positionBuffer;
 uniform sampler2D normalBuffer;
 uniform sampler2D uvAndMeshIdBuffer;
@@ -61,19 +62,12 @@ SurfaceInteraction surfaceInteractionFromBuffer() {
   vec3 uvAndMeshId = texture(uvAndMeshIdBuffer, vCoord).xyz;
 
   vec2 uv = uvAndMeshId.xy;
-  int materialIndex = floatBitsToInt(uvAndMeshId.z);
+  int materialIndex = int(uvAndMeshId.z);
 
-  si.color = materials.colorAndMaterialType[materialIndex].xyz;
+  si.color = vec3(1.0);
   si.roughness = materials.roughnessMetalnessNormalScale[materialIndex].x;
   si.metalness = materials.roughnessMetalnessNormalScale[materialIndex].y;
   si.materialType = int(materials.colorAndMaterialType[materialIndex].w);
-
-  #ifdef NUM_DIFFUSE_MAPS
-    int diffuseMapIndex = materials.diffuseNormalRoughnessMetalnessMapIndex[materialIndex].x;
-    if (diffuseMapIndex >= 0) {
-      si.color *= texture(diffuseMap, vec3(uv * materials.diffuseNormalMapSize[diffuseMapIndex].xy, diffuseMapIndex)).rgb;
-    }
-  #endif
 
   #ifdef NUM_NORMAL_MAPS
     int normalMapIndex = materials.diffuseNormalRoughnessMetalnessMapIndex[materialIndex].y;

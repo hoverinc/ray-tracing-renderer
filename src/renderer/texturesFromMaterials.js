@@ -48,7 +48,7 @@ function texturesFromMaterials(materials, textureName, textures) {
       }
       indices.push(index);
     }
-  }
+5  }
 
   return indices;
 }

@@ -37,7 +37,7 @@ export function makeRayTracingShader({
     }
   }
 
-  const { program, uniforms } = makeProgramFromScene({
+  const { program, uniforms, bufferData, maps } = makeProgramFromScene({
     bounces, decomposedScene, fullscreenQuad, gl, mergedMeshes, optionalExtensions, samplingDimensions, textureAllocator
   });
 
@@ -71,6 +71,11 @@ export function makeRayTracingShader({
   function nextSeed() {
     gl.useProgram(program);
     gl.uniform1fv(uniforms['stratifiedSamples[0]'], samples.next());
+
+  }
+
+  function restartSamples() {
+    samples.restart();
   }
 
   function setStrataCount(strataCount) {
@@ -94,11 +99,13 @@ export function makeRayTracingShader({
     gl.uniform1f(uniforms.useStratifiedSampling, stratifiedSampling ? 1.0 : 0.0);
   }
 
+  const albedoBuffer = textureAllocator.reserveSlot();
   const positionBuffer = textureAllocator.reserveSlot();
   const normalBuffer = textureAllocator.reserveSlot();
   const uvAndMeshIdBuffer = textureAllocator.reserveSlot();
-  function gBufferInput({ position, normal, uvAndMeshId }) {
+  function gBufferInput({ albedo, position, normal, uvAndMeshId }) {
     gl.useProgram(program);
+    albedoBuffer.bind(uniforms.albedoBuffer, albedo);
     positionBuffer.bind(uniforms.positionBuffer, position);
     normalBuffer.bind(uniforms.normalBuffer, normal);
     uvAndMeshIdBuffer.bind(uniforms.uvAndMeshIdBuffer, uvAndMeshId);
@@ -119,7 +126,10 @@ export function makeRayTracingShader({
     setNoise,
     setSize,
     setStrataCount,
-    useStratifiedSampling
+    restartSamples,
+    useStratifiedSampling,
+    bufferData,
+    maps,
   };
 }
 function makeProgramFromScene({
@@ -130,14 +140,14 @@ function makeProgramFromScene({
     mergedMeshes,
     optionalExtensions,
     samplingDimensions,
-    textureAllocator
+    textureAllocator,
   }) {
   const { OES_texture_float_linear } = optionalExtensions;
 
   const { directionalLights, environmentLights } = decomposedScene;
 
   // merge meshes in scene to a single, static geometry
-  const { geometry, materials, materialIndices } = mergedMeshes;
+  const { geometry, materialIndices, materials } = mergedMeshes;
 
   // extract textures shared by meshes in scene
   const maps = getTexturesFromMaterials(materials, ['map', 'normalMap']);
@@ -211,7 +221,7 @@ function makeProgramFromScene({
     bufferData.metalnessMapIndex = pbrMap.indices.metalnessMap;
   }
 
-  uploadBuffers(gl, program, bufferData);
+  uploadBuffers(gl, program, bufferData, 'Materials');
 
   textureAllocator.bind(
     uniforms.positions,
@@ -255,6 +265,8 @@ function makeProgramFromScene({
   return {
     program,
     uniforms,
+    bufferData,
+    maps,
   };
 }
 

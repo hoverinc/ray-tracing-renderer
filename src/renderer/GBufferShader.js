@@ -2,21 +2,31 @@ import { createShader, createProgram, getAttributes, getUniforms } from './glUti
 import gBufferVert from './glsl/gBuffer.vert';
 import gBufferFrag from './glsl/gBuffer.frag';
 import { makeRenderTargets } from './RenderTargets';
+import { uploadBuffers } from './uploadBuffers';
+import { getTexturesFromMaterials } from './texturesFromMaterials';
+import { ThinMaterial, ThickMaterial, ShadowCatcherMaterial } from '../constants';
+import { makeTexture } from './Texture';
 
 export function makeGBufferShader(params) {
   const {
     geometry,
+    materials,
+    textureAllocator,
     gl
   } = params;
 
   const renderTargets = makeRenderTargets([
     {
-      name: 'position',
-      storage: 'float',
+      name: 'albedo',
+      storage: 'float'
     },
     {
       name: 'normal',
       storage: 'float'
+    },
+    {
+      name: 'position',
+      storage: 'float',
     },
     {
       name: 'uvAndMeshId',
@@ -24,14 +34,52 @@ export function makeGBufferShader(params) {
     }
   ]);
 
+  const maps = getTexturesFromMaterials(materials, ['map', 'normalMap']);
+
   const vertShader = createShader(gl, gl.VERTEX_SHADER, gBufferVert());
-  const fragShader = createShader(gl, gl.FRAGMENT_SHADER, gBufferFrag(renderTargets));
+  const fragShader = createShader(gl, gl.FRAGMENT_SHADER, gBufferFrag(renderTargets, {
+    NUM_MATERIALS: materials.length,
+    NUM_DIFFUSE_MAPS: maps.map.textures.length,
+    NUM_NORMAL_MAPS: maps.normalMap.textures.length,
+  }));
   const program = createProgram(gl, vertShader, fragShader);
 
   gl.useProgram(program);
 
   const attributes = getAttributes(gl, program);
   const uniforms = getUniforms(gl, program);
+
+  const bufferData = {};
+
+  bufferData.color = materials.map(m => m.color);
+  bufferData.roughness = materials.map(m => m.roughness);
+  bufferData.metalness = materials.map(m => m.metalness);
+  bufferData.normalScale = materials.map(m => m.normalScale);
+
+  bufferData.type = materials.map(m => {
+    if (m.shadowCatcher) {
+      return ShadowCatcherMaterial;
+    }
+    if (m.transparent) {
+      return m.solid ? ThickMaterial : ThinMaterial;
+    }
+  });
+
+  if (maps.map.textures.length > 0) {
+    const { relativeSizes, texture } = makeTextureArray(gl, maps.map.textures, true);
+    textureAllocator.bind(uniforms.diffuseMap, texture);
+    bufferData.diffuseMapSize = relativeSizes;
+    bufferData.diffuseMapIndex = maps.map.indices;
+  }
+
+  if (maps.normalMap.textures.length > 0) {
+    const { relativeSizes, texture } = makeTextureArray(gl, maps.normalMap.textures, false);
+    textureAllocator.bind(uniforms.normalMap, texture);
+    bufferData.normalMapSize = relativeSizes;
+    bufferData.normalMapIndex = maps.normalMap.indices;
+  }
+
+  uploadBuffers(gl, program, bufferData, 'GBufferMaterials');
 
   const vao = gl.createVertexArray();
   gl.bindVertexArray(vao);
@@ -77,4 +125,45 @@ function setAttribute(gl, location, bufferAttribute) {
   } else {
     throw 'Unsupported buffer type';
   }
+}
+
+function maxImageSize(images) {
+  const maxSize = {
+    width: 0,
+    height: 0
+  };
+
+  for (const image of images) {
+    maxSize.width = Math.max(maxSize.width, image.width);
+    maxSize.height = Math.max(maxSize.height, image.height);
+  }
+
+  const relativeSizes = [];
+  for (const image of images) {
+    relativeSizes.push(image.width / maxSize.width);
+    relativeSizes.push(image.height / maxSize.height);
+  }
+
+  return { maxSize, relativeSizes };
+}
+
+function makeTextureArray(gl, textures, gammaCorrection = false) {
+  const images = textures.map(t => t.image);
+  const flipY = textures.map(t => t.flipY);
+  const { maxSize, relativeSizes } = maxImageSize(images);
+
+  // create GL Array Texture from individual textures
+  const texture = makeTexture(gl, {
+    width: maxSize.width,
+    height: maxSize.height,
+    gammaCorrection,
+    data: images,
+    flipY,
+    channels: 3
+  });
+
+  return {
+   texture,
+   relativeSizes
+  };
 }

@@ -3,8 +3,8 @@ import { makeUniformBuffer } from './glUtil';
 // Upload arrays to uniform buffer objects
 // Packs different arrays into vec4's to take advantage of GLSL's std140 memory layout
 
-export function uploadBuffers(gl, program, bufferData) {
-  const materialBuffer = makeUniformBuffer(gl, program, 'Materials');
+export function uploadBuffers(gl, program, bufferData, name) {
+  const materialBuffer = makeUniformBuffer(gl, program, name);
 
   const {
     color = [],
@@ -21,30 +21,30 @@ export function uploadBuffers(gl, program, bufferData) {
     pbrMapSize = [],
   } = bufferData;
 
-  materialBuffer.set('Materials.colorAndMaterialType[0]', interleave(
+  materialBuffer.set(name+'.colorAndMaterialType[0]', interleave(
     { data: [].concat(...color.map(d => d.toArray())), channels: 3 },
     { data: type, channels: 1}
   ));
 
-  materialBuffer.set('Materials.roughnessMetalnessNormalScale[0]', interleave(
+  materialBuffer.set(name+'.roughnessMetalnessNormalScale[0]', interleave(
     { data: roughness, channels: 1 },
     { data: metalness, channels: 1 },
     { data: [].concat(...normalScale.map(d => d.toArray())), channels: 2 }
   ));
 
-  materialBuffer.set('Materials.diffuseNormalRoughnessMetalnessMapIndex[0]', interleave(
+  materialBuffer.set(name+'.diffuseNormalRoughnessMetalnessMapIndex[0]', interleave(
     { data: diffuseMapIndex, channels: 1 },
     { data: normalMapIndex, channels: 1 },
     { data: roughnessMapIndex, channels: 1 },
     { data: metalnessMapIndex, channels: 1 }
   ));
 
-  materialBuffer.set('Materials.diffuseNormalMapSize[0]', interleave(
+  materialBuffer.set(name+'.diffuseNormalMapSize[0]', interleave(
     { data: diffuseMapSize, channels: 2 },
     { data: normalMapSize, channels: 2 }
   ));
 
-  materialBuffer.set('Materials.pbrMapSize[0]', pbrMapSize);
+  materialBuffer.set(name+'.pbrMapSize[0]', pbrMapSize);
 
   materialBuffer.bind(0);
 }

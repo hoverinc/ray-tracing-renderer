@@ -9,6 +9,8 @@ in int a_meshId;
 uniform mat4 view;
 uniform mat4 projection;
 
+
+
 out vec3 v_worldPosition;
 out vec3 v_normal;
 out vec2 v_uv;
