@@ -12,6 +12,7 @@ in vec3 v_worldPosition;
 in vec3 v_normal;
 in vec2 v_uv;
 flat in int v_meshId;
+flat in vec3 v_flat_normal;
 
 uniform GBufferMaterials {
   vec4 colorAndMaterialType[NUM_MATERIALS];
@@ -53,12 +54,11 @@ void main() {
       }
     #endif
   }
-  albedo = pow(albedo, vec3(2.2)); // to linear space
 
   out_albedo = vec4(albedo, 1.0);
-  out_position = vec4(v_worldPosition, 0);
-  out_normal = vec4(v_normal, 0);
-  out_uvAndMeshId = vec4(v_uv, v_meshId, 0);
+  out_position = vec4(v_worldPosition, v_flat_normal.x);
+  out_normal = vec4(v_normal, v_flat_normal.y);
+  out_uvAndMeshId = vec4(v_uv, v_meshId, v_flat_normal.z);
 }
 `;
 }

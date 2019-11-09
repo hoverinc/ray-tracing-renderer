@@ -50,8 +50,13 @@ struct Triangle {
 
 SurfaceInteraction surfaceInteractionFromBuffer() {
   SurfaceInteraction si;
-  si.position = texture(positionBuffer, vCoord).xyz;
-  si.normal = texture(normalBuffer, vCoord).xyz;
+  vec4 positionNormalX = texture(positionBuffer, vCoord);
+  vec4 normalNormalY = texture(normalBuffer, vCoord);
+  vec4 uvAndMeshIdNormalZ = texture(uvAndMeshIdBuffer, vCoord);
+
+  si.position = positionNormalX.xyz;//texture(positionBuffer, vCoord).xyz;
+  si.normal = normalize(normalNormalY.xyz);//texture(normalBuffer, vCoord).xyz;
+  si.faceNormal = normalize(vec3(positionNormalX.w, normalNormalY.w, uvAndMeshIdNormalZ.w));
   si.faceNormal = si.normal;
 
   si.hit = dot(si.normal, si.normal) > 0.0;
@@ -59,12 +64,19 @@ SurfaceInteraction surfaceInteractionFromBuffer() {
     return si;
   }
 
-  vec3 uvAndMeshId = texture(uvAndMeshIdBuffer, vCoord).xyz;
+  vec3 uvAndMeshId = uvAndMeshIdNormalZ.xyz;//texture(uvAndMeshIdBuffer, vCoord).xyz;
 
   vec2 uv = uvAndMeshId.xy;
   int materialIndex = int(uvAndMeshId.z);
+  si.color = materials.colorAndMaterialType[materialIndex].rgb;
 
-  si.color = vec3(1.0);
+  #ifdef NUM_DIFFUSE_MAPS
+    int diffuseMapIndex = materials.diffuseNormalRoughnessMetalnessMapIndex[materialIndex].x;
+    if (diffuseMapIndex >= 0) {
+      si.color *= texture(diffuseMap, vec3(uv * materials.diffuseNormalMapSize[diffuseMapIndex].xy, diffuseMapIndex)).rgb;
+    }
+  #endif
+
   si.roughness = materials.roughnessMetalnessNormalScale[materialIndex].x;
   si.metalness = materials.roughnessMetalnessNormalScale[materialIndex].y;
   si.materialType = int(materials.colorAndMaterialType[materialIndex].w);
@@ -104,6 +116,9 @@ SurfaceInteraction surfaceInteractionFromBuffer() {
       si.metalness *= texture(pbrMap, vec3(uv * materials.pbrMapSize[metalnessMapIndex].xy, metalnessMapIndex)).b;
     }
   #endif
+
+  si.roughness = clamp(si.roughness, 0.03, 1.0);
+  si.metalness = clamp(si.metalness, 0.0, 1.0);
 
   return si;
 }

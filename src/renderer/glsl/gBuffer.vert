@@ -14,11 +14,13 @@ uniform mat4 projection;
 out vec3 v_worldPosition;
 out vec3 v_normal;
 out vec2 v_uv;
+flat out vec3 v_flat_normal;
 flat out int v_meshId;
 
 void main() {
   v_worldPosition = a_position;
-  v_normal = a_normal;
+  v_normal = normalize(a_normal);
+  v_flat_normal = normalize(a_normal);
   v_uv = a_uv;
   v_meshId = a_meshId;
 

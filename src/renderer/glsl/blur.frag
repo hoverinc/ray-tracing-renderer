@@ -22,9 +22,9 @@ void main() {
   // float incY = pixelSize.y;
   // float decY = pixelSize.y;
 
-  float incX = 1.0 / 800.0;
+  float incX = 1.0 / 500.0;
   float decX = -incX;
-  float incY = 1.0 / 500.0;
+  float incY = 1.0 / 300.0;
   float decY = -incY;
 
   float inc = 1.0 / 1000.0;

@@ -129,7 +129,11 @@ void sampleSurface(inout Path path, SurfaceInteraction si, int i) {
   } else {
     #ifdef USE_GLASS
       if (si.materialType == THIN_GLASS || si.materialType == THICK_GLASS) {
-        path.li += sampleGlassSpecular(si, i, path.ray, path.beta);
+        vec3 newSample = sampleGlassSpecular(si, i, path.ray, path.beta);
+        if (i <= 1) {
+          newSample /= max(si.color, vec3(0.0001));
+        }
+        path.li += newSample;
         path.specularBounce = true;
       }
     #endif
@@ -140,7 +144,11 @@ void sampleSurface(inout Path path, SurfaceInteraction si, int i) {
       }
     #endif
     if (si.materialType == STANDARD) {
-      path.li += sampleMaterial(si, i, path.ray, path.beta, path.abort);
+      vec3 newSample = sampleMaterial(si, i, path.ray, path.beta, path.abort);
+      if (i <= 1) {
+        newSample /= max(si.color, vec3(0.0001));
+      }
+      path.li += newSample;
       path.specularBounce = false;
     }
 

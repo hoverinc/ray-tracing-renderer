@@ -91,9 +91,15 @@ export function makeRenderingPipeline(params) {
     if (!camerasEqual(camera, lastCamera)) {
       lastCamera.copy(camera);
       rayTracingShader.setCamera(camera);
+
       hdrBuffer.bind();
       gl.clear(gl.COLOR_BUFFER_BIT);
       hdrBuffer.unbind();
+
+      toneMapBuffer.bind();
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      toneMapBuffer.unbind();
+
       gBuffer.bind();
       gl.viewport(0, 0, canvasWidth, canvasHeight);
       gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
@@ -117,17 +123,22 @@ export function makeRenderingPipeline(params) {
     // blurBuffer.unbind();
 
     toneMapBuffer.bind();
+    gl.viewport(0, 0, canvasWidth, canvasHeight);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    multiplyShader.draw( { textureA: gBuffer.texture['albedo'], textureB: hdrBuffer.texture})
     // gl.viewport(0, 0, canvasWidth, canvasHeight);
     // toneMapShader.draw({ texture: blurBuffer.texture });
-    toneMapShader.draw({ texture: hdrBuffer.texture });
     toneMapBuffer.unbind();
 
-    gl.viewport(0, 0, canvasWidth, canvasHeight);
-    multiplyShader.draw({ textureA: gBuffer.texture['albedo'], textureB: toneMapBuffer.texture });
+    toneMapShader.draw({ texture: toneMapBuffer.texture });
+    // toneMapShader.draw({ texture: hdrBuffer.texture, albedoTexture: gBuffer.texture['albedo'] });
+    
+    // gBufferShader.draw(camera);
+        // rayTracingShader.draw();
   }
 
   function setSize(width, height) {
-    lightBufferMultiplier = 0.5;
+    lightBufferMultiplier = 1.0;
 
     lightBufferWidth = width * lightBufferMultiplier;
     lightBufferHeight = height * lightBufferMultiplier;
@@ -137,7 +148,7 @@ export function makeRenderingPipeline(params) {
     gBuffer.setSize(width, height);
     gl.viewport(0, 0, width, height);
     hdrBuffer.setSize(lightBufferWidth, lightBufferHeight);
-    toneMapBuffer.setSize(lightBufferWidth, lightBufferHeight);
+    toneMapBuffer.setSize(width, height);
     blurBuffer.setSize(lightBufferWidth, lightBufferHeight);    
     rayTracingShader.setSize(lightBufferWidth, lightBufferHeight);
     rayTracingShader.gBufferInput(gBuffer.texture);

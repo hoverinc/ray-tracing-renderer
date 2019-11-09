@@ -45,12 +45,7 @@ void main() {
   // vec4 tex = textureLinear(image, vCoord);
   vec4 tex = texture(image, vCoord);
 
-  // alpha channel stores the number of samples progressively rendered
-  // divide the sum of light by alpha to obtain average contribution of light
-
-  // in addition, alpha contains a scale factor for the shadow catcher material
-  // dividing by alpha normalizes the brightness of the shadow catcher to match the background envmap.
-  vec3 light = tex.rgb / tex.a;
+  vec3 light = tex.rgb;
 
   light *= ${defines.exposure}; // exposure
 
@@ -59,9 +54,8 @@ void main() {
   // vec3 light = 0.5 * tex.rgb + 0.5;
 
   // int id = floatBitsToInt(tex.b);
-  // vec3 light = vec3(0.05 * float(id));
 
-  // light = pow(light, vec3(1.0 / 2.2)); // gamma correction
+  light = pow(light, vec3(1.0 / 2.2)); // gamma correction
 
   fragColor = vec4(light, 1.0);
 }
