@@ -1,6 +1,6 @@
 import textureLinear from './chunks/textureLinear.glsl';
 
-export default function(defines) {
+export default function({ rayTracingRenderTargets, defines }) {
   return `#version 300 es
 
 precision mediump float;
@@ -10,9 +10,10 @@ in vec2 vCoord;
 
 out vec4 fragColor;
 
-uniform sampler2D image;
 
-// ${textureLinear(defines)}
+${textureLinear(defines)}
+
+${rayTracingRenderTargets.get('blendBuffer')}
 
 // Tonemapping functions from THREE.js
 
@@ -43,7 +44,7 @@ vec3 acesFilmic( vec3 color ) {
 
 void main() {
   // vec4 tex = textureLinear(image, vCoord);
-  vec4 tex = texture(image, vCoord);
+  vec4 tex = texture(blendBuffer, vec3(vCoord, blendBuffer_blend));
 
   vec3 light = tex.rgb;
 

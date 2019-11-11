@@ -10,13 +10,16 @@ import sampleGlass from './chunks/sampleGlassSpecular.glsl';
 // import sampleGlass from './chunks/sampleGlassMicrofacet.glsl';
 import { unrollLoop, addDefines } from '../glslUtil';
 
-export default function(defines) {
+export default function({ rayTracingRenderTargets, gBufferRenderTargets, defines }) {
   return `#version 300 es
 
 precision mediump float;
 precision mediump int;
 
 ${addDefines(defines)}
+
+${gBufferRenderTargets.get('gBuffer')}
+${rayTracingRenderTargets.set()}
 
 #define PI 3.14159265359
 #define TWOPI 6.28318530718
@@ -75,8 +78,6 @@ uniform vec2 pixelSize; // 1 / screenResolution
 
 in vec2 vCoord;
 
-out vec4 fragColor;
-
 void initRay(inout Ray ray, vec3 origin, vec3 direction) {
   ray.o = origin;
   ray.d = direction;
@@ -131,7 +132,7 @@ void sampleSurface(inout Path path, SurfaceInteraction si, int i) {
       if (si.materialType == THIN_GLASS || si.materialType == THICK_GLASS) {
         vec3 newSample = sampleGlassSpecular(si, i, path.ray, path.beta);
         if (i <= 1) {
-          newSample /= max(si.color, vec3(0.0001));
+          newSample /= max(si.color, vec3(0.001));
         }
         path.li += newSample;
         path.specularBounce = true;
@@ -146,7 +147,7 @@ void sampleSurface(inout Path path, SurfaceInteraction si, int i) {
     if (si.materialType == STANDARD) {
       vec3 newSample = sampleMaterial(si, i, path.ray, path.beta, path.abort);
       if (i <= 1) {
-        newSample /= max(si.color, vec3(0.0001));
+        newSample /= max(si.color, vec3(0.001));
       }
       path.li += newSample;
       path.specularBounce = false;
@@ -217,7 +218,8 @@ void main() {
     liAndAlpha = vec4(0, 0, 0, 1);
   }
 
-  fragColor = liAndAlpha;
+  out_primaryLi = liAndAlpha;
+  out_secondaryLi = liAndAlpha;
 
   // Stratified Sampling Sample Count Test
   // ---------------

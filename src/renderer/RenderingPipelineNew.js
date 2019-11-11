@@ -1,10 +1,10 @@
 import { decomposeScene } from './decomposeScene';
 import { makeFramebuffer } from './Framebuffer';
 import { makeFullscreenQuad } from './FullscreenQuad';
-import { makeGBufferShader } from './GBufferShader';
+import { makeGBufferShader, gBufferRenderTargets } from './GBufferShader';
 import { mergeMeshesToGeometry } from './mergeMeshesToGeometry';
 import noiseBase64 from './texture/noise.js';
-import { makeRayTracingShader } from './RayTracingShader';
+import { makeRayTracingShader, rayTracingRenderTargets } from './RayTracingShader';
 import { PerspectiveCamera } from 'three';
 import { makeTextureAllocator } from './TextureAllocator';
 import { makeToneMapShader } from './ToneMapShader';
@@ -51,29 +51,22 @@ export function makeRenderingPipeline(params) {
   const gBuffer = makeFramebuffer({
     depth: true,
     gl,
-    renderTarget: gBufferShader.renderTargets
+    renderTarget: gBufferRenderTargets
   });
 
   const hdrBuffer = makeFramebuffer({
     gl,
-    renderTarget: {
-      storage: 'float'
-    },
+    renderTarget: rayTracingRenderTargets,
   });
 
-  const toneMapBuffer = makeFramebuffer({
-    gl,
-    renderTarget: {
-      storage: 'float'
-    },
-    linearFiltering: true
-  });
+  // const blendBuffer = makeFramebuffer({
+  //   gl,
+  //   renderTarget: rayTracingRenderTargets,
+  // });
 
-  const blurBuffer = makeFramebuffer({
+  const blendBuffer = makeFramebuffer({
     gl,
-    renderTarget: {
-      storage: 'float'
-    }
+    renderTarget: rayTracingRenderTargets,
   });
 
   gl.enable(gl.DEPTH_TEST);
@@ -96,9 +89,9 @@ export function makeRenderingPipeline(params) {
       gl.clear(gl.COLOR_BUFFER_BIT);
       hdrBuffer.unbind();
 
-      toneMapBuffer.bind();
+      blendBuffer.bind();
       gl.clear(gl.COLOR_BUFFER_BIT);
-      toneMapBuffer.unbind();
+      blendBuffer.unbind();
 
       gBuffer.bind();
       gl.viewport(0, 0, canvasWidth, canvasHeight);
@@ -107,38 +100,28 @@ export function makeRenderingPipeline(params) {
       gBuffer.unbind();
       rayTracingShader.restartSamples();
     }
-
     hdrBuffer.bind();
     gl.viewport(0, 0, lightBufferWidth, lightBufferHeight);
     gl.blendEquation(gl.FUNC_ADD);
     gl.blendFunc(gl.ONE, gl.ONE);
     gl.enable(gl.BLEND);
-    rayTracingShader.draw();
+    rayTracingShader.draw(gBuffer.texture);
     rayTracingShader.nextSeed();
     gl.disable(gl.BLEND);
     hdrBuffer.unbind();
 
-    // blurBuffer.bind();
-    // blurShader.draw({texture: hdrBuffer.texture });
-    // blurBuffer.unbind();
-
-    toneMapBuffer.bind();
+    blendBuffer.bind();
     gl.viewport(0, 0, canvasWidth, canvasHeight);
     gl.clear(gl.COLOR_BUFFER_BIT);
-    multiplyShader.draw( { textureA: gBuffer.texture['albedo'], textureB: hdrBuffer.texture})
-    // gl.viewport(0, 0, canvasWidth, canvasHeight);
-    // toneMapShader.draw({ texture: blurBuffer.texture });
-    toneMapBuffer.unbind();
+    multiplyShader.draw(gBuffer.texture, hdrBuffer.texture);
+    blendBuffer.unbind();
 
-    toneMapShader.draw({ texture: toneMapBuffer.texture });
-    // toneMapShader.draw({ texture: hdrBuffer.texture, albedoTexture: gBuffer.texture['albedo'] });
-    
-    // gBufferShader.draw(camera);
-        // rayTracingShader.draw();
+    gl.viewport(0, 0, canvasWidth, canvasHeight);
+    toneMapShader.draw(blendBuffer.texture);
   }
 
   function setSize(width, height) {
-    lightBufferMultiplier = 1.0;
+    lightBufferMultiplier = 0.5;
 
     lightBufferWidth = width * lightBufferMultiplier;
     lightBufferHeight = height * lightBufferMultiplier;
@@ -148,11 +131,9 @@ export function makeRenderingPipeline(params) {
     gBuffer.setSize(width, height);
     gl.viewport(0, 0, width, height);
     hdrBuffer.setSize(lightBufferWidth, lightBufferHeight);
-    toneMapBuffer.setSize(width, height);
-    blurBuffer.setSize(lightBufferWidth, lightBufferHeight);    
+    blendBuffer.setSize(width, height);
     rayTracingShader.setSize(lightBufferWidth, lightBufferHeight);
     rayTracingShader.gBufferInput(gBuffer.texture);
-    blurShader.setSize(lightBufferWidth, lightBufferHeight);
   }
 
   return {

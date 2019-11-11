@@ -1,5 +1,5 @@
 import { makeFullscreenQuad } from './FullscreenQuad';
-import { makeRayTracingShader } from './RayTracingShader';
+import { makeRayTracingShader, rayTracingRenderTargets } from './RayTracingShader';
 import { makeToneMapShader } from './ToneMapShader';
 import { makeFramebuffer } from './Framebuffer';
 import { numberArraysEqual, clamp } from './util';
@@ -21,6 +21,7 @@ export function makeRenderingPipeline({
   let ready = false;
 
   const fullscreenQuad = makeFullscreenQuad(gl);
+
   const textureAllocator = makeTextureAllocator(gl);
   const rayTracingShader = makeRayTracingShader({gl, optionalExtensions, fullscreenQuad, textureAllocator, scene, bounces});
   const toneMapShader = makeToneMapShader({gl, optionalExtensions, fullscreenQuad, textureAllocator, toneMappingParams});

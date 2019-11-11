@@ -8,11 +8,18 @@ import { generateEnvMapFromSceneComponents } from './envMapCreation';
 import { getTexturesFromMaterials, mergeTexturesFromMaterials } from './texturesFromMaterials';
 import { makeTexture } from './Texture';
 import { uploadBuffers } from './uploadBuffers';
+import { gBufferRenderTargets } from './gBufferShader';
 import { ThinMaterial, ThickMaterial, ShadowCatcherMaterial } from '../constants';
 import { clamp } from './util';
 import { makeStratifiedSamplerCombined } from './StratifiedSamplerCombined';
+import { makeRenderTargets } from './RenderTargets';
 
 //Important TODO: Refactor this file to get rid of duplicate and confusing code
+
+export const rayTracingRenderTargets = makeRenderTargets({
+  storage: 'float',
+  names: ['primaryLi', 'secondaryLi', 'blend']
+});
 
 export function makeRayTracingShader({
     bounces, // number of global illumination bounces,
@@ -99,20 +106,18 @@ export function makeRayTracingShader({
     gl.uniform1f(uniforms.useStratifiedSampling, stratifiedSampling ? 1.0 : 0.0);
   }
 
-  const albedoBuffer = textureAllocator.reserveSlot();
-  const positionBuffer = textureAllocator.reserveSlot();
-  const normalBuffer = textureAllocator.reserveSlot();
-  const uvAndMeshIdBuffer = textureAllocator.reserveSlot();
-  function gBufferInput({ albedo, position, normal, uvAndMeshId }) {
+  const gBufferLocation = textureAllocator.reserveSlot();
+
+  function gBufferInput(gBuffer) {
     gl.useProgram(program);
-    albedoBuffer.bind(uniforms.albedoBuffer, albedo);
-    positionBuffer.bind(uniforms.positionBuffer, position);
-    normalBuffer.bind(uniforms.normalBuffer, normal);
-    uvAndMeshIdBuffer.bind(uniforms.uvAndMeshIdBuffer, uvAndMeshId);
+    gBufferLocation.bind(uniforms.gBuffer, gBuffer);
   }
 
-  function draw() {
+  function draw(gBuffer) {
     gl.useProgram(program);
+
+    gBufferLocation.bind(uniforms.gBuffer, gBuffer);
+
     fullscreenQuad.draw();
   }
 
@@ -160,22 +165,26 @@ function makeProgramFromScene({
 
   const useGlass = materials.some(m => m.transparent);
   const useShadowCatcher = materials.some(m => m.shadowCatcher);
-
+  // debugger;
   const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragString({
-    OES_texture_float_linear,
-    BVH_COLUMNS: textureDimensionsFromArray(flattenedBvh.count).columnsLog,
-    INDEX_COLUMNS: textureDimensionsFromArray(numTris).columnsLog,
-    VERTEX_COLUMNS: textureDimensionsFromArray(geometry.attributes.position.count).columnsLog,
-    STACK_SIZE: flattenedBvh.maxDepth,
-    NUM_TRIS: numTris,
-    NUM_MATERIALS: materials.length,
-    NUM_DIFFUSE_MAPS: maps.map.textures.length,
-    NUM_NORMAL_MAPS: maps.normalMap.textures.length,
-    NUM_PBR_MAPS: pbrMap.textures.length,
-    BOUNCES: bounces,
-    USE_GLASS: useGlass,
-    USE_SHADOW_CATCHER: useShadowCatcher,
-    SAMPLING_DIMENSIONS: samplingDimensions.reduce((a, b) => a + b)
+    rayTracingRenderTargets,
+    gBufferRenderTargets,
+    defines: {
+      OES_texture_float_linear,
+      BVH_COLUMNS: textureDimensionsFromArray(flattenedBvh.count).columnsLog,
+      INDEX_COLUMNS: textureDimensionsFromArray(numTris).columnsLog,
+      VERTEX_COLUMNS: textureDimensionsFromArray(geometry.attributes.position.count).columnsLog,
+      STACK_SIZE: flattenedBvh.maxDepth,
+      NUM_TRIS: numTris,
+      NUM_MATERIALS: materials.length,
+      NUM_DIFFUSE_MAPS: maps.map.textures.length,
+      NUM_NORMAL_MAPS: maps.normalMap.textures.length,
+      NUM_PBR_MAPS: pbrMap.textures.length,
+      BOUNCES: bounces,
+      USE_GLASS: useGlass,
+      USE_SHADOW_CATCHER: useShadowCatcher,
+      SAMPLING_DIMENSIONS: samplingDimensions.reduce((a, b) => a + b)
+    }
   }));
 
   const program = createProgram(gl, fullscreenQuad.vertexShader, fragmentShader);

@@ -7,6 +7,11 @@ import { getTexturesFromMaterials } from './texturesFromMaterials';
 import { ThinMaterial, ThickMaterial, ShadowCatcherMaterial } from '../constants';
 import { makeTexture } from './Texture';
 
+export const gBufferRenderTargets = makeRenderTargets({
+      storage: 'float',
+      names: ['albedo', 'normal', 'position', 'uvAndMeshId']
+});
+
 export function makeGBufferShader(params) {
   const {
     geometry,
@@ -15,32 +20,16 @@ export function makeGBufferShader(params) {
     gl
   } = params;
 
-  const renderTargets = makeRenderTargets([
-    {
-      name: 'albedo',
-      storage: 'float'
-    },
-    {
-      name: 'normal',
-      storage: 'float'
-    },
-    {
-      name: 'position',
-      storage: 'float',
-    },
-    {
-      name: 'uvAndMeshId',
-      storage: 'float'
-    }
-  ]);
-
   const maps = getTexturesFromMaterials(materials, ['map', 'normalMap']);
 
   const vertShader = createShader(gl, gl.VERTEX_SHADER, gBufferVert());
-  const fragShader = createShader(gl, gl.FRAGMENT_SHADER, gBufferFrag(renderTargets, {
-    NUM_MATERIALS: materials.length,
-    NUM_DIFFUSE_MAPS: maps.map.textures.length,
-    NUM_NORMAL_MAPS: maps.normalMap.textures.length,
+  const fragShader = createShader(gl, gl.FRAGMENT_SHADER, gBufferFrag({
+    gBufferRenderTargets,
+    defines: {
+      NUM_MATERIALS: materials.length,
+      NUM_DIFFUSE_MAPS: maps.map.textures.length,
+      NUM_NORMAL_MAPS: maps.normalMap.textures.length,
+    }
   }));
   const program = createProgram(gl, vertShader, fragShader);
 
@@ -106,8 +95,7 @@ export function makeGBufferShader(params) {
       gl.drawElements(gl.TRIANGLES, elementCount, gl.UNSIGNED_INT, 0);
 
       gl.bindVertexArray(null);
-    },
-    renderTargets
+    }
   };
 }
 

@@ -1,3 +1,4 @@
+
 export default function(defines) {
   return `
 
@@ -6,12 +7,6 @@ uniform sampler2D positions;
 uniform sampler2D normals;
 uniform sampler2D uvs;
 uniform sampler2D bvh;
-
-// G-Buffers
-uniform sampler2D albedoBuffer;
-uniform sampler2D positionBuffer;
-uniform sampler2D normalBuffer;
-uniform sampler2D uvAndMeshIdBuffer;
 
 uniform Materials {
   vec4 colorAndMaterialType[NUM_MATERIALS];
@@ -50,9 +45,9 @@ struct Triangle {
 
 SurfaceInteraction surfaceInteractionFromBuffer() {
   SurfaceInteraction si;
-  vec4 positionNormalX = texture(positionBuffer, vCoord);
-  vec4 normalNormalY = texture(normalBuffer, vCoord);
-  vec4 uvAndMeshIdNormalZ = texture(uvAndMeshIdBuffer, vCoord);
+  vec4 positionNormalX = texture(gBuffer, vec3(vCoord, gBuffer_position));
+  vec4 normalNormalY = texture(gBuffer, vec3(vCoord, gBuffer_normal));
+  vec4 uvAndMeshIdNormalZ = texture(gBuffer, vec3(vCoord, gBuffer_uvAndMeshId));
 
   si.position = positionNormalX.xyz;//texture(positionBuffer, vCoord).xyz;
   si.normal = normalize(normalNormalY.xyz);//texture(normalBuffer, vCoord).xyz;

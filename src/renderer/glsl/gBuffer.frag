@@ -1,12 +1,14 @@
 import { addDefines } from '../glslUtil';
 
-export default function(renderTargets, defines) {
+export default function({ gBufferRenderTargets, defines }) {
   return `#version 300 es
 
 precision mediump float;
 precision mediump int;
 
 ${addDefines(defines)}
+
+${gBufferRenderTargets.set()}
 
 in vec3 v_worldPosition;
 in vec3 v_normal;
@@ -38,8 +40,6 @@ uniform GBufferMaterials {
 #ifdef NUM_NORMAL_MAPS
   uniform mediump sampler2DArray normalMap;
 #endif
-
-${renderTargets.glslOutput()}
 
 void main() {
   vec3 albedo = vec3(1.0);

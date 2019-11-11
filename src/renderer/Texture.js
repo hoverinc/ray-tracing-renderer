@@ -9,6 +9,9 @@ export function makeTexture(gl, params) {
     // Or an array of any of these objects. In this case an Array Texture will be created
     data = null,
 
+    // If greater than 1, create an Array Texture of this length
+    length = 1,
+
     // Number of channels, [1-4]. If left blank, the the function will decide the number of channels automatically from the data
     channels = null,
 
@@ -39,10 +42,9 @@ export function makeTexture(gl, params) {
   if (Array.isArray(data)) {
     dataArray = data;
     data = dataArray[0];
-    target = gl.TEXTURE_2D_ARRAY;
-  } else {
-    target = gl.TEXTURE_2D;
   }
+
+  target = dataArray || length > 1 ? gl.TEXTURE_2D_ARRAY : gl.TEXTURE_2D;
 
   gl.activeTexture(gl.TEXTURE0);
   gl.bindTexture(target, texture);
@@ -110,9 +112,15 @@ export function makeTexture(gl, params) {
 
       gl.texSubImage3D(target, 0, 0, 0, i, layerWidth, layerHeight, 1, format, type, dataArray[i]);
     }
+  } else if (length > 1) {
+    // create empty array texture
+    gl.texStorage3D(target, 1, internalFormat, width, height, length);
   } else {
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, flipY);
-    gl.texImage2D(target, 0, internalFormat, width, height, 0, format, type, data);
+    gl.texStorage2D(target, 1, internalFormat, width, height);
+    if (data) {
+      gl.texSubImage2D(target, 0, 0, 0, width, height, format, type, data);
+    }
   }
 
   // return state to default
