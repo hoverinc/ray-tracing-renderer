@@ -10,8 +10,7 @@ ${rayTracingRenderTargets.get('historyBuffer')}
 ${rayTracingRenderTargets.get('hdrBuffer')}
 ${rayTracingRenderTargets.set()}
 
-uniform mat4 historyCameraInv;
-uniform mat4 historyCameraProj;
+uniform mat4 historyCamera;
 uniform float amount;
 
 float relativeError(float v, float vApprox) {
@@ -20,21 +19,21 @@ float relativeError(float v, float vApprox) {
 
 vec4 getHistory(ivec2 hTexel, float positionWidth, float normalWidth, vec3 historyPosition, vec3 historyNormal, vec3 position, vec3 normal, out float contrib) {
   // float error = relativeError(distance(historyPositionLerp, historyPosition), distance(position, historyPosition));
-  float error = distance(historyPosition, position) / (positionWidth + 0.04);
+  float error = distance(historyPosition, position) / (positionWidth + 0.001);
 
   // float normalError = distance(historyNormal, normal) * (normalWidth);
-  float normalError = distance(historyNormal, normal) * positionWidth;
+  float normalError = distance(historyNormal, normal) / (normalWidth + 0.001);
 
 
-  contrib = error > 0.5 || normalError > 0.05 ? 0.0 : 1.0;
-  // contrib = normalError > 0.05 ? 0.0 : 1.0;
-  // contrib = error > 0.5 ? 0.0: 1.0;
+  contrib = error > 0.7 || normalError > 0.7 ? 0.0 : 1.0;
+  // contrib = normalError > 0.7 ? 0.0 : 1.0;
+  // contrib = error > 0.7 ? 0.0: 1.0;
 
   return texelFetch(historyBuffer, ivec3(hTexel, historyBuffer_light), 0);
 }
 
 vec2 reproject(vec3 position) {
-  vec4 historyCoord = (historyCameraProj * historyCameraInv * vec4(position, 1.0));
+  vec4 historyCoord = historyCamera* vec4(position, 1.0);
   return 0.5 * historyCoord.xy / historyCoord.w + 0.5;
 }
 
@@ -77,6 +76,8 @@ void main() {
     vec3 n3 = texelFetch(historyBuffer, ivec3(t3, historyBuffer_normal), 0).xyz;
 
     float normalWidth = max(distance(n1, n0), distance(n2, n0));
+    // float normalWidth = max(length(dFdx(normal)), length(dFdy(normal)));
+
 
     float sum;
     float weight;

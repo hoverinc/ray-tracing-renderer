@@ -24,10 +24,14 @@ export function makeReprojectShader(params) {
   const hdrBufferLocation = textureAllocator.reserveSlot();
   const historyBufferLocation = textureAllocator.reserveSlot();
 
+  const historyCamera = new THREE.Matrix4();
+
   function setPreviousCamera(camera) {
     gl.useProgram(program);
-    gl.uniformMatrix4fv(uniforms.historyCameraInv, false, camera.matrixWorldInverse.elements);
-    gl.uniformMatrix4fv(uniforms.historyCameraProj, false, camera.projectionMatrix.elements);
+
+    historyCamera.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+
+    gl.uniformMatrix4fv(uniforms.historyCamera, false, historyCamera.elements);
   }
 
   function setAmount(amount) {
