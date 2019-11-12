@@ -222,8 +222,7 @@ void main() {
 
   out_light = liAndAlpha;
   out_normal = vec4(si.surfaceNormal, 1.0);
-  out_position = vec4(si.position, si.hit);
-
+  out_position = vec4(si.position, 1.0);
 
   // Stratified Sampling Sample Count Test
   // ---------------

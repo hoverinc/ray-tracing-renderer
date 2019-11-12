@@ -18,14 +18,17 @@ float relativeError(float v, float vApprox) {
   return abs((v - vApprox) / v);
 }
 
-vec4 getHistory(ivec2 hTexel, vec3 historyPositionLerp, vec3 historyPosition, vec3 position, vec3 normal, out float contrib) {
-  float error = relativeError(distance(historyPositionLerp, historyPosition), distance(position, historyPosition));
-  // float error = distance(history, position);
+vec4 getHistory(ivec2 hTexel, float positionWidth, float normalWidth, vec3 historyPosition, vec3 historyNormal, vec3 position, vec3 normal, out float contrib) {
+  // float error = relativeError(distance(historyPositionLerp, historyPosition), distance(position, historyPosition));
+  float error = distance(historyPosition, position) / (positionWidth + 0.035);
 
-  vec3 historyNormal = texelFetch(historyBuffer, ivec3(hTexel, historyBuffer_normal), 0).xyz;
-  float normalError = distance(historyNormal, normal);
+  // float normalError = distance(historyNormal, normal) * (normalWidth);
+  float normalError = distance(historyNormal, normal) * positionWidth;
 
-  contrib = error > 0.05 || normalError > 0.05 ? 0.0 : 1.0;
+
+  contrib = error > 0.5 || normalError > 0.05 ? 0.0 : 1.0;
+  // contrib = normalError > 0.05 ? 0.0 : 1.0;
+  // contrib = error > 0.5 ? 0.0: 1.0;
 
   return texelFetch(historyBuffer, ivec3(hTexel, historyBuffer_light), 0);
 }
@@ -41,15 +44,11 @@ void main() {
   vec4 lightTex = texture(hdrBuffer, vec3(vCoord, hdrBuffer_light));
 
   vec3 position = positionTex.xyz;
-  float hit = positionTex.w;
   vec3 normal = normalTex.xyz;
 
   vec4 history;
 
-  float width;
-  vec2 f;
-
-  if (hit > 0.0) {
+  if (dot(position, position) > 0.0) {
     vec2 hCoord = reproject(position);
 
     ivec2 size = textureSize(historyBuffer, 0).xy;
@@ -57,19 +56,27 @@ void main() {
 
     vec2 hTexelf = hCoord * sizef - 0.5;
     ivec2 hTexel = ivec2(hTexelf);
-    f = fract(hTexelf);
+    vec2 f = fract(hTexelf);
 
     ivec2 t0 = hTexel + ivec2(0, 0);
     ivec2 t1 = hTexel + ivec2(1, 0);
     ivec2 t2 = hTexel + ivec2(0, 1);
     ivec2 t3 = hTexel + ivec2(1, 1);
 
-    vec3 h0 = texelFetch(historyBuffer, ivec3(t0, historyBuffer_position), 0).xyz;
-    vec3 h1 = texelFetch(historyBuffer, ivec3(t1, historyBuffer_position), 0).xyz;
-    vec3 h2 = texelFetch(historyBuffer, ivec3(t2, historyBuffer_position), 0).xyz;
-    vec3 h3 = texelFetch(historyBuffer, ivec3(t3, historyBuffer_position), 0).xyz;
+    vec3 p0 = texelFetch(historyBuffer, ivec3(t0, historyBuffer_position), 0).xyz;
+    vec3 p1 = texelFetch(historyBuffer, ivec3(t1, historyBuffer_position), 0).xyz;
+    vec3 p2 = texelFetch(historyBuffer, ivec3(t2, historyBuffer_position), 0).xyz;
+    vec3 p3 = texelFetch(historyBuffer, ivec3(t3, historyBuffer_position), 0).xyz;
 
-    vec3 historyPositionLerp = mix(mix(h0, h1, f.x), mix(h2, h3, f.x), f.y);
+    float positionWidth = max(distance(p1, p0), distance(p2, p0));
+    // float positionWidth = max(length(dFdx(position)), length(dFdy(position)));
+
+    vec3 n0 = texelFetch(historyBuffer, ivec3(t0, historyBuffer_normal), 0).xyz;
+    vec3 n1 = texelFetch(historyBuffer, ivec3(t1, historyBuffer_normal), 0).xyz;
+    vec3 n2 = texelFetch(historyBuffer, ivec3(t2, historyBuffer_normal), 0).xyz;
+    vec3 n3 = texelFetch(historyBuffer, ivec3(t3, historyBuffer_normal), 0).xyz;
+
+    float normalWidth = max(distance(n1, n0), distance(n2, n0));
 
     float sum;
     float weight;
@@ -77,22 +84,22 @@ void main() {
     float contrib;
 
     // bilinear filtering. reject invalid history and redistribute weight
-    reprojection = getHistory(t0, historyPositionLerp, h0, position, normal, contrib);
+    reprojection = getHistory(t0, positionWidth, normalWidth, p0, n0, position, normal, contrib);
     weight = contrib * (1.0 - f.x) * (1.0 - f.y);
     history += reprojection * weight;
     sum += weight;
 
-    reprojection = getHistory(t1, historyPositionLerp, h1, position, normal, contrib);
+    reprojection = getHistory(t1, positionWidth, normalWidth, p1, n1, position, normal, contrib);
     weight = contrib * f.x * (1.0 - f.y);
     history += reprojection * weight;
     sum += weight;
 
-    reprojection = getHistory(t2, historyPositionLerp, h2, position, normal, contrib);
+    reprojection = getHistory(t2, positionWidth, normalWidth, p2, n2, position, normal, contrib);
     weight = contrib * (1.0 - f.x) * f.y;
     history += reprojection * weight;
     sum += weight;
 
-    reprojection = getHistory(t3, historyPositionLerp, h3, position, normal, contrib);
+    reprojection = getHistory(t3, positionWidth, normalWidth, p3, n3, position, normal, contrib);
     weight = contrib * f.x * f.y;
     history += reprojection * weight;
     sum += weight;
@@ -106,7 +113,7 @@ void main() {
   }
 
   out_light = amount * amount * history + lightTex;
-  out_normal = vec4(normal, 0.0);
+  out_normal = normalTex;
   out_position = positionTex;
 }
 
