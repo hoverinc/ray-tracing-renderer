@@ -18,7 +18,7 @@ import { makeRenderTargets } from './RenderTargets';
 
 export const rayTracingRenderTargets = makeRenderTargets({
   storage: 'float',
-  names: ['primaryLi', 'secondaryLi', 'blend']
+  names: ['primaryLi', 'secondaryLi', 'blur', 'blend']
 });
 
 export function makeRayTracingShader({
@@ -71,6 +71,11 @@ export function makeRayTracingShader({
     gl.uniform1f(uniforms['camera.fov'], 0.5 / Math.tan(0.5 * Math.PI * camera.fov / 180));
     gl.uniform1f(uniforms['camera.focus'], camera.focus || 0);
     gl.uniform1f(uniforms['camera.aperture'], camera.aperture || 0);
+  }
+
+  function setOneBounceOnlyMode(useOneBounce){
+    gl.useProgram(program);
+    gl.uniform1f(uniforms.processOnlyFirstBounce, useOneBounce);
   }
 
   let samples;
@@ -130,6 +135,7 @@ export function makeRayTracingShader({
     setCamera,
     setNoise,
     setSize,
+    setOneBounceOnlyMode,
     setStrataCount,
     restartSamples,
     useStratifiedSampling,

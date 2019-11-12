@@ -28,13 +28,17 @@ void main() {
   // in addition, alpha contains a scale factor for the shadow catcher material
   // dividing by alpha normalizes the brightness of the shadow catcher to match the background envmap.
   light /= lightTexture.a;
-  secondaryLight /= secondaryLightTexture.a;
+  if (length(secondaryLight) > 0.0) {
+    secondaryLight /= secondaryLightTexture.a;
+  }
+
   if (albedoTexture.a > 0.0) {
     light *= albedoTexture.rgb;
   }
   light += secondaryLight;
 
   out_blend = vec4(light, lightTexture.a);
+  // out_blend = vec4(secondaryLight, lightTexture.a);
 }
 
 `;

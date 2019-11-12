@@ -75,6 +75,7 @@ struct Camera {
 
 uniform Camera camera;
 uniform vec2 pixelSize; // 1 / screenResolution
+uniform bool processOnlyFirstBounce;
 
 in vec2 vCoord;
 
@@ -130,10 +131,10 @@ void sampleSurface(inout Path path, SurfaceInteraction si, int i) {
       vec3 newSample = path.beta * sampleEnvmapFromDirection(path.ray.d);
       if (i <= 2) {
         path.primaryAlpha = path.alpha;
-        path.primaryLi = newSample;
+        path.primaryLi += newSample;
       } else {
         path.secondaryLi += newSample;
-        path.secondaryAlpha = path.alpha;
+        path.secondaryAlpha += path.alpha;
       }
       path.li += newSample;
     }
@@ -229,7 +230,9 @@ Path integrator(Ray ray) {
   path.abort = false;
 
   primarySample(path);
-
+  if (processOnlyFirstBounce) {
+    return path;
+  }
   // equivelant to
   // for (int i = 1; i < params.bounces + 1, i += 1)
   ${unrollLoop('i', 2, defines.BOUNCES + 1, 1, `
@@ -252,13 +255,17 @@ void main() {
   vec4 primaryLiAndAlpha = vec4(resultPath.primaryLi, resultPath.primaryAlpha);
   vec4 secondaryLiAndAlpha = vec4(resultPath.secondaryLi, resultPath.secondaryAlpha);
 
+
   if (!(liAndAlpha.x < INF && liAndAlpha.x > -EPS)) {
     primaryLiAndAlpha = vec4(0, 0, 0, 1);
     secondaryLiAndAlpha = vec4(0, 0, 0, 1);
   }
 
+  secondaryLiAndAlpha = mix(secondaryLiAndAlpha, vec4(0, 0, 0, 0), float(processOnlyFirstBounce));
+
   out_primaryLi = primaryLiAndAlpha;
   out_secondaryLi = secondaryLiAndAlpha;
+  out_blur = secondaryLiAndAlpha;
 
   // Stratified Sampling Sample Count Test
   // ---------------

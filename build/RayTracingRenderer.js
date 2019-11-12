@@ -2324,6 +2324,7 @@ struct Camera {
 
 uniform Camera camera;
 uniform vec2 pixelSize; // 1 / screenResolution
+uniform bool processOnlyFirstBounce;
 
 in vec2 vCoord;
 
@@ -2363,7 +2364,11 @@ ${sampleShadowCatcher()}
 struct Path {
   Ray ray;
   vec3 li;
+  vec3 primaryLi;
+  vec3 secondaryLi;
   float alpha;
+  float primaryAlpha;
+  float secondaryAlpha;
   vec3 beta;
   bool specularBounce;
   bool abort;
@@ -2372,7 +2377,15 @@ struct Path {
 void sampleSurface(inout Path path, SurfaceInteraction si, int i) {
   if (!si.hit) {
     if (path.specularBounce) {
-      path.li += path.beta * sampleEnvmapFromDirection(path.ray.d);
+      vec3 newSample = path.beta * sampleEnvmapFromDirection(path.ray.d);
+      if (i <= 2) {
+        path.primaryAlpha = path.alpha;
+        path.primaryLi += newSample;
+      } else {
+        path.secondaryLi += newSample;
+        path.secondaryAlpha += path.alpha;
+      }
+      path.li += newSample;
     }
 
     path.abort = true;
@@ -2382,6 +2395,11 @@ void sampleSurface(inout Path path, SurfaceInteraction si, int i) {
         vec3 newSample = sampleGlassSpecular(si, i, path.ray, path.beta);
         if (i <= 1) {
           newSample /= max(si.color, vec3(0.001));
+          path.primaryAlpha = path.alpha;
+          path.primaryLi = newSample;
+        } else {
+          path.secondaryLi += newSample;
+          path.secondaryAlpha = path.alpha;
         }
         path.li += newSample;
         path.specularBounce = true;
@@ -2389,7 +2407,16 @@ void sampleSurface(inout Path path, SurfaceInteraction si, int i) {
     #endif
     #ifdef USE_SHADOW_CATCHER
       if (si.materialType == SHADOW_CATCHER) {
-        path.li += sampleShadowCatcher(si, i, path.ray, path.beta, path.alpha, path.li, path.abort);
+        vec3 newSample = sampleShadowCatcher(si, i, path.ray, path.beta, path.alpha, path.li, path.abort);
+        if (i <= 1) {
+          newSample /= max(si.color, vec3(0.001));
+          path.primaryAlpha = path.alpha;
+          path.primaryLi = newSample;
+        } else {
+          path.secondaryLi += newSample;
+          path.secondaryAlpha = path.alpha;
+        }
+        path.li += newSample;
         path.specularBounce = false;
       }
     #endif
@@ -2397,6 +2424,11 @@ void sampleSurface(inout Path path, SurfaceInteraction si, int i) {
       vec3 newSample = sampleMaterial(si, i, path.ray, path.beta, path.abort);
       if (i <= 1) {
         newSample /= max(si.color, vec3(0.001));
+        path.primaryAlpha = path.alpha;
+        path.primaryLi = newSample;        
+      } else {
+        path.secondaryLi += newSample;
+        path.secondaryAlpha = path.alpha;
       }
       path.li += newSample;
       path.specularBounce = false;
@@ -2433,24 +2465,30 @@ void secondarySample(inout Path path, int i) {
 
 // Path tracing integrator as described in
 // http://www.pbr-book.org/3ed-2018/Light_Transport_I_Surface_Reflection/Path_Tracing.html#
-vec4 integrator(Ray ray) {
+Path integrator(Ray ray) {
   Path path;
   path.ray = ray;
   path.li = vec3(0);
+  path.primaryLi = vec3(0);
+  path.secondaryLi = vec3(0);
   path.alpha = 1.0;
+  path.primaryAlpha = 1.0;
+  path.secondaryAlpha = 1.0;
   path.beta = vec3(1.0);
   path.specularBounce = true;
   path.abort = false;
 
   primarySample(path);
-
+  if (processOnlyFirstBounce) {
+    return path;
+  }
   // equivelant to
   // for (int i = 1; i < params.bounces + 1, i += 1)
   ${unrollLoop('i', 2, defines.BOUNCES + 1, 1, `
     secondarySample(path, i);
   `)}
 
-  return vec4(path.li, path.alpha);
+  return path;//vec4(path.li, path.alpha);
 }
 
 void main() {
@@ -2461,14 +2499,22 @@ void main() {
   vec3 direction = mat3(camera.transform) * normalize(vec3(vCoord - 0.5, -1.0) * vec3(camera.aspect, 1.0, camera.fov));
   initRay(cam, origin, direction);
 
-  vec4 liAndAlpha = integrator(cam);
+  Path resultPath = integrator(cam);
+  vec4 liAndAlpha = vec4(resultPath.li, resultPath.alpha);
+  vec4 primaryLiAndAlpha = vec4(resultPath.primaryLi, resultPath.primaryAlpha);
+  vec4 secondaryLiAndAlpha = vec4(resultPath.secondaryLi, resultPath.secondaryAlpha);
+
 
   if (!(liAndAlpha.x < INF && liAndAlpha.x > -EPS)) {
-    liAndAlpha = vec4(0, 0, 0, 1);
+    primaryLiAndAlpha = vec4(0, 0, 0, 1);
+    secondaryLiAndAlpha = vec4(0, 0, 0, 1);
   }
 
-  out_primaryLi = liAndAlpha;
-  out_secondaryLi = liAndAlpha;
+  secondaryLiAndAlpha = mix(secondaryLiAndAlpha, vec4(0, 0, 0, 0), float(processOnlyFirstBounce));
+
+  out_primaryLi = primaryLiAndAlpha;
+  out_secondaryLi = secondaryLiAndAlpha;
+  out_blur = secondaryLiAndAlpha;
 
   // Stratified Sampling Sample Count Test
   // ---------------
@@ -3184,7 +3230,7 @@ void main() {
 
   const rayTracingRenderTargets = makeRenderTargets({
     storage: 'float',
-    names: ['primaryLi', 'secondaryLi', 'blend']
+    names: ['primaryLi', 'secondaryLi', 'blur', 'blend']
   });
 
   function makeRayTracingShader({
@@ -3237,6 +3283,11 @@ void main() {
       gl.uniform1f(uniforms['camera.fov'], 0.5 / Math.tan(0.5 * Math.PI * camera.fov / 180));
       gl.uniform1f(uniforms['camera.focus'], camera.focus || 0);
       gl.uniform1f(uniforms['camera.aperture'], camera.aperture || 0);
+    }
+
+    function setOneBounceOnlyMode(useOneBounce){
+      gl.useProgram(program);
+      gl.uniform1f(uniforms.processOnlyFirstBounce, useOneBounce);
     }
 
     let samples;
@@ -3296,6 +3347,7 @@ void main() {
       setCamera,
       setNoise,
       setSize,
+      setOneBounceOnlyMode,
       setStrataCount,
       restartSamples,
       useStratifiedSampling,
@@ -3678,8 +3730,10 @@ ${rayTracingRenderTargets.set()}
 void main() {
   vec4 albedoTexture = texture(gBuffer, vec3(vCoord, gBuffer_albedo));
   vec4 lightTexture = texture(hdrBuffer, vec3(vCoord, hdrBuffer_primaryLi));
+  vec4 secondaryLightTexture = texture(hdrBuffer, vec3(vCoord, hdrBuffer_secondaryLi));
 
   vec3 light = lightTexture.rgb;
+  vec3 secondaryLight = secondaryLightTexture.rgb;
 
   // alpha channel stores the number of samples progressively rendered
   // divide the sum of light by alpha to obtain average contribution of light
@@ -3687,13 +3741,17 @@ void main() {
   // in addition, alpha contains a scale factor for the shadow catcher material
   // dividing by alpha normalizes the brightness of the shadow catcher to match the background envmap.
   light /= lightTexture.a;
+  if (length(secondaryLight) > 0.0) {
+    secondaryLight /= secondaryLightTexture.a;
+  }
 
   if (albedoTexture.a > 0.0) {
     light *= albedoTexture.rgb;
   }
+  light += secondaryLight;
 
   out_blend = vec4(light, lightTexture.a);
-  // out_blend = albedoTexture;
+  // out_blend = vec4(secondaryLight, lightTexture.a);
 }
 
 `;
@@ -3736,7 +3794,7 @@ void main() {
     };
   }
 
-  function fragString$3(defines) {
+  function fragString$3({rayTracingRenderTargets, defines}) {
     return `#version 300 es
 
 precision mediump float;
@@ -3744,9 +3802,9 @@ precision mediump int;
 
 in vec2 vCoord;
 
-out vec4 fragColor;
+${rayTracingRenderTargets.get('hdrBuffer')}
+${rayTracingRenderTargets.set()}
 
-uniform sampler2D image;
 uniform vec2 pixelSize; // 1 / screenResolution
 
 // ${textureLinear()}
@@ -3758,31 +3816,47 @@ void main() {
   // float incY = pixelSize.y;
   // float decY = pixelSize.y;
 
-  float incX = 1.0 / 500.0;
+  float incX = 1.0 / 1000.0;
   float decX = -incX;
-  float incY = 1.0 / 300.0;
+  float incY = 1.0 / 600.0;
   float decY = -incY;
-
-  float inc = 1.0 / 1000.0;
-  float dec = -inc;
 
   float quarter = 0.25;
   float eigth = 0.125;
   float sixteenth = 0.0625;
 
-  vec4 texA = texture(image, vCoord) * quarter;
-  vec4 texB = texture(image, clamp(vCoord + vec2(incX, incY), vec2(0.0), vec2(1.0) )) * sixteenth;
-  vec4 texC = texture(image, clamp(vCoord - vec2(decX, decY), vec2(0.0), vec2(1.0) )) * sixteenth;  
-  vec4 texD = texture(image, clamp(vCoord - vec2(decX, incY), vec2(0.0), vec2(1.0) )) * sixteenth;  
-  vec4 texE = texture(image, clamp(vCoord - vec2(incX, decY), vec2(0.0), vec2(1.0) )) * sixteenth;
-  vec4 texF = texture(image, clamp(vCoord - vec2(0, decY), vec2(0.0), vec2(1.0) )) * eigth;
-  vec4 texG = texture(image, clamp(vCoord - vec2(incX, 0), vec2(0.0), vec2(1.0) )) * eigth;
-  vec4 texH = texture(image, clamp(vCoord - vec2(0, incY), vec2(0.0), vec2(1.0) )) * eigth;
-  vec4 texI = texture(image, clamp(vCoord - vec2(decX, 0), vec2(0.0), vec2(1.0) )) * eigth;
+  vec4 primaryLi = texture(hdrBuffer, vec3(vCoord, hdrBuffer_primaryLi));
 
-  vec4 light = (texA + texB + texC + texD + texE + texF + texG + texH + texI);
+  vec4 texA = texture(hdrBuffer, vec3(vCoord, hdrBuffer_secondaryLi)) * quarter;
+  vec4 texB = texture(hdrBuffer, vec3(clamp(vCoord + vec2(incX, incY), vec2(0.0), vec2(1.0) ), hdrBuffer_secondaryLi)) * sixteenth;
+  vec4 texC = texture(hdrBuffer, vec3(clamp(vCoord - vec2(decX, decY), vec2(0.0), vec2(1.0) ), hdrBuffer_secondaryLi)) * sixteenth;  
+  vec4 texD = texture(hdrBuffer, vec3(clamp(vCoord - vec2(decX, incY), vec2(0.0), vec2(1.0) ), hdrBuffer_secondaryLi)) * sixteenth;  
+  vec4 texE = texture(hdrBuffer, vec3(clamp(vCoord - vec2(incX, decY), vec2(0.0), vec2(1.0) ), hdrBuffer_secondaryLi)) * sixteenth;
+  vec4 texF = texture(hdrBuffer, vec3(clamp(vCoord - vec2(0, decY), vec2(0.0), vec2(1.0) ), hdrBuffer_secondaryLi)) * eigth;
+  vec4 texG = texture(hdrBuffer, vec3(clamp(vCoord - vec2(incX, 0), vec2(0.0), vec2(1.0) ), hdrBuffer_secondaryLi)) * eigth;
+  vec4 texH = texture(hdrBuffer, vec3(clamp(vCoord - vec2(0, incY), vec2(0.0), vec2(1.0) ), hdrBuffer_secondaryLi)) * eigth;
+  vec4 texI = texture(hdrBuffer, vec3(clamp(vCoord - vec2(decX, 0), vec2(0.0), vec2(1.0) ), hdrBuffer_secondaryLi)) * eigth;
 
-  fragColor = vec4(light);
+  vec4 secondaryLight = (texA + texB + texC + texD + texE + texF + texG + texH + texI);
+
+  texA = texture(hdrBuffer, vec3(vCoord, hdrBuffer_primaryLi)) * quarter;
+  texB = texture(hdrBuffer, vec3(clamp(vCoord + vec2(incX, incY), vec2(0.0), vec2(1.0) ), hdrBuffer_primaryLi)) * sixteenth;
+  texC = texture(hdrBuffer, vec3(clamp(vCoord - vec2(decX, decY), vec2(0.0), vec2(1.0) ), hdrBuffer_primaryLi)) * sixteenth;  
+  texD = texture(hdrBuffer, vec3(clamp(vCoord - vec2(decX, incY), vec2(0.0), vec2(1.0) ), hdrBuffer_primaryLi)) * sixteenth;  
+  texE = texture(hdrBuffer, vec3(clamp(vCoord - vec2(incX, decY), vec2(0.0), vec2(1.0) ), hdrBuffer_primaryLi)) * sixteenth;
+  texF = texture(hdrBuffer, vec3(clamp(vCoord - vec2(0, decY), vec2(0.0), vec2(1.0) ), hdrBuffer_primaryLi)) * eigth;
+  texG = texture(hdrBuffer, vec3(clamp(vCoord - vec2(incX, 0), vec2(0.0), vec2(1.0) ), hdrBuffer_primaryLi)) * eigth;
+  texH = texture(hdrBuffer, vec3(clamp(vCoord - vec2(0, incY), vec2(0.0), vec2(1.0) ), hdrBuffer_primaryLi)) * eigth;
+  texI = texture(hdrBuffer, vec3(clamp(vCoord - vec2(decX, 0), vec2(0.0), vec2(1.0) ), hdrBuffer_primaryLi)) * eigth;
+
+  vec4 primaryLight = (texA + texB + texC + texD + texE + texF + texG + texH + texI);
+  // if (light.a > 0.0) {
+  //   light.rgb /= light.a;
+  // }
+  out_blur = secondaryLight;
+  // out_blur = vec4(1.0);
+  out_primaryLi = primaryLight;
+  out_secondaryLi = secondaryLight;
 }
 
 `;
@@ -3796,16 +3870,23 @@ void main() {
       textureAllocator,
     } = params;
 
-    const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragString$3());
+    const { OES_texture_float_linear } = optionalExtensions;
+
+    const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragString$3({
+      rayTracingRenderTargets,
+      defines: {
+        OES_texture_float_linear,
+      }
+    }));
     const program = createProgram(gl, fullscreenQuad.vertexShader, fragmentShader);
 
     const uniforms = getUniforms(gl, program);
-    const image = textureAllocator.reserveSlot();
+    const hdrBufferLocation = textureAllocator.reserveSlot();
 
-    function draw({ texture }) {
+    function draw(hdrBuffer) {
       gl.useProgram(program);
 
-      image.bind(uniforms.image, texture);
+      hdrBufferLocation.bind(uniforms.hdrBuffer, hdrBuffer);
 
       fullscreenQuad.draw();
     }
@@ -3863,13 +3944,14 @@ void main() {
 
     const hdrBuffer = makeFramebuffer({
       gl,
+      linearFiltering: true,
       renderTarget: rayTracingRenderTargets,
     });
 
-    // const blendBuffer = makeFramebuffer({
-    //   gl,
-    //   renderTarget: rayTracingRenderTargets,
-    // });
+    const blurBuffer = makeFramebuffer({
+      gl,
+      renderTarget: rayTracingRenderTargets,
+    });
 
     const blendBuffer = makeFramebuffer({
       gl,
@@ -3882,6 +3964,9 @@ void main() {
 
     rayTracingShader.useStratifiedSampling(true);
     rayTracingShader.setStrataCount(1);
+    rayTracingShader.setOneBounceOnlyMode(false);
+
+    let previewCounter = 0;
 
     function drawFull(camera) {
       if (!ready) {
@@ -3891,6 +3976,9 @@ void main() {
       if (!camerasEqual(camera, lastCamera)) {
         lastCamera.copy(camera);
         rayTracingShader.setCamera(camera);
+
+        rayTracingShader.setOneBounceOnlyMode(true);
+        previewCounter = 0;
 
         hdrBuffer.bind();
         gl.clear(gl.COLOR_BUFFER_BIT);
@@ -3907,6 +3995,13 @@ void main() {
         gBuffer.unbind();
         rayTracingShader.restartSamples();
       }
+
+      previewCounter++;
+      if(previewCounter > 5) {
+        previewCounter = 0;
+        rayTracingShader.setOneBounceOnlyMode(false);
+      }
+
       hdrBuffer.bind();
       gl.viewport(0, 0, lightBufferWidth, lightBufferHeight);
       gl.blendEquation(gl.FUNC_ADD);
@@ -3916,19 +4011,20 @@ void main() {
       rayTracingShader.nextSeed();
       gl.disable(gl.BLEND);
       hdrBuffer.unbind();
-
-      blendBuffer.bind();
-      gl.viewport(0, 0, canvasWidth, canvasHeight);
-      gl.clear(gl.COLOR_BUFFER_BIT);
-      multiplyShader.draw(gBuffer.texture, hdrBuffer.texture);
-      blendBuffer.unbind();
+      {
+        blendBuffer.bind();
+        gl.viewport(0, 0, canvasWidth, canvasHeight);
+        gl.clear(gl.COLOR_BUFFER_BIT);
+        multiplyShader.draw(gBuffer.texture, hdrBuffer.texture);
+        blendBuffer.unbind();
+      }
 
       gl.viewport(0, 0, canvasWidth, canvasHeight);
       toneMapShader.draw(blendBuffer.texture);
     }
 
     function setSize(width, height) {
-      lightBufferMultiplier = 0.5;
+      lightBufferMultiplier = 1;
 
       lightBufferWidth = width * lightBufferMultiplier;
       lightBufferHeight = height * lightBufferMultiplier;
@@ -3939,6 +4035,7 @@ void main() {
       gl.viewport(0, 0, width, height);
       hdrBuffer.setSize(lightBufferWidth, lightBufferHeight);
       blendBuffer.setSize(width, height);
+      blurBuffer.setSize(width, height);
       rayTracingShader.setSize(lightBufferWidth, lightBufferHeight);
       rayTracingShader.gBufferInput(gBuffer.texture);
     }
@@ -3984,7 +4081,7 @@ void main() {
     let pipeline = null;
     const size = new THREE$1.Vector2();
     let renderTime = 22;
-    let pixelRatio = 1;
+    let pixelRatio = 1.0;
 
     const module = {
       bounces: 3,

@@ -28,7 +28,7 @@ export function RayTracingRenderer(params = {}) {
   let pipeline = null;
   const size = new THREE.Vector2();
   let renderTime = 22;
-  let pixelRatio = 1;
+  let pixelRatio = 1.0;
 
   const module = {
     bounces: 3,
