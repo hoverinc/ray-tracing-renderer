@@ -114,7 +114,11 @@ ${sampleShadowCatcher(defines)}
 struct Path {
   Ray ray;
   vec3 li;
+  vec3 primaryLi;
+  vec3 secondaryLi;
   float alpha;
+  float primaryAlpha;
+  float secondaryAlpha;
   vec3 beta;
   bool specularBounce;
   bool abort;
@@ -123,7 +127,15 @@ struct Path {
 void sampleSurface(inout Path path, SurfaceInteraction si, int i) {
   if (!si.hit) {
     if (path.specularBounce) {
-      path.li += path.beta * sampleEnvmapFromDirection(path.ray.d);
+      vec3 newSample = path.beta * sampleEnvmapFromDirection(path.ray.d);
+      if (i <= 2) {
+        path.primaryAlpha = path.alpha;
+        path.primaryLi = newSample;
+      } else {
+        path.secondaryLi += newSample;
+        path.secondaryAlpha = path.alpha;
+      }
+      path.li += newSample;
     }
 
     path.abort = true;
@@ -133,6 +145,11 @@ void sampleSurface(inout Path path, SurfaceInteraction si, int i) {
         vec3 newSample = sampleGlassSpecular(si, i, path.ray, path.beta);
         if (i <= 1) {
           newSample /= max(si.color, vec3(0.001));
+          path.primaryAlpha = path.alpha;
+          path.primaryLi = newSample;
+        } else {
+          path.secondaryLi += newSample;
+          path.secondaryAlpha = path.alpha;
         }
         path.li += newSample;
         path.specularBounce = true;
@@ -140,7 +157,16 @@ void sampleSurface(inout Path path, SurfaceInteraction si, int i) {
     #endif
     #ifdef USE_SHADOW_CATCHER
       if (si.materialType == SHADOW_CATCHER) {
-        path.li += sampleShadowCatcher(si, i, path.ray, path.beta, path.alpha, path.li, path.abort);
+        vec3 newSample = sampleShadowCatcher(si, i, path.ray, path.beta, path.alpha, path.li, path.abort);
+        if (i <= 1) {
+          newSample /= max(si.color, vec3(0.001));
+          path.primaryAlpha = path.alpha;
+          path.primaryLi = newSample;
+        } else {
+          path.secondaryLi += newSample;
+          path.secondaryAlpha = path.alpha;
+        }
+        path.li += newSample;
         path.specularBounce = false;
       }
     #endif
@@ -148,6 +174,11 @@ void sampleSurface(inout Path path, SurfaceInteraction si, int i) {
       vec3 newSample = sampleMaterial(si, i, path.ray, path.beta, path.abort);
       if (i <= 1) {
         newSample /= max(si.color, vec3(0.001));
+        path.primaryAlpha = path.alpha;
+        path.primaryLi = newSample;        
+      } else {
+        path.secondaryLi += newSample;
+        path.secondaryAlpha = path.alpha;
       }
       path.li += newSample;
       path.specularBounce = false;
@@ -184,11 +215,15 @@ void secondarySample(inout Path path, int i) {
 
 // Path tracing integrator as described in
 // http://www.pbr-book.org/3ed-2018/Light_Transport_I_Surface_Reflection/Path_Tracing.html#
-vec4 integrator(Ray ray) {
+Path integrator(Ray ray) {
   Path path;
   path.ray = ray;
   path.li = vec3(0);
+  path.primaryLi = vec3(0);
+  path.secondaryLi = vec3(0);
   path.alpha = 1.0;
+  path.primaryAlpha = 1.0;
+  path.secondaryAlpha = 1.0;
   path.beta = vec3(1.0);
   path.specularBounce = true;
   path.abort = false;
@@ -201,7 +236,7 @@ vec4 integrator(Ray ray) {
     secondarySample(path, i);
   `)}
 
-  return vec4(path.li, path.alpha);
+  return path;//vec4(path.li, path.alpha);
 }
 
 void main() {
@@ -212,14 +247,18 @@ void main() {
   vec3 direction = mat3(camera.transform) * normalize(vec3(vCoord - 0.5, -1.0) * vec3(camera.aspect, 1.0, camera.fov));
   initRay(cam, origin, direction);
 
-  vec4 liAndAlpha = integrator(cam);
+  Path resultPath = integrator(cam);
+  vec4 liAndAlpha = vec4(resultPath.li, resultPath.alpha);
+  vec4 primaryLiAndAlpha = vec4(resultPath.primaryLi, resultPath.primaryAlpha);
+  vec4 secondaryLiAndAlpha = vec4(resultPath.secondaryLi, resultPath.secondaryAlpha);
 
   if (!(liAndAlpha.x < INF && liAndAlpha.x > -EPS)) {
-    liAndAlpha = vec4(0, 0, 0, 1);
+    primaryLiAndAlpha = vec4(0, 0, 0, 1);
+    secondaryLiAndAlpha = vec4(0, 0, 0, 1);
   }
 
-  out_primaryLi = liAndAlpha;
-  out_secondaryLi = liAndAlpha;
+  out_primaryLi = primaryLiAndAlpha;
+  out_secondaryLi = secondaryLiAndAlpha;
 
   // Stratified Sampling Sample Count Test
   // ---------------

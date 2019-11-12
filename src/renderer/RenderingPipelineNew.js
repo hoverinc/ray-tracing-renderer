@@ -74,7 +74,7 @@ export function makeRenderingPipeline(params) {
   const lastCamera = new PerspectiveCamera();
 
   rayTracingShader.useStratifiedSampling(true);
-  rayTracingShader.setStrataCount(1);
+  rayTracingShader.setStrataCount(5);
 
   function drawFull(camera) {
     if (!ready) {
@@ -121,7 +121,7 @@ export function makeRenderingPipeline(params) {
   }
 
   function setSize(width, height) {
-    lightBufferMultiplier = 0.5;
+    lightBufferMultiplier = 1.0;
 
     lightBufferWidth = width * lightBufferMultiplier;
     lightBufferHeight = height * lightBufferMultiplier;
