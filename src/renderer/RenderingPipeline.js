@@ -61,6 +61,8 @@ export function makeRenderingPipeline({
   });
 
   const clearToBlack = new Float32Array([0, 0, 0, 0]);
+
+  const reprojectDecay = 0.96;
   const numSamplesToReproject = 64;
 
   // lower resolution buffer used for the first frame
@@ -241,7 +243,7 @@ export function makeRenderingPipeline({
     sampleCount++;
     lastCamera.copy(camera);
 
-    const reprojectAmount = clamp(1 - (sampleCount - 1) / numSamplesToReproject, 0, 1);
+    const reprojectAmount = clamp(reprojectDecay * (1 - (sampleCount - 1) / numSamplesToReproject), 0, 1);
     reprojectShader.setAmount(reprojectAmount);
 
     rayTracingShader.nextSeed();

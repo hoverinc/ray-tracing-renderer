@@ -20,7 +20,7 @@ float relativeError(float v, float vApprox) {
 
 vec4 getHistory(ivec2 hTexel, float positionWidth, float normalWidth, vec3 historyPosition, vec3 historyNormal, vec3 position, vec3 normal, out float contrib) {
   // float error = relativeError(distance(historyPositionLerp, historyPosition), distance(position, historyPosition));
-  float error = distance(historyPosition, position) / (positionWidth + 0.035);
+  float error = distance(historyPosition, position) / (positionWidth + 0.04);
 
   // float normalError = distance(historyNormal, normal) * (normalWidth);
   float normalError = distance(historyNormal, normal) * positionWidth;
