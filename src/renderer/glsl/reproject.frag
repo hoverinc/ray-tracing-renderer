@@ -13,23 +13,16 @@ ${rayTracingRenderTargets.set()}
 uniform mat4 historyCamera;
 uniform float amount;
 
-float relativeError(float v, float vApprox) {
-  return abs((v - vApprox) / v);
-}
+float isHistoryValid(float positionWidth, float normalWidth, vec3 historyPosition, vec3 historyNormal, vec3 position, vec3 normal) {
+  float positionError = distance(historyPosition, position) / (positionWidth + 0.001);
 
-vec4 getHistory(ivec2 hTexel, float positionWidth, float normalWidth, vec3 historyPosition, vec3 historyNormal, vec3 position, vec3 normal, out float contrib) {
-  // float error = relativeError(distance(historyPositionLerp, historyPosition), distance(position, historyPosition));
-  float error = distance(historyPosition, position) / (positionWidth + 0.001);
-
-  // float normalError = distance(historyNormal, normal) * (normalWidth);
   float normalError = distance(historyNormal, normal) / (normalWidth + 0.001);
 
-
-  contrib = error > 0.7 || normalError > 0.7 ? 0.0 : 1.0;
+  return positionError > 0.7 || normalError > 0.7 ? 0.0 : 1.0;
   // contrib = normalError > 0.7 ? 0.0 : 1.0;
-  // contrib = error > 0.7 ? 0.0: 1.0;
+  // contrib = positionError > 0.7 ? 0.0: 1.0;
 
-  return texelFetch(historyBuffer, ivec3(hTexel, historyBuffer_light), 0);
+  // return ;
 }
 
 vec2 reproject(vec3 position) {
@@ -78,31 +71,29 @@ void main() {
     float normalWidth = max(distance(n1, n0), distance(n2, n0));
     // float normalWidth = max(length(dFdx(normal)), length(dFdy(normal)));
 
-
     float sum;
     float weight;
-    vec4 reprojection;
-    float contrib;
+    float isValid;
 
-    // bilinear filtering. reject invalid history and redistribute weight
-    reprojection = getHistory(t0, positionWidth, normalWidth, p0, n0, position, normal, contrib);
-    weight = contrib * (1.0 - f.x) * (1.0 - f.y);
-    history += reprojection * weight;
+    // bilinear filtering. if invalid, reject sample and redistribute weight
+    isValid = isHistoryValid(positionWidth, normalWidth, p0, n0, position, normal);
+    weight = isValid * (1.0 - f.x) * (1.0 - f.y);
+    history += weight * texelFetch(historyBuffer, ivec3(t0, historyBuffer_light), 0);
     sum += weight;
 
-    reprojection = getHistory(t1, positionWidth, normalWidth, p1, n1, position, normal, contrib);
-    weight = contrib * f.x * (1.0 - f.y);
-    history += reprojection * weight;
+    isValid = isHistoryValid(positionWidth, normalWidth, p1, n1, position, normal);
+    weight = isValid * f.x * (1.0 - f.y);
+    history += weight * texelFetch(historyBuffer, ivec3(t1, historyBuffer_light), 0);
     sum += weight;
 
-    reprojection = getHistory(t2, positionWidth, normalWidth, p2, n2, position, normal, contrib);
-    weight = contrib * (1.0 - f.x) * f.y;
-    history += reprojection * weight;
+    isValid = isHistoryValid(positionWidth, normalWidth, p2, n2, position, normal);
+    weight = isValid * (1.0 - f.x) * f.y;
+    history += weight * texelFetch(historyBuffer, ivec3(t2, historyBuffer_light), 0);
     sum += weight;
 
-    reprojection = getHistory(t3, positionWidth, normalWidth, p3, n3, position, normal, contrib);
-    weight = contrib * f.x * f.y;
-    history += reprojection * weight;
+    isValid = isHistoryValid(positionWidth, normalWidth, p3, n3, position, normal);
+    weight = isValid * f.x * f.y;
+    history += weight * texelFetch(historyBuffer, ivec3(t3, historyBuffer_light), 0);
     sum += weight;
 
     if (sum > 0.0) {
