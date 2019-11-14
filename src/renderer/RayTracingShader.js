@@ -18,7 +18,7 @@ import { makeRenderTargets } from './RenderTargets';
 
 export const rayTracingRenderTargets = makeRenderTargets({
   storage: 'float',
-  names: ['primaryLi', 'secondaryLi', 'blur', 'blend']
+  names: ['primaryLi', 'secondaryLi', 'albedo', 'blur', 'blend']
 });
 
 export function makeRayTracingShader({

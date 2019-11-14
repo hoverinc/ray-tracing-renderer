@@ -51,7 +51,8 @@ export function makeRenderingPipeline(params) {
   const gBuffer = makeFramebuffer({
     depth: true,
     gl,
-    renderTarget: gBufferRenderTargets
+    linearFiltering: true,
+    renderTarget: gBufferRenderTargets,
   });
 
   const hdrBuffer = makeFramebuffer({
@@ -79,6 +80,7 @@ export function makeRenderingPipeline(params) {
   rayTracingShader.setOneBounceOnlyMode(false);
 
   let previewCounter = 0;
+  let seed = 1;
 
   function drawFull(camera) {
     if (!ready) {
@@ -101,14 +103,44 @@ export function makeRenderingPipeline(params) {
       blendBuffer.unbind();
 
       gBuffer.bind();
+      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+      gBuffer.unbind();
+
+      gBuffer.bind();
       gl.viewport(0, 0, canvasWidth, canvasHeight);
       gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+      gBufferShader.updateSeed(seed);
       gBufferShader.draw(camera);
       gBuffer.unbind();
-      rayTracingShader.restartSamples();
+
+      seed++;
+      // rayTracingShader.restartSamples();
+      // seed++;
+    } else {
+      gBuffer.bind();
+      gl.viewport(0, 0, canvasWidth, canvasHeight);
+      // gl.clearBufferfv(gl.COLOR, 0, [0.0, 0.0, 0.0, 0.0]);
+      // gl.clearBufferfv(gl.COLOR, 1, [0.0, 0.0, 0.0, 0.0]);
+      // gl.clearBufferfv(gl.COLOR, 2, [0.0, 0.0, 0.0, 0.0]);
+      // gl.clearBufferfv(gl.COLOR, 3, [0.0, 0.0, 0.0, 0.0]);
+      // gl.clear(gl.DEPTH_BUFFER_BIT);
+      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+      // gl.blendEquation(gl.FUNC_ADD);
+      // gl.blendFunc(gl.ONE, gl.ONE);
+      // gl.enable(gl.BLEND);
+      gBufferShader.updateSeed(seed);
+      gBufferShader.draw(camera);
+
+      // gl.disable(gl.BLEND);
+      gBuffer.unbind();
+      seed++;
     }
+    // gBuffer.copyToScreen();
+    // return;
 
     previewCounter++;
+    seed++;
     if(previewCounter > 5) {
       previewCounter = 0;
       rayTracingShader.setOneBounceOnlyMode(false);
@@ -139,8 +171,16 @@ export function makeRenderingPipeline(params) {
     } else {
       blendBuffer.bind();
       gl.viewport(0, 0, canvasWidth, canvasHeight);
-      gl.clear(gl.COLOR_BUFFER_BIT);
+      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+      gl.blendEquation(gl.FUNC_ADD);
+      gl.blendFunc(gl.ONE, gl.ONE);
+      gl.enable(gl.BLEND);
+
       multiplyShader.draw(gBuffer.texture, hdrBuffer.texture);
+
+      gl.disable(gl.BLEND);
+
       blendBuffer.unbind();
     }
 
@@ -157,6 +197,7 @@ export function makeRenderingPipeline(params) {
     canvasHeight = height;
 
     gBuffer.setSize(width, height);
+    gBufferShader.setSize(width, height);
     gl.viewport(0, 0, width, height);
     hdrBuffer.setSize(lightBufferWidth, lightBufferHeight);
     blendBuffer.setSize(width, height);

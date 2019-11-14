@@ -129,7 +129,7 @@ void sampleSurface(inout Path path, SurfaceInteraction si, int i) {
   if (!si.hit) {
     if (path.specularBounce) {
       vec3 newSample = path.beta * sampleEnvmapFromDirection(path.ray.d);
-      if (i <= 2) {
+      if (i <= 1) {
         path.primaryAlpha = path.alpha;
         path.primaryLi += newSample;
       } else {
@@ -160,7 +160,6 @@ void sampleSurface(inout Path path, SurfaceInteraction si, int i) {
       if (si.materialType == SHADOW_CATCHER) {
         vec3 newSample = sampleShadowCatcher(si, i, path.ray, path.beta, path.alpha, path.li, path.abort);
         if (i <= 1) {
-          newSample /= max(si.color, vec3(0.001));
           path.primaryAlpha = path.alpha;
           path.primaryLi = newSample;
         } else {
@@ -265,7 +264,7 @@ void main() {
 
   out_primaryLi = primaryLiAndAlpha;
   out_secondaryLi = secondaryLiAndAlpha;
-  out_blur = secondaryLiAndAlpha;
+  out_albedo = texture(gBuffer, vec3(vCoord, gBuffer_albedo));
 
   // Stratified Sampling Sample Count Test
   // ---------------

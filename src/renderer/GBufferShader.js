@@ -85,6 +85,17 @@ export function makeGBufferShader(params) {
 
   gl.bindVertexArray(null);
 
+
+  function setSize(width, height) {
+    gl.useProgram(program);
+    gl.uniform2f(uniforms.resolution, width, height);
+  }
+
+  function updateSeed(t) {
+    gl.useProgram(program);
+    gl.uniform1f(uniforms.seed, t);
+  }
+
   return {
     draw(camera) {
       gl.bindVertexArray(vao);
@@ -95,7 +106,9 @@ export function makeGBufferShader(params) {
       gl.drawElements(gl.TRIANGLES, elementCount, gl.UNSIGNED_INT, 0);
 
       gl.bindVertexArray(null);
-    }
+    },
+    setSize,
+    updateSeed,
   };
 }
 
