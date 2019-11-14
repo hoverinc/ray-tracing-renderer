@@ -78,9 +78,9 @@ vec3 importanceSampleMaterial(SurfaceInteraction si, vec3 viewDir, bool lastBoun
   return li;
 }
 
-vec3 sampleMaterial(SurfaceInteraction si, int bounce, inout Ray ray, inout vec3 beta, inout bool abort) {
+void sampleMaterial(SurfaceInteraction si, int bounce, inout Path path) {
   mat3 basis = orthonormalBasis(si.normal);
-  vec3 viewDir = -ray.d;
+  vec3 viewDir = -path.ray.d;
 
   vec2 diffuseOrSpecular = randomSampleVec2();
 
@@ -91,7 +91,7 @@ vec3 sampleMaterial(SurfaceInteraction si, int bounce, inout Ray ray, inout vec3
   bool lastBounce = bounce == BOUNCES;
 
   // Add path contribution
-  vec3 li = beta * (
+  path.li += path.beta * (
       importanceSampleLight(si, viewDir, lastBounce, randomSampleVec2()) +
       importanceSampleMaterial(si, viewDir, lastBounce, lightDir)
     );
@@ -107,16 +107,16 @@ vec3 sampleMaterial(SurfaceInteraction si, int bounce, inout Ray ray, inout vec3
   float scatteringPdf;
   vec3 brdf = materialBrdf(si, viewDir, lightDir, cosThetaL, 1.0, scatteringPdf);
 
-  beta *= abs(cosThetaL) * brdf / scatteringPdf;
+  path.beta *= abs(cosThetaL) * brdf / scatteringPdf;
 
-  initRay(ray, si.position + EPS * lightDir, lightDir);
+  initRay(path.ray, si.position + EPS * lightDir, lightDir);
 
   // If new ray direction is pointing into the surface,
   // the light path is physically impossible and we terminate the path.
   float orientation = dot(si.faceNormal, viewDir) * cosThetaL;
-  abort = orientation < 0.0;
+  path.abort = orientation < 0.0;
 
-  return li;
+  path.specularBounce = false;
 }
 
 `;

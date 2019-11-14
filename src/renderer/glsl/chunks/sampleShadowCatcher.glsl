@@ -79,17 +79,16 @@ float importanceSampleMaterialShadowCatcher(SurfaceInteraction si, vec3 viewDir,
   return li;
 }
 
-vec3 sampleShadowCatcher(SurfaceInteraction si, int bounce, inout Ray ray, inout vec3 beta, inout float alpha, inout vec3 prevLi, inout bool abort) {
+void sampleShadowCatcher(SurfaceInteraction si, int bounce, inout Path path) {
   mat3 basis = orthonormalBasis(si.normal);
-  vec3 viewDir = -ray.d;
+  vec3 viewDir = -path.ray.d;
   vec3 color = sampleEnvmapFromDirection(-viewDir);
 
   vec3 lightDir = lightDirDiffuse(si.faceNormal, viewDir, basis, randomSampleVec2());
 
   float alphaBounce = 0.0;
 
-  // Add path contribution
-  vec3 li = beta * color * (
+  vec3 li = path.beta * color * (
       importanceSampleLightShadowCatcher(si, viewDir, randomSampleVec2(), alphaBounce) +
       importanceSampleMaterialShadowCatcher(si, viewDir, lightDir, alphaBounce)
     );
@@ -98,11 +97,14 @@ vec3 sampleShadowCatcher(SurfaceInteraction si, int bounce, inout Ray ray, inout
   alphaBounce = alphaBounce == 0.0 ? 1.0 : alphaBounce;
 
   // in post processing step, we divide by alpha to obtain the percentage of light relative to shadow for the shadow catcher
-  alpha *= alphaBounce;
+  path.alpha *= alphaBounce;
 
   // we only want the alpha division to affect the shadow catcher
   // factor in alpha to the previous light, so that dividing by alpha with the previous light cancels out this contribution
-  prevLi *= alphaBounce;
+  path.li *= alphaBounce;
+
+  // add path contribution
+  path.li += li;
 
   // Get new path direction
 
@@ -111,20 +113,20 @@ vec3 sampleShadowCatcher(SurfaceInteraction si, int bounce, inout Ray ray, inout
   float cosThetaL = dot(si.normal, lightDir);
 
   // lambertian brdf with terms cancelled
-  beta *= color;
+  path.beta *= color;
 
-  initRay(ray, si.position + EPS * lightDir, lightDir);
+  initRay(path.ray, si.position + EPS * lightDir, lightDir);
 
   // If new ray direction is pointing into the surface,
   // the light path is physically impossible and we terminate the path.
   float orientation = dot(si.faceNormal, viewDir) * cosThetaL;
-  abort = orientation < 0.0;
+  path.abort = orientation < 0.0;
+
+  path.specularBounce = false;
 
   // advance dimension index by unused stratified samples
   const int usedSamples = 6;
   sampleIndex += SAMPLES_PER_MATERIAL - usedSamples;
-
-  return li;
 }
 
 #endif

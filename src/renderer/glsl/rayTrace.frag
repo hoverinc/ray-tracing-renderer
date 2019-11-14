@@ -101,6 +101,16 @@ ivec4 fetchData(isampler2D s, int i, int columnsLog2) {
   return texelFetch(s, unpackTexel(i, columnsLog2), 0);
 }
 
+struct Path {
+  Ray ray;
+  vec3 li;
+  vec3 albedo;
+  float alpha;
+  vec3 beta;
+  bool specularBounce;
+  bool abort;
+};
+
 ${textureLinear(defines)}
 ${intersect(defines)}
 ${random(defines)}
@@ -110,15 +120,6 @@ ${sample(defines)}
 ${sampleMaterial(defines)}
 ${sampleGlass(defines)}
 ${sampleShadowCatcher(defines)}
-
-struct Path {
-  Ray ray;
-  vec3 li;
-  float alpha;
-  vec3 beta;
-  bool specularBounce;
-  bool abort;
-};
 
 void bounce(inout Path path, int i, inout SurfaceInteraction si) {
   if (path.abort) {
@@ -136,19 +137,16 @@ void bounce(inout Path path, int i, inout SurfaceInteraction si) {
   } else {
     #ifdef USE_GLASS
       if (si.materialType == THIN_GLASS || si.materialType == THICK_GLASS) {
-        path.li += sampleGlassSpecular(si, i, path.ray, path.beta);
-        path.specularBounce = true;
+        sampleGlassSpecular(si, i, path);
       }
     #endif
     #ifdef USE_SHADOW_CATCHER
       if (si.materialType == SHADOW_CATCHER) {
-        path.li += sampleShadowCatcher(si, i, path.ray, path.beta, path.alpha, path.li, path.abort);
-        path.specularBounce = false;
+        sampleShadowCatcher(si, i, path);
       }
     #endif
     if (si.materialType == STANDARD) {
-      path.li += sampleMaterial(si, i, path.ray, path.beta, path.abort);
-      path.specularBounce = false;
+      sampleMaterial(si, i, path);
     }
 
     // Russian Roulette sampling
