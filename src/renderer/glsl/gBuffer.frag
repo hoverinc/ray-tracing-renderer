@@ -55,7 +55,7 @@ uniform GBufferMaterials {
 
 void main() {
   vec3 albedo = vec3(1.0);
-  vec3 localNormal = v_normal;
+  vec3 normal = v_normal;
   float materialType = gBufferMaterials.colorAndMaterialType[v_meshId].w;
   if (materialType != 3.0) {
     albedo = gBufferMaterials.colorAndMaterialType[v_meshId].xyz;
@@ -66,20 +66,36 @@ void main() {
       }
     #endif
 
-    // #ifdef NUM_NORMAL_MAPS
-    // 	int normalMapIndex = gBufferMaterials.diffuseNormalRoughnessMetalnessMapIndex[v_meshId].y;
-    // 	if (normalMapIndex >= 0) {
-    // 		localNormal = texture(normalMap, vec3(v_uv * gBufferMaterials.diffuseNormalMapSize[normalMapIndex].xy, normalMapIndex)).rgb;
-    // 		// localNormal = (v_view * vec4(localNormal, 0)).xyz;
-    //     localNormal = (inverse(transpose(v_view)) * vec4(localNormal, 0.0)).xyz;
-    // 	}
-    // #endif
+    #ifdef NUM_NORMAL_MAPS
+    	int normalMapIndex = gBufferMaterials.diffuseNormalRoughnessMetalnessMapIndex[v_meshId].y;
+    	if (normalMapIndex >= 0) {
+        vec2 duv02 = dFdx(v_uv);
+        vec2 duv12 = dFdy(v_uv);
+        vec3 dp02 = dFdx(v_worldPosition);
+        vec3 dp12 = dFdy(v_worldPosition);
+
+        vec3 dp12perp = cross(dp12, normal);
+        vec3 dp02perp = cross(normal, dp02);
+        vec3 dpdu = dp12perp * duv02.x + dp02perp * duv12.x;
+        vec3 dpdv = dp12perp * duv02.y + dp02perp * duv12.y;
+        float invmax = inversesqrt(max(dot(dpdu, dpdu), dot(dpdv, dpdv)));
+        dpdu *= invmax;
+        dpdv *= invmax;
+
+        vec3 n = 2.0 * texture(normalMap, vec3(v_uv * gBufferMaterials.diffuseNormalMapSize[normalMapIndex].zw, normalMapIndex)).rgb - 1.0;
+        n.xy *= gBufferMaterials.roughnessMetalnessNormalScale[v_meshId].zw;
+
+        mat3 tbn = mat3(dpdu, dpdv, normal);
+
+        normal = normalize(tbn * n);
+    	}
+    #endif
   }
 
   // out_albedo = vec4(normalize(localNormal), 1.0);
   out_albedo = vec4(albedo, 1.0);
   out_position = vec4(v_worldPosition, v_flat_normal.x);
-  out_normal = vec4((localNormal), 1.0);
+  out_normal = vec4(normal, 1.0);
   out_uvAndMeshId = vec4(v_uv, v_meshId, v_flat_normal.z);
 }
 `;
