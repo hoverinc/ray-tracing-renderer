@@ -8,7 +8,7 @@ import { generateEnvMapFromSceneComponents } from './envMapCreation';
 import { getTexturesFromMaterials, mergeTexturesFromMaterials } from './texturesFromMaterials';
 import { makeTexture } from './Texture';
 import { uploadBuffers } from './uploadBuffers';
-import { gBufferRenderTargets } from './gBufferShader';
+import { gBufferRenderTargets } from './GBufferShader';
 import { ThinMaterial, ThickMaterial, ShadowCatcherMaterial } from '../constants';
 import { clamp } from './util';
 import { makeStratifiedSamplerCombined } from './StratifiedSamplerCombined';
