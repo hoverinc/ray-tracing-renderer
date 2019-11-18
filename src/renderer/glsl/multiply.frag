@@ -42,8 +42,9 @@ void main() {
   light += secondaryLight;
 
   out_blend = vec4(light, lightTexture.a);
+  // out_blend = vec4(lightTexture.rgb / lightTexture.a, lightTexture.a);
   // out_blend = vec4(normalTex.rgb / normalTex.a, 1.0);
-  // out_blend = vec4(albedo * light, 1.0);  
+  // out_blend = vec4(secondaryLight, 1.0);  
   // out_blend = vec4(secondaryLight, lightTexture.a);
   // out_blend = vec4(albedo, lightTexture.a);
 }

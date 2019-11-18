@@ -20,6 +20,9 @@ export function makeGBufferShader(params) {
     gl
   } = params;
 
+  let width = null;
+  let height = null;
+
   const maps = getTexturesFromMaterials(materials, ['map', 'normalMap']);
 
   const vertShader = createShader(gl, gl.VERTEX_SHADER, gBufferVert());
@@ -86,14 +89,22 @@ export function makeGBufferShader(params) {
   gl.bindVertexArray(null);
 
 
-  function setSize(width, height) {
+  function setSize(x, y) {
     gl.useProgram(program);
-    gl.uniform2f(uniforms.resolution, width, height);
+    gl.uniform2f(uniforms.resolution, x, y);
+    width = x;
+    height = y;
   }
 
   function updateSeed(t) {
     gl.useProgram(program);
     gl.uniform1f(uniforms.seed, t);
+  }
+
+  function getRandomOffsetJitter() {
+    const jitterX = ((Math.random()) * 2.0 - 1.0) / width;
+    const jitterY = ((Math.random()) * 2.0 - 1.0) / height;
+    return { jitterX, jitterY };
   }
 
   return {
@@ -103,6 +114,8 @@ export function makeGBufferShader(params) {
       gl.useProgram(program);
       gl.uniformMatrix4fv(uniforms.projection, false, camera.projectionMatrix.elements);
       gl.uniformMatrix4fv(uniforms.view, false, camera.matrixWorldInverse.elements);
+      const { jitterX, jitterY } = getRandomOffsetJitter();
+      gl.uniform2f(uniforms.jitter, jitterX, jitterY );
       gl.drawElements(gl.TRIANGLES, elementCount, gl.UNSIGNED_INT, 0);
 
       gl.bindVertexArray(null);
