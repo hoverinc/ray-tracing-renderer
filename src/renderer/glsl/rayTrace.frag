@@ -189,9 +189,7 @@ vec4 integrator(inout Ray ray, inout SurfaceInteraction si) {
 void main() {
   initRandom();
 
-  // vec2 antialias = pixelSize * (jitter - 0.5);
-  vec2 antialias;
-  vec2 vCoordAntiAlias = vCoord + antialias;
+  vec2 vCoordAntiAlias = vCoord + jitter;
 
   vec3 direction = normalize(vec3(vCoordAntiAlias - 0.5, -1.0) * vec3(camera.aspect, 1.0, camera.fov));
 
@@ -223,7 +221,6 @@ void main() {
   out_light = liAndAlpha;
   out_normal = vec4(si.surfaceNormal, 0.0);
   out_position = vec4(si.position, 0.0);
-  out_jitter = vec4(antialias, 0.0, 0.0);
 
   // Stratified Sampling Sample Count Test
   // ---------------

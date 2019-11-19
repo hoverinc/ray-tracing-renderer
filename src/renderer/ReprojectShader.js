@@ -34,9 +34,14 @@ export function makeReprojectShader(params) {
     gl.uniformMatrix4fv(uniforms.historyCamera, false, historyCamera.elements);
   }
 
-  function setAmount(amount) {
+  function setBlendAmount(x) {
     gl.useProgram(program);
-    gl.uniform1f(uniforms.amount, clamp(amount, 0, 1));
+    gl.uniform1f(uniforms.blendAmount, clamp(x, 0, 1));
+  }
+
+  function setJitter(x, y) {
+    gl.useProgram(program);
+    gl.uniform2f(uniforms.jitter, x, y);
   }
 
   function draw(hdrBuffer, historyBuffer) {
@@ -50,7 +55,8 @@ export function makeReprojectShader(params) {
 
   return {
     draw,
-    setAmount,
+    setBlendAmount,
+    setJitter,
     setPreviousCamera,
   };
 }

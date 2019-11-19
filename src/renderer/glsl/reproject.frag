@@ -11,7 +11,8 @@ ${rayTracingRenderTargets.get('hdrBuffer')}
 ${rayTracingRenderTargets.set()}
 
 uniform mat4 historyCamera;
-uniform float amount;
+uniform float blendAmount;
+uniform vec2 jitter;
 
 vec2 reproject(vec3 position) {
   vec4 historyCoord = historyCamera * vec4(position, 1.0);
@@ -19,21 +20,16 @@ vec2 reproject(vec3 position) {
 }
 
 void main() {
-
   vec4 positionTex = texture(hdrBuffer, vec3(vCoord, hdrBuffer_position));
   vec4 normalTex = texture(hdrBuffer, vec3(vCoord, hdrBuffer_normal));
   vec4 lightTex = texture(hdrBuffer, vec3(vCoord, hdrBuffer_light));
-  vec4 jitterTex = texture(hdrBuffer, vec3(vCoord, hdrBuffer_jitter));
 
   vec3 position = positionTex.xyz;
   vec3 normal = normalTex.xyz;
-  vec2 jitter = jitterTex.xy;
 
   vec4 history;
 
   if (dot(position, position) > 0.0) {
-    vec2 historyJitter = texture(historyBuffer, vec3(vCoord, historyBuffer_jitter)).xy;
-
     // vec2 hCoord = reproject(position) + historyJitter;
     vec2 hCoord = reproject(position) - jitter;
 
@@ -44,11 +40,11 @@ void main() {
     ivec2 hTexel = ivec2(hTexelf);
     vec2 f = fract(hTexelf);
 
-    const ivec2 offset[] = ivec2[](
-      ivec2(0, 0),
-      ivec2(1, 0),
-      ivec2(0, 1),
-      ivec2(1, 1)
+    ivec2 texel[] = ivec2[](
+      hTexel + ivec2(0, 0),
+      hTexel + ivec2(1, 0),
+      hTexel + ivec2(0, 1),
+      hTexel + ivec2(1, 1)
     );
 
     float weights[] = float[](
@@ -62,7 +58,7 @@ void main() {
     vec3 histNor[4];
 
     for (int i = 0; i < 4; i++) {
-      ivec2 p = hTexel + offset[i];
+      ivec2 p = texel[i];
       histPos[i] = texelFetch(historyBuffer, ivec3(p, historyBuffer_position), 0).xyz;
       histNor[i] = texelFetch(historyBuffer, ivec3(p, historyBuffer_normal), 0).xyz;
     }
@@ -76,13 +72,13 @@ void main() {
 
       float normalError = distance(histNor[i], normal) / (normalWidth + 0.05);
 
-      float isValid = positionError > 0.65 || normalError > 0.4 ? 0.0 : 1.0;
+      // float isValid = positionError > 0.65 || normalError > 0.4 ? 0.0 : 1.0;
       // float isValid = normalError  > 0.4 ? 0.0 : 1.0;
-      // float isValid = positionError > 0.65 ? 0.0: 1.0;
+      float isValid = positionError > 0.9 ? 0.0: 1.0;
       // float isValid = 1.0;
 
       float weight = isValid * weights[i];
-      history += weight * texelFetch(historyBuffer, ivec3(hTexel + offset[i], historyBuffer_light), 0);
+      history += weight * texelFetch(historyBuffer, ivec3(texel[i], historyBuffer_light), 0);
       sum += weight;
     }
 
@@ -93,11 +89,10 @@ void main() {
     }
   }
 
-  out_light = amount * amount * history + lightTex;
+  out_light = blendAmount * history + lightTex;
   // out_light = mix(history, lightTex, 0.05);
   out_normal = normalTex;
   out_position = positionTex;
-  out_jitter = jitterTex;
 }
 
   `;

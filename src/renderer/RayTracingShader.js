@@ -15,7 +15,7 @@ import { makeRenderTargets } from './RenderTargets';
 
 export const rayTracingRenderTargets = makeRenderTargets({
   storage: 'float',
-  names: ['light', 'normal', 'position', 'jitter']
+  names: ['light', 'normal', 'position']
 });
 
 export function makeRayTracingShader({
@@ -71,10 +71,14 @@ export function makeRayTracingShader({
     gl.uniform1f(uniforms['camera.aperture'], camera.aperture || 0);
   }
 
+  function setJitter(x, y) {
+    gl.useProgram(program);
+    gl.uniform2f(uniforms.jitter, x, y);
+  }
+
   function nextSeed() {
     gl.useProgram(program);
     gl.uniform1fv(uniforms['stratifiedSamples[0]'], samples.next());
-    gl.uniform2f(uniforms.jitter, Math.random(), Math.random());
   }
 
   function setStrataCount(strataCount) {
@@ -109,6 +113,7 @@ export function makeRayTracingShader({
     draw,
     nextSeed,
     setCamera,
+    setJitter,
     setNoise,
     setSize,
     setStrataCount,
