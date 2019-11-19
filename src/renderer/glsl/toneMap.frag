@@ -56,7 +56,7 @@ void main() {
 
   light = ${defines.toneMapping}(light); // tone mapping
 
-  // light = texture(hdrBuffer, vec3(vCoord, hdrBuffer_normal)).rgb;
+  // light = texture(hdrBuffer, vec3(vCoord, hdrBuffer_jitter)).rgb;
 
   light = pow(light, vec3(1.0 / 2.2)); // gamma correction
 

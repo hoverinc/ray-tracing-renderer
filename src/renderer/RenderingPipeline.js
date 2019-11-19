@@ -62,7 +62,7 @@ export function makeRenderingPipeline({
 
   const clearToBlack = new Float32Array([0, 0, 0, 0]);
 
-  const reprojectDecay = 0.96;
+  const reprojectDecay = 1.0;
   const numSamplesToReproject = 64;
 
   // lower resolution buffer used for the first frame
@@ -134,6 +134,7 @@ export function makeRenderingPipeline({
 
     gl.clearBufferfv(gl.COLOR, rayTracingRenderTargets.location.normal, clearToBlack);
     gl.clearBufferfv(gl.COLOR, rayTracingRenderTargets.location.position, clearToBlack);
+    gl.clearBufferfv(gl.COLOR, rayTracingRenderTargets.location.jitter, clearToBlack);
 
     gl.viewport(0, 0, buffer.width, buffer.height);
     rayTracingShader.draw();
