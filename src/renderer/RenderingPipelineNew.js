@@ -76,7 +76,7 @@ export function makeRenderingPipeline(params) {
   const lastCamera = new PerspectiveCamera();
 
   rayTracingShader.useStratifiedSampling(true);
-  rayTracingShader.setStrataCount(1);
+  rayTracingShader.setStrataCount(5);
   rayTracingShader.setOneBounceOnlyMode(false);
 
   let previewCounter = 0;
@@ -88,6 +88,14 @@ export function makeRenderingPipeline(params) {
     }
 
     if (!camerasEqual(camera, lastCamera)) {
+      // lightBufferMultiplier = 0.5;
+      // lightBufferWidth = canvasWidth * lightBufferMultiplier;
+      // lightBufferHeight = canvasHeight * lightBufferMultiplier;
+      // rayTracingShader.setSize(lightBufferWidth, lightBufferHeight);
+      // hdrBuffer.setSize(lightBufferWidth, lightBufferHeight);
+
+      rayTracingShader.useStratifiedSampling(false);
+      rayTracingShader.setStrataCount(1);
       lastCamera.copy(camera);
       rayTracingShader.setCamera(camera);
 
@@ -117,6 +125,8 @@ export function makeRenderingPipeline(params) {
       // rayTracingShader.restartSamples();
       // seed++;
     } else {
+      rayTracingShader.useStratifiedSampling(true);
+      rayTracingShader.setStrataCount(1);
       gBuffer.bind();
       gl.viewport(0, 0, canvasWidth, canvasHeight);
       // gl.clearBufferfv(gl.COLOR, 0, [0.0, 0.0, 0.0, 0.0]);
@@ -142,8 +152,14 @@ export function makeRenderingPipeline(params) {
     previewCounter++;
     seed++;
     if(previewCounter > 5) {
+      // lightBufferMultiplier = 1.0;
+      // lightBufferWidth = canvasWidth * lightBufferMultiplier;
+      // lightBufferHeight = canvasHeight * lightBufferMultiplier;
       previewCounter = 0;
+      rayTracingShader.setStrataCount(5);
       rayTracingShader.setOneBounceOnlyMode(false);
+      // rayTracingShader.setSize(lightBufferWidth, lightBufferHeight);
+      // hdrBuffer.setSize(lightBufferWidth, lightBufferHeight);
     }
 
     hdrBuffer.bind();
@@ -189,7 +205,7 @@ export function makeRenderingPipeline(params) {
   }
 
   function setSize(width, height) {
-    lightBufferMultiplier = 1;
+    lightBufferMultiplier = 0.5;
 
     lightBufferWidth = width * lightBufferMultiplier;
     lightBufferHeight = height * lightBufferMultiplier;
