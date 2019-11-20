@@ -15,7 +15,7 @@ import { makeRenderTargets } from './RenderTargets';
 
 export const rayTracingRenderTargets = makeRenderTargets({
   storage: 'float',
-  names: ['light', 'normal', 'position']
+  names: ['light', 'normalAndMeshId', 'position']
 });
 
 export function makeRayTracingShader({
@@ -30,7 +30,6 @@ export function makeRayTracingShader({
   bounces = clamp(bounces, 1, 6);
 
   const samplingDimensions = [];
-  samplingDimensions.push(2); // anti aliasing, depth of field
   for (let i = 0; i < bounces; i++) {
     // specular or diffuse reflection, light importance sampling, material sampling, next path direction
     samplingDimensions.push(2, 2, 2, 2);

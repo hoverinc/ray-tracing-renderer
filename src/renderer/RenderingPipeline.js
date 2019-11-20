@@ -62,7 +62,7 @@ export function makeRenderingPipeline({
 
   const clearToBlack = new Float32Array([0, 0, 0, 0]);
 
-  const reprojectDecay = 0.97;
+  const reprojectDecay = 0.98;
   const numSamplesToReproject = 64;
 
   // lower resolution buffer used for the first frame
@@ -135,7 +135,7 @@ export function makeRenderingPipeline({
     gl.blendFunc(gl.ONE, gl.ONE);
     gl.enable(gl.BLEND);
 
-    gl.clearBufferfv(gl.COLOR, rayTracingRenderTargets.location.normal, clearToBlack);
+    gl.clearBufferfv(gl.COLOR, rayTracingRenderTargets.location.normalAndMeshId, clearToBlack);
     gl.clearBufferfv(gl.COLOR, rayTracingRenderTargets.location.position, clearToBlack);
 
     gl.viewport(0, 0, buffer.width, buffer.height);
@@ -172,7 +172,7 @@ export function makeRenderingPipeline({
   }
 
   function updateSeed() {
-    if (sampleCount === 2) {
+    if ( sampleCount === 1) {
       rayTracingShader.useStratifiedSampling(true);
       rayTracingShader.setStrataCount(1);
     } else if (sampleCount === numUniformSamples) {

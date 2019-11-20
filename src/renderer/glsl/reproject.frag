@@ -21,16 +21,16 @@ vec2 reproject(vec3 position) {
 
 void main() {
   vec4 positionTex = texture(hdrBuffer, vec3(vCoord, hdrBuffer_position));
-  vec4 normalTex = texture(hdrBuffer, vec3(vCoord, hdrBuffer_normal));
+  vec4 normalAndMeshIdTex = texture(hdrBuffer, vec3(vCoord, hdrBuffer_normalAndMeshId));
   vec4 lightTex = texture(hdrBuffer, vec3(vCoord, hdrBuffer_light));
 
   vec3 position = positionTex.xyz;
-  vec3 normal = normalTex.xyz;
+  vec3 normal = normalAndMeshIdTex.xyz;
+  float meshId = normalAndMeshIdTex.w;
 
   vec4 history;
 
   if (dot(position, position) > 0.0) {
-    // vec2 hCoord = reproject(position) + historyJitter;
     vec2 hCoord = reproject(position) - jitter;
 
     ivec2 size = textureSize(historyBuffer, 0).xy;
@@ -56,11 +56,15 @@ void main() {
 
     vec3 histPos[4];
     vec3 histNor[4];
+    float histMeshId[4];
 
     for (int i = 0; i < 4; i++) {
       ivec2 p = texel[i];
       histPos[i] = texelFetch(historyBuffer, ivec3(p, historyBuffer_position), 0).xyz;
-      histNor[i] = texelFetch(historyBuffer, ivec3(p, historyBuffer_normal), 0).xyz;
+
+      vec4 normalAndMeshId = texelFetch(historyBuffer, ivec3(p, historyBuffer_normalAndMeshId), 0);
+      histNor[i] = normalAndMeshId.xyz;
+      histMeshId[i] = normalAndMeshId.w;
     }
 
     float positionWidth = max(distance(histPos[1], histPos[0]), distance(histPos[2], histPos[0]));
@@ -72,9 +76,10 @@ void main() {
 
       float normalError = distance(histNor[i], normal) / (normalWidth + 0.05);
 
-      // float isValid = positionError > 0.65 || normalError > 0.4 ? 0.0 : 1.0;
+      float isValid = histMeshId[i] != meshId  || positionError > 0.95 || normalError > 0.4 ? 0.0 : 1.0;
       // float isValid = normalError  > 0.4 ? 0.0 : 1.0;
-      float isValid = positionError > 0.9 ? 0.0: 1.0;
+      // float isValid = positionError > 0.95 ? 0.0: 1.0;
+      // float isValid = histMeshId[i] != meshId ? 0.0 : 1.0;
       // float isValid = 1.0;
 
       float weight = isValid * weights[i];
@@ -91,7 +96,7 @@ void main() {
 
   out_light = blendAmount * history + lightTex;
   // out_light = mix(history, lightTex, 0.05);
-  out_normal = normalTex;
+  out_normalAndMeshId = normalAndMeshIdTex;
   out_position = positionTex;
 }
 

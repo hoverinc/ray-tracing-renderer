@@ -63,6 +63,7 @@ struct SurfaceInteraction {
   float roughness;
   float metalness;
   int materialType;
+  int meshId;
 };
 
 struct Camera {
@@ -219,7 +220,10 @@ void main() {
   }
 
   out_light = liAndAlpha;
-  out_normal = vec4(si.surfaceNormal, 0.0);
+  // float col = 0.1 * float(si.meshId);
+  // float col = 1.0;
+  // out_light = vec4(col, col, col, 1.0);
+  out_normalAndMeshId = vec4(si.surfaceNormal, si.meshId);
   out_position = vec4(si.position, 0.0);
 
   // Stratified Sampling Sample Count Test

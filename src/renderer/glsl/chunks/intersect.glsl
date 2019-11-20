@@ -61,6 +61,7 @@ void surfaceInteractionFromIntersection(inout SurfaceInteraction si, Triangle tr
   si.metalness = materials.roughnessMetalnessNormalScale[materialIndex].y;
 
   si.materialType = int(materials.colorAndMaterialType[materialIndex].w);
+  si.meshId = materialIndex;
 
   #if defined(NUM_DIFFUSE_MAPS) || defined(NUM_NORMAL_MAPS) || defined(NUM_PBR_MAPS)
     vec2 uv0 = texelFetch(uvs, i0, 0).xy;
