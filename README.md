@@ -4,7 +4,7 @@
 # Ray Tracing Renderer
 A [Three.js](https://github.com/mrdoob/three.js/) renderer which utilizes path tracing to render a scene with true photorealism. The renderer supports global illumination, reflections, soft shadows, and realistic environment lighting.
 
-[User Guide](https://github.com/hoverinc/ray-tracing-renderer/wiki/User-Guide) | [API Reference](https://github.com/hoverinc/ray-tracing-renderer/wiki/RayTracingRenderer) | [Contributing](https://github.com/hoverinc/ray-tracing-renderer/wiki/Contributing)
+[Demo](https://hoverinc.github.io/ray-tracing-renderer/scenes/sample-models/) [User Guide](https://github.com/hoverinc/ray-tracing-renderer/wiki/User-Guide) | [API Reference](https://github.com/hoverinc/ray-tracing-renderer/wiki/RayTracingRenderer) | [Contributing](https://github.com/hoverinc/ray-tracing-renderer/wiki/Contributing)
 
 
 ## Usage

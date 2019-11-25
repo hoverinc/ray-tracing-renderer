@@ -1,5 +1,13 @@
 // TODO: Support multiple hdr maps
-const DEFAULT_ENV_MAP_PATH = '/scenes/envmaps/gray-background-with-dirlight.hdr';
+
+// Dev HOST
+// const HOST = 'https://localhost:8080';
+
+// Remote HOST
+const HOST = 'https://hoverinc.github.io/ray-tracing-renderer';
+
+// Envinronment maps
+const DEFAULT_ENV_MAP_PATH = 'scenes/envmaps/gray-background-with-dirlight.hdr';
 
 // Sample models from BabylonJS: http://models.babylonjs.com/
 const BABYLON_JS_SAMPLE_MODELS = [
@@ -167,7 +175,7 @@ async function init() {
   window.addEventListener('resize', resize);
   resize();
 
-  const envMap = new THREE.RGBELoader().load(DEFAULT_ENV_MAP_PATH);
+  const envMap = new THREE.RGBELoader().load(`${HOST}/${DEFAULT_ENV_MAP_PATH}`);
   const envLight = new THREE.EnvironmentLight(envMap);
 
   groundMesh = createGroundMesh();
