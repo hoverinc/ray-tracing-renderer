@@ -212,17 +212,19 @@ void main() {
   initRay(cam, origin, direction);
 
   SurfaceInteraction si;
+  si.meshId = -1;
 
   vec4 liAndAlpha = integrator(cam, si);
+
+  if (dot(si.position, si.position) == 0.0) {
+    si.position = origin + direction * RAY_MAX_DISTANCE;
+  }
 
   if (!(liAndAlpha.x < INF && liAndAlpha.x > -EPS)) {
     liAndAlpha = vec4(0, 0, 0, 1);
   }
 
   out_light = liAndAlpha;
-  // float col = 0.1 * float(si.meshId);
-  // float col = 1.0;
-  // out_light = vec4(col, col, col, 1.0);
   out_normalAndMeshId = vec4(si.surfaceNormal, si.meshId);
   out_position = vec4(si.position, 0.0);
 

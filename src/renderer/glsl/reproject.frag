@@ -30,72 +30,98 @@ void main() {
 
   vec4 history;
 
-  if (dot(position, position) > 0.0) {
-    vec2 hCoord = reproject(position) - jitter;
+  vec2 hCoord = reproject(position) - jitter;
 
-    ivec2 size = textureSize(historyBuffer, 0).xy;
-    vec2 sizef = vec2(size);
+  ivec2 size = textureSize(historyBuffer, 0).xy;
+  vec2 sizef = vec2(size);
 
-    vec2 hTexelf = hCoord * sizef - 0.5;
-    ivec2 hTexel = ivec2(hTexelf);
-    vec2 f = fract(hTexelf);
+  vec2 hTexelf = hCoord * sizef - 0.5;
+  ivec2 hTexel = ivec2(hTexelf);
+  vec2 f = fract(hTexelf);
 
-    ivec2 texel[] = ivec2[](
-      hTexel + ivec2(0, 0),
-      hTexel + ivec2(1, 0),
-      hTexel + ivec2(0, 1),
-      hTexel + ivec2(1, 1)
-    );
+  float sum;
 
-    float weights[] = float[](
-      (1.0 - f.x) * (1.0 - f.y),
-      f.x * (1.0 - f.y),
-      (1.0 - f.x) * f.y,
-      f.x * f.y
-    );
+  const ivec2 bilinearOffsets[] = ivec2[](
+    ivec2(0, 0),
+    ivec2(1, 0),
+    ivec2(0, 1),
+    ivec2(1, 1)
+  );
 
-    vec3 histPos[4];
-    vec3 histNor[4];
-    float histMeshId[4];
+  float weights[] = float[](
+    (1.0 - f.x) * (1.0 - f.y),
+    f.x * (1.0 - f.y),
+    (1.0 - f.x) * f.y,
+    f.x * f.y
+  );
 
-    for (int i = 0; i < 4; i++) {
-      ivec2 p = texel[i];
-      histPos[i] = texelFetch(historyBuffer, ivec3(p, historyBuffer_position), 0).xyz;
+  float positionWidth = max(length(dFdx(position)), length(dFdy(position)));
+  float normalWidth = max(length(dFdx(normal)), length(dFdy(normal)));
 
-      vec4 normalAndMeshId = texelFetch(historyBuffer, ivec3(p, historyBuffer_normalAndMeshId), 0);
-      histNor[i] = normalAndMeshId.xyz;
-      histMeshId[i] = normalAndMeshId.w;
+  for (int i = 0; i < 4; i++) {
+    ivec2 texel = hTexel + bilinearOffsets[i];
+
+    vec4 histNormalAndMeshId = texelFetch(historyBuffer, ivec3(texel, historyBuffer_normalAndMeshId), 0);
+
+    vec3 histNormal = histNormalAndMeshId.xyz;
+    float histMeshId = histNormalAndMeshId.w;
+
+    vec3 histPosition = texelFetch(historyBuffer, ivec3(texel, historyBuffer_position), 0).xyz;
+
+    float positionError = distance(histPosition, position) / (positionWidth + 0.005);
+    float normalError = distance(histNormal, normal) / (normalWidth + 0.005);
+
+    float isValid = histMeshId != meshId  || positionError > 1.0 || normalError > 1.0 ? 0.0 : 1.0;
+    // float isValid = normalError  > 1.0 ? 0.0 : 1.0;
+    // float isValid = positionError > 1.0 ? 0.0: 1.0;
+    // float isValid = histMeshId != meshId ? 0.0 : 1.0;
+    // float isValid = 1.0;
+
+    float weight = isValid * weights[i];
+    history += weight * texelFetch(historyBuffer, ivec3(texel, historyBuffer_light), 0);
+    sum += weight;
+  }
+
+  if (sum > 0.0) {
+    history = history / sum;
+  } else {
+    hTexel = ivec2(hTexelf + 0.5);
+
+    for (int x = -1; x <= 1; x++) {
+      for (int y = -1; y <= 1; y++) {
+        ivec2 texel = hTexel + ivec2(x, y);
+
+        vec4 histNormalAndMeshId = texelFetch(historyBuffer, ivec3(texel, historyBuffer_normalAndMeshId), 0);
+
+        vec3 histNormal = histNormalAndMeshId.xyz;
+        float histMeshId = histNormalAndMeshId.w;
+
+        vec3 histPosition = texelFetch(historyBuffer, ivec3(texel, historyBuffer_position), 0).xyz;
+
+        float positionError = distance(histPosition, position) / (positionWidth + 0.005);
+        float normalError = distance(histNormal, normal) / (normalWidth + 0.005);
+
+        float isValid = histMeshId != meshId  || positionError > 1.0 || normalError > 1.0 ? 0.0 : 1.0;
+        // float isValid = histMeshId != meshId ? 0.0 : 1.0;
+        // float isValid = positionError > 0.7 ? 0.0: 1.0;
+        // float isValid = normalError > 0.7 ? 0.0 : 1.0;
+
+
+        float weight = isValid;
+        vec4 h = texelFetch(historyBuffer, ivec3(texel, historyBuffer_light), 0);
+        history += weight * h;
+        sum += weight;
+      }
     }
-
-    float positionWidth = max(distance(histPos[1], histPos[0]), distance(histPos[2], histPos[0]));
-    float normalWidth = max(distance(histNor[1], histNor[0]), distance(histNor[2], histNor[0]));
-
-    float sum;
-    for (int i = 0; i < 4; i++) {
-      float positionError = distance(histPos[i], position) / (positionWidth + 0.05);
-
-      float normalError = distance(histNor[i], normal) / (normalWidth + 0.05);
-
-      float isValid = histMeshId[i] != meshId  || positionError > 0.95 || normalError > 0.4 ? 0.0 : 1.0;
-      // float isValid = normalError  > 0.4 ? 0.0 : 1.0;
-      // float isValid = positionError > 0.95 ? 0.0: 1.0;
-      // float isValid = histMeshId[i] != meshId ? 0.0 : 1.0;
-      // float isValid = 1.0;
-
-      float weight = isValid * weights[i];
-      history += weight * texelFetch(historyBuffer, ivec3(texel[i], historyBuffer_light), 0);
-      sum += weight;
-    }
-
-    if (sum > 0.0) {
-      history /= sum;
-    } else {
-      history = vec4(0.0);
-    }
+    history = sum > 0.0 ? history / sum : history;
+  }
+  if (history.w > 25.0) {
+    history.xyz *= 25.0 / history.w;
+    history.w = 25.0;
   }
 
   out_light = blendAmount * history + lightTex;
-  // out_light = mix(history, lightTex, 0.05);
+  // out_light = mix(lightTex, history, blendAmount);
   out_normalAndMeshId = normalAndMeshIdTex;
   out_position = positionTex;
 }
