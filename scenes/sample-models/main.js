@@ -1,4 +1,6 @@
 // TODO: Support multiple hdr maps
+
+// Envinronment maps
 const DEFAULT_ENV_MAP_PATH = '/scenes/envmaps/gray-background-with-dirlight.hdr';
 
 // Sample models from BabylonJS: http://models.babylonjs.com/
@@ -167,7 +169,7 @@ async function init() {
   window.addEventListener('resize', resize);
   resize();
 
-  const envMap = new THREE.RGBELoader().load(DEFAULT_ENV_MAP_PATH);
+  const envMap = new THREE.RGBELoader().load(`${DEFAULT_ENV_MAP_PATH}`);
   const envLight = new THREE.EnvironmentLight(envMap);
 
   groundMesh = createGroundMesh();
