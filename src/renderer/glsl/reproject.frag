@@ -71,10 +71,10 @@ void main() {
     float positionError = distance(histPosition, position) / (positionWidth + 0.005);
     float normalError = distance(histNormal, normal) / (normalWidth + 0.005);
 
-    float isValid = histMeshId != meshId  || positionError > 1.0 || normalError > 1.0 ? 0.0 : 1.0;
+    // float isValid = histMeshId != meshId  || positionError > 1.0 || normalError > 1.0 ? 0.0 : 1.0;
     // float isValid = normalError  > 1.0 ? 0.0 : 1.0;
     // float isValid = positionError > 1.0 ? 0.0: 1.0;
-    // float isValid = histMeshId != meshId ? 0.0 : 1.0;
+    float isValid = histMeshId != meshId ? 0.0 : 1.0;
     // float isValid = 1.0;
 
     float weight = isValid * weights[i];
@@ -101,10 +101,11 @@ void main() {
         float positionError = distance(histPosition, position) / (positionWidth + 0.005);
         float normalError = distance(histNormal, normal) / (normalWidth + 0.005);
 
-        float isValid = histMeshId != meshId  || positionError > 1.0 || normalError > 1.0 ? 0.0 : 1.0;
-        // float isValid = histMeshId != meshId ? 0.0 : 1.0;
+        // float isValid = histMeshId != meshId  || positionError > 1.0 || normalError > 1.0 ? 0.0 : 1.0;
+        float isValid = histMeshId != meshId ? 0.0 : 1.0;
         // float isValid = positionError > 0.7 ? 0.0: 1.0;
         // float isValid = normalError > 0.7 ? 0.0 : 1.0;
+        // float isValid = 1.0;
 
 
         float weight = isValid;

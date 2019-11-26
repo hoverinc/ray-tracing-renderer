@@ -13,9 +13,6 @@ export function makeReprojectShader(params) {
 
   const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragString({
     rayTracingRenderTargets,
-    defines: {
-
-    }
   }));
 
   const program = createProgram(gl, fullscreenQuad.vertexShader, fragmentShader);

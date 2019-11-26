@@ -50,7 +50,17 @@ export function makeRenderingPipeline({
     renderTarget: rayTracingRenderTargets,
   });
 
-  let historyBuffer = makeFramebuffer({
+  let hdrPreviewBuffer = makeFramebuffer({
+    gl,
+    renderTarget: rayTracingRenderTargets,
+  });
+
+  let historyPreviewBuffer = makeFramebuffer({
+    gl,
+    renderTarget: rayTracingRenderTargets,
+  });
+
+  let reprojectPreviewBuffer = makeFramebuffer({
     gl,
     renderTarget: rayTracingRenderTargets,
   });
@@ -64,13 +74,6 @@ export function makeRenderingPipeline({
 
   const reprojectDecay = 0.98;
   const numSamplesToReproject = 64;
-
-  // lower resolution buffer used for the first frame
-  // const hdrPreviewBuffer = makeFramebuffer({
-  //   gl,
-  //   renderTarget: { storage: 'float' },
-  //   linearFiltering
-  // });
 
   // used to sample only a portion of the scene to the HDR Buffer to prevent the GPU from locking up from excessive computation
   const tileRender = makeTileRender(gl);
@@ -91,41 +94,36 @@ export function makeRenderingPipeline({
   rayTracingShader.setStrataCount(1);
   rayTracingShader.useStratifiedSampling(true);
 
-  let width;
-  let height;
-
   function clear() {
-    hdrBuffer.bind();
-    gl.clear(gl.COLOR_BUFFER_BIT);
-    hdrBuffer.unbind();
-
     sampleCount = 0;
     tileRender.reset();
   }
 
-  function initFirstSample(camera) {
-    rayTracingShader.setCamera(camera);
-    rayTracingShader.useStratifiedSampling(false);
-    lastCamera.copy(camera);
-    clear();
-  }
-
   function setPreviewBufferDimensions() {
     const aspectRatio = hdrBuffer.width / hdrBuffer.height;
-    const desiredTimeForPreview = 16; // 60 fps
+    const desiredTimeForPreview = 17; // 60 fps
     const numPixelsForPreview = desiredTimeForPreview / tileRender.getTimePerPixel();
-    const previewWidth = clamp(Math.sqrt(numPixelsForPreview * aspectRatio), 1, hdrBuffer.width);
+    const previewWidth = Math.round(clamp(Math.sqrt(numPixelsForPreview * aspectRatio), 1, hdrBuffer.width));
     const previewHeight = clamp(previewWidth / aspectRatio, 1, hdrBuffer.height);
     if (previewWidth !== hdrPreviewBuffer.width) {
+      console.log(previewWidth, hdrPreviewBuffer.width)
       hdrPreviewBuffer.setSize(previewWidth, previewHeight);
+      historyPreviewBuffer.setSize(previewWidth, previewHeight);
+      reprojectPreviewBuffer.setSize(previewWidth, previewHeight);
     }
   }
 
-  function camerasEqual(cam1, cam2) {
+  function areCamerasEqual(cam1, cam2) {
     return numberArraysEqual(cam1.matrixWorld.elements, cam2.matrixWorld.elements) &&
       cam1.aspect === cam2.aspect &&
       cam1.fov === cam2.fov &&
       cam1.focus === cam2.focus;
+  }
+
+  function clearBuffer(buffer) {
+    hdrBuffer.bind();
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    hdrBuffer.unbind();
   }
 
   function addSampleToBuffer(buffer) {
@@ -152,11 +150,9 @@ export function makeRenderingPipeline({
     buffer.unbind();
   }
 
-  function renderPreview() {
-    newSampleToBuffer(hdrPreviewBuffer);
-
+  function toneMapToScreen(buffer) {
     gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
-    toneMapShader.draw(hdrPreviewBuffer.texture);
+    toneMapShader.draw(buffer.texture);
   }
 
   function renderTile(x, y, width, height) {
@@ -164,11 +160,6 @@ export function makeRenderingPipeline({
     gl.enable(gl.SCISSOR_TEST);
     addSampleToBuffer(hdrBuffer);
     gl.disable(gl.SCISSOR_TEST);
-  }
-
-  function hdrBufferToScreen() {
-    gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
-    toneMapShader.draw(hdrBuffer.texture);
   }
 
   function updateSeed() {
@@ -182,110 +173,77 @@ export function makeRenderingPipeline({
     }
   }
 
-  function drawTile(camera) {
-    if (!ready) {
-      return;
-    } else if (!camerasEqual(camera, lastCamera)) {
-      initFirstSample(camera);
-      setPreviewBufferDimensions();
-      renderPreview();
-    } else {
-      const { x, y, tileWidth, tileHeight, isFirstTile, isLastTile } = tileRender.nextTile();
-
-      if (isFirstTile) {
-        sampleCount++;
-        updateSeed();
-      }
-
-      renderTile(x, y, tileWidth, tileHeight);
-
-      if (isLastTile) {
-        hdrBufferToScreen();
-        sampleRenderedCallback(sampleCount);
-      }
-    }
-  }
-
-  function drawOffscreenTile(camera) {
-    if (!ready) {
-      return;
-    } else if (!camerasEqual(camera, lastCamera)) {
-      initFirstSample(camera);
-    }
-
-    const { x, y, tileWidth, tileHeight, isFirstTile, isLastTile } = tileRender.nextTile();
-
-    if (isFirstTile) {
-      sampleCount++;
-      updateSeed();
-    }
-
-    renderTile(x, y, tileWidth, tileHeight);
-
-    if (isLastTile) {
-      sampleRenderedCallback(sampleCount);
-    }
-  }
-
   function drawFull(camera) {
     if (!ready) {
       return;
     }
 
-    if (!camerasEqual(camera, lastCamera)) {
-      clear();
+    const camerasEqual = areCamerasEqual(camera, lastCamera);
 
-      const temp = historyBuffer;
-      historyBuffer = reprojectBuffer;
-      reprojectBuffer = temp;
+    if (!camerasEqual) {
+
+      const temp = historyPreviewBuffer;
+      historyPreviewBuffer = reprojectPreviewBuffer;
+      reprojectPreviewBuffer = temp;
+
+      let historyBuffer = sampleCount > 1 ? reprojectBuffer : historyPreviewBuffer;
+
+      sampleCount = 1;
+
+      clearBuffer(hdrBuffer);
+      setPreviewBufferDimensions();
+
+      rayTracingShader.setCamera(camera);
+      updateSeed();
+      newSampleToBuffer(hdrPreviewBuffer);
 
       reprojectShader.setPreviousCamera(lastCamera);
-      rayTracingShader.setCamera(camera);
+      reprojectShader.setBlendAmount(reprojectDecay);
+
+      reprojectPreviewBuffer.bind();
+      gl.viewport(0, 0, reprojectPreviewBuffer.width, reprojectPreviewBuffer.height);
+      reprojectShader.draw(hdrPreviewBuffer.texture, historyBuffer.texture);
+      reprojectPreviewBuffer.unbind();
+
+      toneMapToScreen(reprojectPreviewBuffer);
+    } else {
+      sampleCount++;
+
+      updateSeed();
+      addSampleToBuffer(hdrBuffer);
+
+      let reprojectAmount = reprojectDecay * (1 - sampleCount / numSamplesToReproject);
+      reprojectAmount = clamp(reprojectAmount * reprojectAmount, 0, 1);
+      reprojectShader.setBlendAmount(reprojectAmount);
+
+      reprojectBuffer.bind();
+      gl.viewport(0, 0, reprojectBuffer.width, reprojectBuffer.height);
+      reprojectShader.draw(hdrBuffer.texture, historyPreviewBuffer.texture);
+      reprojectBuffer.unbind();
+
+      toneMapToScreen(reprojectBuffer);
     }
 
-    sampleCount++;
     lastCamera.copy(camera);
-
-    const jitterX = (Math.random() - 0.5) / width;
-    const jitterY = (Math.random() - 0.5) / height;
-
-    rayTracingShader.setJitter(jitterX, jitterY);
-    updateSeed();
-    addSampleToBuffer(hdrBuffer);
-
-    let reprojectAmount = reprojectDecay * (1 - sampleCount / numSamplesToReproject);
-    reprojectAmount = clamp(reprojectAmount * reprojectAmount, 0, 1);
-
-    reprojectShader.setBlendAmount(reprojectAmount);
-    reprojectShader.setJitter(jitterX, jitterY);
-
-    reprojectBuffer.bind();
-    reprojectShader.draw(hdrBuffer.texture, historyBuffer.texture);
-    reprojectBuffer.unbind();
-
-    gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
-    toneMapShader.draw(reprojectBuffer.texture);
   }
 
   function setSize(w, h) {
-    width = w;
-    height = h;
     rayTracingShader.setSize(w, h);
     tileRender.setSize(w, h);
     hdrBuffer.setSize(w, h);
-    historyBuffer.setSize(w, h);
     reprojectBuffer.setSize(w, h);
+    // historyBuffer.setSize(w, h);
     clear();
   }
 
   return {
     drawTile: drawFull,
-    drawOffscreenTile,
+    drawOffscreenTile: drawFull,
     drawFull,
     restartTimer: tileRender.restartTimer,
     setRenderTime: tileRender.setRenderTime,
     setSize,
-    hdrBufferToScreen,
+    // hdrBufferToScreen,
     getTotalSamplesRendered() {
       return sampleCount;
     },
