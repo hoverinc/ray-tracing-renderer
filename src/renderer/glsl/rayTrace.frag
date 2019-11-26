@@ -225,8 +225,8 @@ void main() {
   }
 
   out_light = liAndAlpha;
-  out_normalAndMeshId = vec4(si.surfaceNormal, si.meshId);
-  out_position = vec4(si.position, 0.0);
+  // out_normalAndMeshId = vec4(si.surfaceNormal, 0.0);
+  out_position = vec4(si.position, si.meshId);
 
   // Stratified Sampling Sample Count Test
   // ---------------

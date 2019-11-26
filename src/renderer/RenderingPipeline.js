@@ -106,7 +106,6 @@ export function makeRenderingPipeline({
     const previewWidth = Math.round(clamp(Math.sqrt(numPixelsForPreview * aspectRatio), 1, hdrBuffer.width));
     const previewHeight = clamp(previewWidth / aspectRatio, 1, hdrBuffer.height);
     if (previewWidth !== hdrPreviewBuffer.width) {
-      console.log(previewWidth, hdrPreviewBuffer.width)
       hdrPreviewBuffer.setSize(previewWidth, previewHeight);
       historyPreviewBuffer.setSize(previewWidth, previewHeight);
       reprojectPreviewBuffer.setSize(previewWidth, previewHeight);
@@ -133,7 +132,7 @@ export function makeRenderingPipeline({
     gl.blendFunc(gl.ONE, gl.ONE);
     gl.enable(gl.BLEND);
 
-    gl.clearBufferfv(gl.COLOR, rayTracingRenderTargets.location.normalAndMeshId, clearToBlack);
+    // gl.clearBufferfv(gl.COLOR, rayTracingRenderTargets.location.normal, clearToBlack);
     gl.clearBufferfv(gl.COLOR, rayTracingRenderTargets.location.position, clearToBlack);
 
     gl.viewport(0, 0, buffer.width, buffer.height);
@@ -232,7 +231,6 @@ export function makeRenderingPipeline({
     tileRender.setSize(w, h);
     hdrBuffer.setSize(w, h);
     reprojectBuffer.setSize(w, h);
-    // historyBuffer.setSize(w, h);
     clear();
   }
 

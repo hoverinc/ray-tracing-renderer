@@ -15,7 +15,7 @@ import { makeRenderTargets } from './RenderTargets';
 
 export const rayTracingRenderTargets = makeRenderTargets({
   storage: 'float',
-  names: ['light', 'normalAndMeshId', 'position']
+  names: ['light', 'position']
 });
 
 export function makeRayTracingShader({
