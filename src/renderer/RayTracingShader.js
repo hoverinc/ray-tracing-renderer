@@ -30,10 +30,11 @@ export function makeRayTracingShader({
   bounces = clamp(bounces, 1, 6);
 
   const samplingDimensions = [];
-  for (let i = 0; i < bounces; i++) {
+
+  for (let i = 1; i <= bounces; i++) {
     // specular or diffuse reflection, light importance sampling, material sampling, next path direction
     samplingDimensions.push(2, 2, 2, 2);
-    if (i >= 1) {
+    if (i >= 2) {
       // russian roulette sampling
       // this step is skipped on the first bounce
       samplingDimensions.push(1);
@@ -96,11 +97,6 @@ export function makeRayTracingShader({
     nextSeed();
   }
 
-  function useStratifiedSampling(stratifiedSampling) {
-    gl.useProgram(program);
-    gl.uniform1f(uniforms.useStratifiedSampling, stratifiedSampling ? 1.0 : 0.0);
-  }
-
   function draw() {
     gl.useProgram(program);
     fullscreenQuad.draw();
@@ -116,7 +112,6 @@ export function makeRayTracingShader({
     setNoise,
     setSize,
     setStrataCount,
-    useStratifiedSampling
   };
 }
 function makeProgramFromScene({

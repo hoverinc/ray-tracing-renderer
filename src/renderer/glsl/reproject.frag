@@ -62,7 +62,27 @@ void main() {
     sum += weight;
   }
 
-  history /= sum > 0.0 ? sum : 1.0;
+  if (sum > 0.0) {
+    history /= sum;
+  } else {
+    hTexel = ivec2(hTexelf + 0.5);
+
+    for (int x = -1; x <= 1; x++) {
+      for (int y = -1; y <= 1; y++) {
+        ivec2 texel = hTexel + ivec2(x, y);
+
+        float histMeshId = texelFetch(historyBuffer, ivec3(texel, historyBuffer_position), 0).w;
+
+        float isValid = histMeshId != currentMeshId ? 0.0 : 1.0;
+
+        float weight = isValid;
+        vec4 h = texelFetch(historyBuffer, ivec3(texel, historyBuffer_light), 0);
+        history += weight * h;
+        sum += weight;
+      }
+    }
+    history = sum > 0.0 ? history / sum : history;
+  }
 
   if (history.w > 25.0) {
     history.xyz *= 25.0 / history.w;

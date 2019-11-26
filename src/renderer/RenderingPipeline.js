@@ -91,9 +91,6 @@ export function makeRenderingPipeline({
 
   let sampleRenderedCallback = () => {};
 
-  rayTracingShader.setStrataCount(1);
-  rayTracingShader.useStratifiedSampling(true);
-
   function clear() {
     sampleCount = 0;
     tileRender.reset();
@@ -132,7 +129,6 @@ export function makeRenderingPipeline({
     gl.blendFunc(gl.ONE, gl.ONE);
     gl.enable(gl.BLEND);
 
-    // gl.clearBufferfv(gl.COLOR, rayTracingRenderTargets.location.normal, clearToBlack);
     gl.clearBufferfv(gl.COLOR, rayTracingRenderTargets.location.position, clearToBlack);
 
     gl.viewport(0, 0, buffer.width, buffer.height);
@@ -161,9 +157,15 @@ export function makeRenderingPipeline({
     gl.disable(gl.SCISSOR_TEST);
   }
 
-  function updateSeed() {
+  function updateSeed(width, height) {
+    rayTracingShader.setSize(width, height);
+
+    const jitterX = (Math.random() - 0.5) / width;
+    const jitterY = (Math.random() - 0.5) / height;
+    rayTracingShader.setJitter(jitterX, jitterY);
+    reprojectShader.setJitter(jitterX, jitterY);
+
     if ( sampleCount === 1) {
-      rayTracingShader.useStratifiedSampling(true);
       rayTracingShader.setStrataCount(1);
     } else if (sampleCount === numUniformSamples) {
       rayTracingShader.setStrataCount(strataCount);
@@ -180,7 +182,6 @@ export function makeRenderingPipeline({
     const camerasEqual = areCamerasEqual(camera, lastCamera);
 
     if (!camerasEqual) {
-
       const temp = historyPreviewBuffer;
       historyPreviewBuffer = reprojectPreviewBuffer;
       reprojectPreviewBuffer = temp;
@@ -193,7 +194,7 @@ export function makeRenderingPipeline({
       setPreviewBufferDimensions();
 
       rayTracingShader.setCamera(camera);
-      updateSeed();
+      updateSeed(hdrPreviewBuffer.width, hdrPreviewBuffer.height);
       newSampleToBuffer(hdrPreviewBuffer);
 
       reprojectShader.setPreviousCamera(lastCamera);
@@ -208,7 +209,7 @@ export function makeRenderingPipeline({
     } else {
       sampleCount++;
 
-      updateSeed();
+      updateSeed(hdrBuffer.width, hdrBuffer.height);
       addSampleToBuffer(hdrBuffer);
 
       let reprojectAmount = reprojectDecay * (1 - sampleCount / numSamplesToReproject);
