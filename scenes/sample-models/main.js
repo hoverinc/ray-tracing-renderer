@@ -1,7 +1,18 @@
-// TODO: Support multiple hdr maps
+const ORIGIN = window.location.origin;
+const REMOTE_ORIGIN = 'https://hoverinc.github.io/ray-tracing-renderer/';
+const PREFIX = ORIGIN.includes('localhost') ? ORIGIN : REMOTE_ORIGIN;
 
 // Envinronment maps
-const DEFAULT_ENV_MAP_PATH = '/scenes/envmaps/gray-background-with-dirlight.hdr';
+const ENV_MAPS_SAMPLES = [
+  {
+    path: `${PREFIX}/scenes/envmaps/gray-background-with-dirlight.hdr`,
+    name: 'Gray + Dir Light',
+  },
+  {
+    path: `${PREFIX}/scenes/envmaps/blurry-sunset-with-dirlight.hdr`,
+    name: 'Sunset + Dir Light',
+  },
+];
 
 // Sample models from BabylonJS: http://models.babylonjs.com/
 const BABYLON_JS_SAMPLE_MODELS = [
@@ -29,9 +40,11 @@ const BABYLON_JS_SAMPLE_MODELS = [
 
 const MODEL_DATA = [...BABYLON_JS_SAMPLE_MODELS];
 const INITIAL_MODEL_DATA = MODEL_DATA[0];
+const INITIAL_ENV_MAP = ENV_MAPS_SAMPLES[0];
 
 let currentModelLoaded = null;
 let groundMesh = null;
+let currentEnvLight = null;
 
 const renderer = new THREE.RayTracingRenderer();
 
@@ -165,16 +178,41 @@ async function selectModelFromName(name) {
   console.log(`Switch to Model '${name}'`);
 }
 
+async function loadEnvironmentMap(path) {
+  const loadPromise = new Promise((resolve) =>
+    new THREE.RGBELoader().load(path, (environmentMapTexture) =>
+      resolve(environmentMapTexture),
+    ),
+  );
+
+  const environmentMap = await loadPromise;
+  environmentMap.encoding = THREE.LinearEncoding;
+
+  return environmentMap;
+}
+
+async function selectEnvMapFromName(name) {
+  const envMapEntry = ENV_MAPS_SAMPLES.find(item => item.name === name);
+  const envMap = await loadEnvironmentMap(envMapEntry.path);
+  const envLight = new THREE.EnvironmentLight(envMap);
+
+  if (currentEnvLight) scene.remove(currentEnvLight);
+  scene.add(envLight);
+  currentEnvLight = envLight;
+
+  renderer.needsUpdate = true;
+
+  console.log(`Switch to Env Map '${name}'`);
+}
+
 async function init() {
   window.addEventListener('resize', resize);
   resize();
 
-  const envMap = new THREE.RGBELoader().load(`${DEFAULT_ENV_MAP_PATH}`);
-  const envLight = new THREE.EnvironmentLight(envMap);
+  selectEnvMapFromName(INITIAL_ENV_MAP.name);
 
   groundMesh = createGroundMesh();
-  selectModelFromName(INITIAL_MODEL_DATA.name)
-  scene.add(envLight);
+  selectModelFromName(INITIAL_MODEL_DATA.name);
 
   scene.add(groundMesh);
   scene.add(camera);
@@ -182,14 +220,23 @@ async function init() {
   const gui = new dat.GUI();
   const uiOptions = {
     selectedModelName: INITIAL_MODEL_DATA.name,
+    selectedEnvMap: INITIAL_ENV_MAP.name,
     modelOptions: MODEL_DATA.map(item => item.name),
+    envMapOptions: ENV_MAPS_SAMPLES.map(item => item.name),
   };
 
   const modelController = gui.add(uiOptions, 'selectedModelName', uiOptions.modelOptions)
     .name('model');
 
+  const envMapController = gui.add(uiOptions, 'selectedEnvMap', uiOptions.envMapOptions)
+    .name('env map');
+
   modelController.onChange(async (value) => {
     selectModelFromName(value)
+  });
+
+  envMapController.onChange(async (value) => {
+    selectEnvMapFromName(value)
   });
 
   THREE.DefaultLoadingManager.onLoad = tick;
