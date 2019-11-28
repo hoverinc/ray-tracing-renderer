@@ -54,7 +54,6 @@ void surfaceInteractionFromIntersection(inout SurfaceInteraction si, Triangle tr
   vec3 n1 = texelFetch(normals, i1, 0).xyz;
   vec3 n2 = texelFetch(normals, i2, 0).xyz;
   si.normal = normalize(barycentric.x * n0 + barycentric.y * n1 + barycentric.z * n2);
-  si.surfaceNormal = si.normal;
 
   si.color = materials.colorAndMaterialType[materialIndex].xyz;
   si.roughness = materials.roughnessMetalnessNormalScale[materialIndex].x;

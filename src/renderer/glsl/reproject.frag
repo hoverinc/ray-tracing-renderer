@@ -1,3 +1,5 @@
+import { addDefines } from '../glslUtil';
+
 export default function({ rayTracingRenderTargets, defines }) {
   return `#version 300 es
 
@@ -9,6 +11,8 @@ in vec2 vCoord;
 ${rayTracingRenderTargets.get('historyBuffer')}
 ${rayTracingRenderTargets.get('hdrBuffer')}
 ${rayTracingRenderTargets.set()}
+
+${addDefines(defines)}
 
 uniform mat4 historyCamera;
 uniform float blendAmount;
@@ -84,9 +88,9 @@ void main() {
     history = sum > 0.0 ? history / sum : history;
   }
 
-  if (history.w > 25.0) {
-    history.xyz *= 25.0 / history.w;
-    history.w = 25.0;
+  if (history.w > MAX_SAMPLES) {
+    history.xyz *= MAX_SAMPLES / history.w;
+    history.w = MAX_SAMPLES;
   }
 
   out_light = blendAmount * history + lightTex;

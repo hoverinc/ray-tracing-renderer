@@ -8,11 +8,15 @@ export function makeReprojectShader(params) {
   const {
     fullscreenQuad,
     gl,
+    maxReprojectedSamples,
     textureAllocator,
   } = params;
 
   const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragString({
     rayTracingRenderTargets,
+    defines: {
+      MAX_SAMPLES: maxReprojectedSamples.toFixed(1)
+    }
   }));
 
   const program = createProgram(gl, fullscreenQuad.vertexShader, fragmentShader);

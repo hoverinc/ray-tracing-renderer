@@ -23,13 +23,16 @@ export function makeRenderingPipeline({
 
   let ready = false;
 
+  const reprojectDecay = 0.975;
+  const maxReprojectedSamples = reprojectDecay / (1 - reprojectDecay);
+
   const fullscreenQuad = makeFullscreenQuad(gl);
 
   const textureAllocator = makeTextureAllocator(gl);
 
   const rayTracingShader = makeRayTracingShader({bounces, fullscreenQuad, gl, optionalExtensions, scene, textureAllocator});
 
-  const reprojectShader = makeReprojectShader({ fullscreenQuad, gl, textureAllocator });
+  const reprojectShader = makeReprojectShader({ fullscreenQuad, gl, maxReprojectedSamples, textureAllocator });
 
   const toneMapShader = makeToneMapShader({
     fullscreenQuad, gl, optionalExtensions, textureAllocator, toneMappingParams
@@ -72,9 +75,6 @@ export function makeRenderingPipeline({
 
   const clearToBlack = new Float32Array([0, 0, 0, 0]);
 
-  const reprojectDecay = 0.98;
-  const numSamplesToReproject = 64;
-
   // used to sample only a portion of the scene to the HDR Buffer to prevent the GPU from locking up from excessive computation
   const tileRender = makeTileRender(gl);
 
@@ -88,6 +88,8 @@ export function makeRenderingPipeline({
   const strataCount = 6;
 
   let sampleCount = 0;
+
+  let lastUsedBuffer = historyPreviewBuffer;
 
   let sampleRenderedCallback = () => {};
 
@@ -148,6 +150,7 @@ export function makeRenderingPipeline({
   function toneMapToScreen(buffer) {
     gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
     toneMapShader.draw(buffer.texture);
+    lastUsedBuffer = buffer;
   }
 
   function renderTile(x, y, width, height) {
@@ -182,15 +185,12 @@ export function makeRenderingPipeline({
     const camerasEqual = areCamerasEqual(camera, lastCamera);
 
     if (!camerasEqual) {
+      sampleCount = 1;
+
       const temp = historyPreviewBuffer;
       historyPreviewBuffer = reprojectPreviewBuffer;
       reprojectPreviewBuffer = temp;
 
-      let historyBuffer = sampleCount > 1 ? reprojectBuffer : historyPreviewBuffer;
-
-      sampleCount = 1;
-
-      clearBuffer(hdrBuffer);
       setPreviewBufferDimensions();
 
       rayTracingShader.setCamera(camera);
@@ -202,26 +202,34 @@ export function makeRenderingPipeline({
 
       reprojectPreviewBuffer.bind();
       gl.viewport(0, 0, reprojectPreviewBuffer.width, reprojectPreviewBuffer.height);
-      reprojectShader.draw(hdrPreviewBuffer.texture, historyBuffer.texture);
+      reprojectShader.draw(hdrPreviewBuffer.texture, lastUsedBuffer.texture);
       reprojectPreviewBuffer.unbind();
 
       toneMapToScreen(reprojectPreviewBuffer);
+
+      clearBuffer(hdrBuffer);
+
     } else {
       sampleCount++;
 
       updateSeed(hdrBuffer.width, hdrBuffer.height);
       addSampleToBuffer(hdrBuffer);
 
-      let reprojectAmount = reprojectDecay * (1 - sampleCount / numSamplesToReproject);
-      reprojectAmount = clamp(reprojectAmount * reprojectAmount, 0, 1);
-      reprojectShader.setBlendAmount(reprojectAmount);
+      let blendAmount = clamp(1.0 - sampleCount / maxReprojectedSamples, 0, 1);
+      blendAmount *= blendAmount;
 
-      reprojectBuffer.bind();
-      gl.viewport(0, 0, reprojectBuffer.width, reprojectBuffer.height);
-      reprojectShader.draw(hdrBuffer.texture, historyPreviewBuffer.texture);
-      reprojectBuffer.unbind();
+      if (blendAmount > 0.0) {
+        reprojectShader.setBlendAmount(blendAmount);
 
-      toneMapToScreen(reprojectBuffer);
+        reprojectBuffer.bind();
+        gl.viewport(0, 0, reprojectBuffer.width, reprojectBuffer.height);
+        reprojectShader.draw(hdrBuffer.texture, historyPreviewBuffer.texture);
+        reprojectBuffer.unbind();
+
+        toneMapToScreen(reprojectBuffer);
+      } else {
+        toneMapToScreen(hdrBuffer);
+      }
     }
 
     lastCamera.copy(camera);
