@@ -24,7 +24,7 @@ export function makeRenderingPipeline({
   let ready = false;
 
   const reprojectDecay = 0.975;
-  const maxReprojectedSamples = reprojectDecay / (1 - reprojectDecay);
+  const maxReprojectedSamples = Math.round(reprojectDecay / (1 - reprojectDecay));
 
   const fullscreenQuad = makeFullscreenQuad(gl);
 
