@@ -2,13 +2,14 @@
   typeof exports === 'object' && typeof module !== 'undefined' ? factory(exports, require('three')) :
   typeof define === 'function' && define.amd ? define(['exports', 'three'], factory) :
   (global = global || self, factory(global.RayTracingRenderer = {}, global.THREE));
-}(this, function (exports, THREE$1) { 'use strict';
+}(this, (function (exports, THREE$1) { 'use strict';
 
   const ThinMaterial = 1;
   const ThickMaterial = 2;
   const ShadowCatcherMaterial = 3;
 
   var constants = /*#__PURE__*/Object.freeze({
+    __proto__: null,
     ThinMaterial: ThinMaterial,
     ThickMaterial: ThickMaterial,
     ShadowCatcherMaterial: ShadowCatcherMaterial
@@ -2019,34 +2020,6 @@ void main() {
     };
   }
 
-  // Convert image data from the RGBE format to a 32-bit floating point format
-  // See https://www.cg.tuwien.ac.at/research/theses/matkovic/node84.html for a description of the RGBE format
-  // Optional multiplier argument for performance optimization
-  function rgbeToFloat(buffer, intensity = 1) {
-    const texels = buffer.length / 4;
-    const floatBuffer = new Float32Array(texels * 3);
-
-    const expTable = [];
-    for (let i = 0; i < 255; i++) {
-      expTable[i] = intensity * Math.pow(2, i - 128) / 255;
-    }
-
-    for (let i = 0; i < texels; i++) {
-
-      const r = buffer[4 * i];
-      const g = buffer[4 * i + 1];
-      const b = buffer[4 * i + 2];
-      const a = buffer[4 * i + 3];
-      const e = expTable[a];
-
-      floatBuffer[3 * i] = r * e;
-      floatBuffer[3 * i + 1] = g * e;
-      floatBuffer[3 * i + 2] = b * e;
-    }
-
-    return floatBuffer;
-  }
-
   function clamp(x, min, max) {
     return Math.min(Math.max(x, min), max);
   }
@@ -2080,38 +2053,20 @@ void main() {
 
   // Tools for generating and modify env maps for lighting from scene component data
   function generateEnvMapFromSceneComponents(directionalLights, environmentLights) {
-    let envImage = initializeEnvMap(environmentLights);
+    let envImage = initializeEnvMap();
     directionalLights.forEach( light => { envImage.data = addDirectionalLightToEnvMap(light, envImage); });
 
     return envImage;
   }
 
   function initializeEnvMap(environmentLights) {
-    let envImage;
-
-    // Initialize map from environment light if present
-    if (environmentLights.length > 0) {
-      // TODO: support multiple environment lights (what if they have different resolutions?)
-      const environmentLight = environmentLights[0];
-
-      envImage = {
-        width: environmentLight.map.image.width,
-        height: environmentLight.map.image.height,
-        data: environmentLight.map.image.data,
-      };
-
-      envImage.data = rgbeToFloat(envImage.data, environmentLight.intensity);
-    } else {
-      // initialize blank map
-      envImage = generateBlankMap(DEFAULT_MAP_RESOLUTION.width, DEFAULT_MAP_RESOLUTION.height);
-    }
-
-    return envImage;
+    return generateBlankMap(DEFAULT_MAP_RESOLUTION.width, DEFAULT_MAP_RESOLUTION.height);
   }
 
   function generateBlankMap(width, height) {
     const texels = width * height;
     const floatBuffer = new Float32Array(texels * 3);
+    floatBuffer.fill(1.0);
 
     return {
       width: width,
@@ -2813,7 +2768,7 @@ void main() {
       makeDataTexture(gl, flattenedBvh.buffer, 4)
     );
 
-    const envImage = generateEnvMapFromSceneComponents(directionalLights, environmentLights);
+    const envImage = generateEnvMapFromSceneComponents(directionalLights);
 
     textureAllocator.bind(uniforms.envmap, makeTexture(gl, {
       data: envImage.data,
@@ -3786,4 +3741,4 @@ void main() {
 
   Object.defineProperty(exports, '__esModule', { value: true });
 
-}));
+})));

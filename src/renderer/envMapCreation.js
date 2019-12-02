@@ -19,10 +19,11 @@ export function generateEnvMapFromSceneComponents(directionalLights, environment
 }
 
 export function initializeEnvMap(environmentLights) {
+  return generateBlankMap(DEFAULT_MAP_RESOLUTION.width, DEFAULT_MAP_RESOLUTION.height);
   let envImage;
 
   // Initialize map from environment light if present
-  if (environmentLights.length > 0) {
+  if (environmentLights.length > 0 && environmentLights[0].map) {
     // TODO: support multiple environment lights (what if they have different resolutions?)
     const environmentLight = environmentLights[0];
 
@@ -44,6 +45,7 @@ export function initializeEnvMap(environmentLights) {
 export function generateBlankMap(width, height) {
   const texels = width * height;
   const floatBuffer = new Float32Array(texels * 3);
+  floatBuffer.fill(1.0);
 
   return {
     width: width,

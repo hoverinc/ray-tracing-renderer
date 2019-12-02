@@ -2,13 +2,14 @@
   typeof exports === 'object' && typeof module !== 'undefined' ? factory(exports, require('three')) :
   typeof define === 'function' && define.amd ? define(['exports', 'three'], factory) :
   (global = global || self, factory(global.RayTracingRenderer = {}, global.THREE));
-}(this, function (exports, THREE$1) { 'use strict';
+}(this, (function (exports, THREE$1) { 'use strict';
 
   var ThinMaterial = 1;
   var ThickMaterial = 2;
   var ShadowCatcherMaterial = 3;
 
   var constants = /*#__PURE__*/Object.freeze({
+    __proto__: null,
     ThinMaterial: ThinMaterial,
     ThickMaterial: ThickMaterial,
     ShadowCatcherMaterial: ShadowCatcherMaterial
@@ -153,6 +154,10 @@
   }
 
   function _iterableToArrayLimit(arr, i) {
+    if (!(Symbol.iterator in Object(arr) || Object.prototype.toString.call(arr) === "[object Arguments]")) {
+      return;
+    }
+
     var _arr = [];
     var _n = true;
     var _d = false;
@@ -1159,33 +1164,6 @@
     };
   }
 
-  // Convert image data from the RGBE format to a 32-bit floating point format
-  // See https://www.cg.tuwien.ac.at/research/theses/matkovic/node84.html for a description of the RGBE format
-  // Optional multiplier argument for performance optimization
-  function rgbeToFloat(buffer) {
-    var intensity = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : 1;
-    var texels = buffer.length / 4;
-    var floatBuffer = new Float32Array(texels * 3);
-    var expTable = [];
-
-    for (var i = 0; i < 255; i++) {
-      expTable[i] = intensity * Math.pow(2, i - 128) / 255;
-    }
-
-    for (var _i = 0; _i < texels; _i++) {
-      var r = buffer[4 * _i];
-      var g = buffer[4 * _i + 1];
-      var b = buffer[4 * _i + 2];
-      var a = buffer[4 * _i + 3];
-      var e = expTable[a];
-      floatBuffer[3 * _i] = r * e;
-      floatBuffer[3 * _i + 1] = g * e;
-      floatBuffer[3 * _i + 2] = b * e;
-    }
-
-    return floatBuffer;
-  }
-
   function clamp(x, min, max) {
     return Math.min(Math.max(x, min), max);
   }
@@ -1218,34 +1196,19 @@
   }; // Tools for generating and modify env maps for lighting from scene component data
 
   function generateEnvMapFromSceneComponents(directionalLights, environmentLights) {
-    var envImage = initializeEnvMap(environmentLights);
+    var envImage = initializeEnvMap();
     directionalLights.forEach(function (light) {
       envImage.data = addDirectionalLightToEnvMap(light, envImage);
     });
     return envImage;
   }
   function initializeEnvMap(environmentLights) {
-    var envImage; // Initialize map from environment light if present
-
-    if (environmentLights.length > 0) {
-      // TODO: support multiple environment lights (what if they have different resolutions?)
-      var environmentLight = environmentLights[0];
-      envImage = {
-        width: environmentLight.map.image.width,
-        height: environmentLight.map.image.height,
-        data: environmentLight.map.image.data
-      };
-      envImage.data = rgbeToFloat(envImage.data, environmentLight.intensity);
-    } else {
-      // initialize blank map
-      envImage = generateBlankMap(DEFAULT_MAP_RESOLUTION.width, DEFAULT_MAP_RESOLUTION.height);
-    }
-
-    return envImage;
+    return generateBlankMap(DEFAULT_MAP_RESOLUTION.width, DEFAULT_MAP_RESOLUTION.height);
   }
   function generateBlankMap(width, height) {
     var texels = width * height;
     var floatBuffer = new Float32Array(texels * 3);
+    floatBuffer.fill(1.0);
     return {
       width: width,
       height: height,
@@ -1773,31 +1736,49 @@
 
     function next() {
       var i = 0;
+      var _iteratorNormalCompletion2 = true;
+      var _didIteratorError2 = false;
+      var _iteratorError2 = undefined;
 
-      for (var _i = 0, _strataObjs = strataObjs; _i < _strataObjs.length; _i++) {
-        var strata = _strataObjs[_i];
-        var nums = strata.next();
-        var _iteratorNormalCompletion2 = true;
-        var _didIteratorError2 = false;
-        var _iteratorError2 = undefined;
+      try {
+        for (var _iterator2 = strataObjs[Symbol.iterator](), _step2; !(_iteratorNormalCompletion2 = (_step2 = _iterator2.next()).done); _iteratorNormalCompletion2 = true) {
+          var strata = _step2.value;
+          var nums = strata.next();
+          var _iteratorNormalCompletion3 = true;
+          var _didIteratorError3 = false;
+          var _iteratorError3 = undefined;
 
-        try {
-          for (var _iterator2 = nums[Symbol.iterator](), _step2; !(_iteratorNormalCompletion2 = (_step2 = _iterator2.next()).done); _iteratorNormalCompletion2 = true) {
-            var num = _step2.value;
-            combined[i++] = num;
-          }
-        } catch (err) {
-          _didIteratorError2 = true;
-          _iteratorError2 = err;
-        } finally {
           try {
-            if (!_iteratorNormalCompletion2 && _iterator2["return"] != null) {
-              _iterator2["return"]();
+            for (var _iterator3 = nums[Symbol.iterator](), _step3; !(_iteratorNormalCompletion3 = (_step3 = _iterator3.next()).done); _iteratorNormalCompletion3 = true) {
+              var num = _step3.value;
+              combined[i++] = num;
             }
+          } catch (err) {
+            _didIteratorError3 = true;
+            _iteratorError3 = err;
           } finally {
-            if (_didIteratorError2) {
-              throw _iteratorError2;
+            try {
+              if (!_iteratorNormalCompletion3 && _iterator3["return"] != null) {
+                _iterator3["return"]();
+              }
+            } finally {
+              if (_didIteratorError3) {
+                throw _iteratorError3;
+              }
             }
+          }
+        }
+      } catch (err) {
+        _didIteratorError2 = true;
+        _iteratorError2 = err;
+      } finally {
+        try {
+          if (!_iteratorNormalCompletion2 && _iterator2["return"] != null) {
+            _iterator2["return"]();
+          }
+        } finally {
+          if (_didIteratorError2) {
+            throw _iteratorError2;
           }
         }
       }
@@ -1806,9 +1787,28 @@
     }
 
     function restart() {
-      for (var _i2 = 0, _strataObjs2 = strataObjs; _i2 < _strataObjs2.length; _i2++) {
-        var strata = _strataObjs2[_i2];
-        strata.restart();
+      var _iteratorNormalCompletion4 = true;
+      var _didIteratorError4 = false;
+      var _iteratorError4 = undefined;
+
+      try {
+        for (var _iterator4 = strataObjs[Symbol.iterator](), _step4; !(_iteratorNormalCompletion4 = (_step4 = _iterator4.next()).done); _iteratorNormalCompletion4 = true) {
+          var strata = _step4.value;
+          strata.restart();
+        }
+      } catch (err) {
+        _didIteratorError4 = true;
+        _iteratorError4 = err;
+      } finally {
+        try {
+          if (!_iteratorNormalCompletion4 && _iterator4["return"] != null) {
+            _iterator4["return"]();
+          }
+        } finally {
+          if (_didIteratorError4) {
+            throw _iteratorError4;
+          }
+        }
       }
     }
 
@@ -1934,8 +1934,7 @@
 
     var _decomposeScene = decomposeScene(scene),
         meshes = _decomposeScene.meshes,
-        directionalLights = _decomposeScene.directionalLights,
-        environmentLights = _decomposeScene.environmentLights;
+        directionalLights = _decomposeScene.directionalLights;
 
     if (meshes.length === 0) {
       throw 'RayTracingRenderer: Scene contains no renderable meshes.';
@@ -2040,7 +2039,7 @@
     textureAllocator.bind(uniforms.normals, makeDataTexture(gl, geometry.getAttribute('normal').array, 3));
     textureAllocator.bind(uniforms.uvs, makeDataTexture(gl, geometry.getAttribute('uv').array, 2));
     textureAllocator.bind(uniforms.bvh, makeDataTexture(gl, flattenedBvh.buffer, 4));
-    var envImage = generateEnvMapFromSceneComponents(directionalLights, environmentLights);
+    var envImage = generateEnvMapFromSceneComponents(directionalLights);
     textureAllocator.bind(uniforms.envmap, makeTexture(gl, {
       data: envImage.data,
       minFilter: OES_texture_float_linear ? gl.LINEAR : gl.NEAREST,
@@ -2796,8 +2795,10 @@
     };
   }
 
-  var glRequiredExtensions = ['EXT_color_buffer_float'];
-  var glOptionalExtensions = ['OES_texture_float_linear'];
+  var glRequiredExtensions = ['EXT_color_buffer_float' // enables rendering to float buffers
+  ];
+  var glOptionalExtensions = ['OES_texture_float_linear' // enables gl.LINEAR texture filtering for float textures,
+  ];
   function RayTracingRenderer() {
     var params = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : {};
     var canvas = params.canvas || document.createElement('canvas');
@@ -3010,4 +3011,4 @@
 
   Object.defineProperty(exports, '__esModule', { value: true });
 
-}));
+})));
