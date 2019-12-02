@@ -56,6 +56,7 @@ void main() {
   vec4 history;
   float sum;
 
+  // bilinear sampling, rejecting samples that don't have a matching mesh id
   for (int i = 0; i < 4; i++) {
     float histMeshId = texelFetch(historyBuffer, ivec3(texel[i], historyBuffer_position), 0).w;
 
@@ -69,6 +70,7 @@ void main() {
   if (sum > 0.0) {
     history /= sum;
   } else {
+    // If all samples of bilinear fail, try a 3x3 box filter
     hTexel = ivec2(hTexelf + 0.5);
 
     for (int x = -1; x <= 1; x++) {

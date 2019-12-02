@@ -211,7 +211,6 @@ void main() {
   initRay(cam, origin, direction);
 
   SurfaceInteraction si;
-  si.meshId = -1;
 
   vec4 liAndAlpha = integrator(cam, si);
 
