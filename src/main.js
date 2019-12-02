@@ -5,8 +5,8 @@ import { EnvironmentLight } from './EnvironmentLight';
 import { RayTracingMaterial } from './RayTracingMaterial';
 import { RayTracingRenderer } from './RayTracingRenderer';
 
-/* global THREE */
-if (THREE) {
+if (window.THREE) {
+  /* global THREE */
   THREE.LensCamera = LensCamera;
   THREE.SoftDirectionalLight = SoftDirectionalLight;
   THREE.EnvironmentLight = EnvironmentLight;

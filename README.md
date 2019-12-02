@@ -4,7 +4,7 @@
 # Ray Tracing Renderer
 A [Three.js](https://github.com/mrdoob/three.js/) renderer which utilizes path tracing to render a scene with true photorealism. The renderer supports global illumination, reflections, soft shadows, and realistic environment lighting.
 
-[User Guide](https://github.com/hoverinc/ray-tracing-renderer/wiki/User-Guide) | [API Reference](https://github.com/hoverinc/ray-tracing-renderer/wiki/RayTracingRenderer) | [Contributing](https://github.com/hoverinc/ray-tracing-renderer/wiki/Contributing)
+[Demo](https://hoverinc.github.io/ray-tracing-renderer/scenes/sample-models/) | [User Guide](https://github.com/hoverinc/ray-tracing-renderer/wiki/User-Guide) | [API Reference](https://github.com/hoverinc/ray-tracing-renderer/wiki/RayTracingRenderer) | [Contributing](https://github.com/hoverinc/ray-tracing-renderer/wiki/Contributing)
 
 
 ## Usage
@@ -35,7 +35,7 @@ const renderer = new THREE.RayTracingRenderer();
 #### As a module
 If you installed via npm, simply import the renderer as follows.
 ```javascript
-import { RayTracingRenderer } from 'three.js-ray-tracing-renderer'
+import { RayTracingRenderer } from 'ray-tracing-renderer'
 ```
 Or if you downloaded the renderer as a file,
 ```javascript

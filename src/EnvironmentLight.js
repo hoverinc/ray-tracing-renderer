@@ -4,6 +4,7 @@ export class EnvironmentLight extends Light {
   constructor(map, ...args) {
     super(...args);
     this.map = map;
+    this.isEnvironmentLight = true;
   }
 
   copy(source) {

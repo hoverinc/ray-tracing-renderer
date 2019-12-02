@@ -1,7 +1,8 @@
+# hidden config files
 .DS_Store
 
+# dependencies
 node_modules
 
-# demo/test scenes
-demos/
-test-scene/
+# file with environment variables
+.env

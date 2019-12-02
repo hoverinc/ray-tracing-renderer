@@ -260,20 +260,20 @@ function decomposeScene(scene) {
   const directionalLights = [];
   const environmentLights = [];
   scene.traverse(child => {
-    if (child instanceof THREE.Mesh) {
+    if (child.isMesh) {
       if (!child.geometry || !child.geometry.getAttribute('position')) {
         console.warn(child, 'must have a geometry property with a position attribute');
       }
-      else if (!(child.material instanceof THREE.MeshStandardMaterial)) {
+      else if (!(child.material.isMeshStandardMaterial)) {
         console.warn(child, 'must use MeshStandardMaterial in order to be rendered.');
       } else {
         meshes.push(child);
       }
     }
-    if (child instanceof THREE.DirectionalLight) {
+    if (child.isDirectionalLight) {
       directionalLights.push(child);
     }
-    if (child instanceof THREE.EnvironmentLight) {
+    if (child.isEnvironmentLight) {
       if (environmentLights.length > 1) {
         console.warn(environmentLights, 'only one environment light can be used per scene');
       }
