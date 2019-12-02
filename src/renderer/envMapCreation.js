@@ -19,7 +19,6 @@ export function generateEnvMapFromSceneComponents(directionalLights, environment
 }
 
 export function initializeEnvMap(environmentLights) {
-  return generateBlankMap(DEFAULT_MAP_RESOLUTION.width, DEFAULT_MAP_RESOLUTION.height);
   let envImage;
 
   // Initialize map from environment light if present
