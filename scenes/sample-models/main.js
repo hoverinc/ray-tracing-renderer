@@ -111,7 +111,6 @@ function createGroundMesh() {
   mat.metalness = 0.0;
   mat.shadowCatcher = true;
   const mesh = new THREE.Mesh(geo, mat);
-  mesh.position.set(0, 0, -5);
   mesh.rotateX(Math.PI / 2);
 
   return mesh;
@@ -152,7 +151,7 @@ function updateGroundMeshFromModel(groundMesh, model) {
   const bounds = computeBoundingBoxFromModel(model);
 
   const x = currentModelLoaded.position.x;
-  const y = bounds.min.y;
+  const y = bounds.min.y - 0.005 * (bounds.max.y - bounds.min.y); // move slightly below bounds to prevent z-fighting
   const z = currentModelLoaded.position.z;
 
   groundMesh.position.set(x, y, z);
