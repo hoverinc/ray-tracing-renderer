@@ -10,7 +10,6 @@ in vec2 vCoord;
 
 out vec4 fragColor;
 
-// uniform sampler2D image;
 ${rayTracingRenderTargets.get('hdrBuffer')}
 
 ${textureLinear(defines)}
@@ -55,8 +54,6 @@ void main() {
   light *= ${defines.exposure}; // exposure
 
   light = ${defines.toneMapping}(light); // tone mapping
-
-  // light = texture(hdrBuffer, vec3(vCoord, hdrBuffer_jitter)).rgb;
 
   light = pow(light, vec3(1.0 / 2.2)); // gamma correction
 

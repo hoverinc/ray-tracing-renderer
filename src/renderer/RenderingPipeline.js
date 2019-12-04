@@ -235,6 +235,8 @@ export function makeRenderingPipeline({
         } else {
           toneMapToScreen(hdrBuffer);
         }
+
+        sampleRenderedCallback(sampleCount);
       }
     }
   }
