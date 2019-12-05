@@ -81,11 +81,14 @@ export function makeRenderingPipeline({
 
   function setPreviewBufferDimensions() {
     const aspectRatio = hdrBuffer.width / hdrBuffer.height;
-    const desiredTimeForPreview = 16; // 60 fps
+    const desiredTimeForPreview = 8; // 60 fps
     const numPixelsForPreview = desiredTimeForPreview / tileRender.getTimePerPixel();
-    const previewWidth = clamp(Math.sqrt(numPixelsForPreview * aspectRatio), 1, hdrBuffer.width);
-    const previewHeight = clamp(previewWidth / aspectRatio, 1, hdrBuffer.height);
-    if (previewWidth !== hdrPreviewBuffer.width) {
+    const previewWidth = Math.round(clamp(Math.sqrt(numPixelsForPreview * aspectRatio), 1, hdrBuffer.width));
+    const previewHeight = Math.round(clamp(previewWidth / aspectRatio, 1, hdrBuffer.height));
+
+    const diff = Math.abs(previewWidth - hdrPreviewBuffer.width) / previewWidth;
+    if (diff > 0.1) {
+      console.log('NEW WIDTH', hdrPreviewBuffer.width, previewWidth);
       hdrPreviewBuffer.setSize(previewWidth, previewHeight);
     }
   }
@@ -221,7 +224,6 @@ export function makeRenderingPipeline({
     drawOffscreenTile,
     drawFull,
     restartTimer: tileRender.restartTimer,
-    setRenderTime: tileRender.setRenderTime,
     setSize,
     hdrBufferToScreen,
     getTotalSamplesRendered() {
