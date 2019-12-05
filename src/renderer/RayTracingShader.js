@@ -225,24 +225,30 @@ function makeProgramFromScene({
   );
 
   const envImage = generateEnvMapFromSceneComponents(directionalLights, environmentLights);
-
-  textureAllocator.bind(uniforms.envmap, makeTexture(gl, {
+  const envImageTextureObject = makeTexture(gl, {
     data: envImage.data,
     minFilter: OES_texture_float_linear ? gl.LINEAR : gl.NEAREST,
     magFilter: OES_texture_float_linear ? gl.LINEAR : gl.NEAREST,
     width: envImage.width,
     height: envImage.height,
-  }));
+  });
 
-  const backgroundImage = (scene.background) ? generateBackgroundMapFromSceneBackground(scene.background) : envImage;
+  textureAllocator.bind(uniforms.envmap, envImageTextureObject);
 
-  textureAllocator.bind(uniforms.backgroundMap, makeTexture(gl, {
-    data: backgroundImage.data,
-    minFilter: OES_texture_float_linear ? gl.LINEAR : gl.NEAREST,
-    magFilter: OES_texture_float_linear ? gl.LINEAR : gl.NEAREST,
-    width: backgroundImage.width,
-    height: backgroundImage.height,
-  }));
+  let backgroundImageTextureObject;
+  if (scene.background) {
+    const backgroundImage = generateBackgroundMapFromSceneBackground(scene.background);
+    backgroundImageTextureObject = makeTexture(gl, {
+      data: backgroundImage.data,
+      minFilter: OES_texture_float_linear ? gl.LINEAR : gl.NEAREST,
+      magFilter: OES_texture_float_linear ? gl.LINEAR : gl.NEAREST,
+      width: backgroundImage.width,
+      height: backgroundImage.height,
+    });
+  } else {
+    backgroundImageTextureObject = envImageTextureObject;
+  }
+  textureAllocator.bind(uniforms.backgroundMap, backgroundImageTextureObject);
 
   const distribution = envmapDistribution(envImage);
   textureAllocator.bind(uniforms.envmapDistribution, makeTexture(gl, {
