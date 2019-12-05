@@ -25,31 +25,70 @@ export function initializeEnvMap(environmentLights) {
   if (environmentLights.length > 0) {
     // TODO: support multiple environment lights (what if they have different resolutions?)
     const environmentLight = environmentLights[0];
-
-    envImage = {
-      width: environmentLight.map.image.width,
-      height: environmentLight.map.image.height,
-      data: environmentLight.map.image.data,
-    };
-
-    envImage.data = rgbeToFloat(envImage.data, environmentLight.intensity);
+    // if environment light has valid map use that
+    if (environmentLight.map && (environmentLight.map.encoding === THREE.RGBEEncoding || environmentLight.map.encoding === THREE.LinearEncoding)) {
+      envImage = {
+        width: environmentLight.map.image.width,
+        height: environmentLight.map.image.height,
+        data: environmentLight.map.image.data,
+      };
+      envImage.data = rgbeToFloat(envImage.data, environmentLight.intensity);
+    }
+    // if there is no map fall back to color property
+    else if (environmentLight.color && environmentLight.color.isColor) {
+      envImage = generateMap(DEFAULT_MAP_RESOLUTION.width, DEFAULT_MAP_RESOLUTION.height, environmentLight.color, environmentLight.intensity)
+    }
   } else {
     // initialize blank map
-    envImage = generateBlankMap(DEFAULT_MAP_RESOLUTION.width, DEFAULT_MAP_RESOLUTION.height);
+    envImage = generateMap(DEFAULT_MAP_RESOLUTION.width, DEFAULT_MAP_RESOLUTION.height);
   }
 
   return envImage;
 }
 
-export function generateBlankMap(width, height) {
+export function generateMap(width, height, color, intensity) {
   const texels = width * height;
   const floatBuffer = new Float32Array(texels * 3);
-
+  if (color && color.isColor) {
+    setBufferToColor(floatBuffer, color, intensity);
+  }
   return {
     width: width,
     height: height,
     data: floatBuffer,
   };
+}
+
+export function generateBackgroundMapFromSceneBackground(background) {
+  let backgroundImage;
+
+  if (background.isColor) {
+    backgroundImage = generateMap(DEFAULT_MAP_RESOLUTION.width, DEFAULT_MAP_RESOLUTION.height, background);
+  } else if (background.encoding === THREE.RGBEEncoding) {
+      backgroundImage = {
+        width: background.image.width,
+        height: background.image.height,
+        data: background.image.data,
+      };
+      backgroundImage.data = rgbeToFloat(backgroundImage.data)
+  }
+  return backgroundImage;
+}
+
+function setBufferToColor(buffer, color, intensity) {
+  buffer.forEach(function(part, index) {
+    const component = index % 3;
+    if (component === 0) {
+      buffer[index] = color.r * intensity;
+    }
+    else if (component === 1) {
+      buffer[index] = color.g * intensity;
+    }
+    else if (component === 2) {
+      buffer[index] = color.b * intensity;
+    }
+  });
+  return buffer;
 }
 
 export function addDirectionalLightToEnvMap(light, image) {

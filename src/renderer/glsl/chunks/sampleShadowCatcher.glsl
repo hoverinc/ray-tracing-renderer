@@ -82,7 +82,7 @@ float importanceSampleMaterialShadowCatcher(SurfaceInteraction si, vec3 viewDir,
 vec3 sampleShadowCatcher(SurfaceInteraction si, int bounce, inout Ray ray, inout vec3 beta, inout float alpha, inout vec3 prevLi, inout bool abort) {
   mat3 basis = orthonormalBasis(si.normal);
   vec3 viewDir = -ray.d;
-  vec3 color = sampleEnvmapFromDirection(-viewDir);
+  vec3 color = mix(sampleBackgroundFromDirection(-viewDir), sampleEnvmapFromDirection(-viewDir), vec3(float(bounce > 1)));
 
   vec3 lightDir = lightDirDiffuse(si.faceNormal, viewDir, basis, randomSampleVec2());
 

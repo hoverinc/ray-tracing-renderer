@@ -5,7 +5,7 @@ import { createShader, createProgram, getUniforms } from './glUtil';
 import { mergeMeshesToGeometry } from './mergeMeshesToGeometry';
 import { bvhAccel, flattenBvh } from './bvhAccel';
 import { envmapDistribution } from './envmapDistribution';
-import { generateEnvMapFromSceneComponents } from './envMapCreation';
+import { generateEnvMapFromSceneComponents, generateBackgroundMapFromSceneBackground } from './envMapCreation';
 import { getTexturesFromMaterials, mergeTexturesFromMaterials } from './texturesFromMaterials';
 import { makeTexture } from './Texture';
 import { uploadBuffers } from './uploadBuffers';
@@ -234,6 +234,16 @@ function makeProgramFromScene({
     height: envImage.height,
   }));
 
+  const backgroundImage = (scene.background) ? generateBackgroundMapFromSceneBackground(scene.background) : envImage;
+
+  textureAllocator.bind(uniforms.backgroundMap, makeTexture(gl, {
+    data: backgroundImage.data,
+    minFilter: OES_texture_float_linear ? gl.LINEAR : gl.NEAREST,
+    magFilter: OES_texture_float_linear ? gl.LINEAR : gl.NEAREST,
+    width: backgroundImage.width,
+    height: backgroundImage.height,
+  }));
+
   const distribution = envmapDistribution(envImage);
   textureAllocator.bind(uniforms.envmapDistribution, makeTexture(gl, {
     data: distribution.data,
@@ -271,10 +281,13 @@ function decomposeScene(scene) {
       if (environmentLights.length > 1) {
         console.warn(environmentLights, 'only one environment light can be used per scene');
       }
-      else if (isHDRTexture(child)) {
+      // Valid lights have either an HDR texture map in RGBEEncoding or a valid THREE.Color property
+      if (isHDRTexture(child)) {
+        environmentLights.push(child);
+      } else if (child.color && child.color.isColor) {
         environmentLights.push(child);
       } else {
-        console.warn(child, 'environment light does not use THREE.RGBEEncoding');
+        console.warn(child, 'environment light does not use color value or map with THREE.RGBEEncoding');
       }
     }
   });
