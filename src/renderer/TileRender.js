@@ -35,6 +35,10 @@ export function makeTileRender(gl) {
 
   let timePerPixel = desiredTimePerTile / pixelsPerTile;
 
+  function restartTimer() {
+    firstTileTime = 0;
+  }
+
   function reset() {
     currentTile = -1;
     firstTileTime = 0;
@@ -109,21 +113,13 @@ export function makeTileRender(gl) {
   }
 
   return {
-    setSize,
-    reset,
-    nextTile,
-    restartTimer() {
-      firstTileTime = 0;
-    },
     getTimePerPixel() {
       return timePerPixel;
     },
-    getTileWidth() {
-      return tileWidth;
-    },
-    getTileHeight() {
-      return tileHeight;
-    }
+    nextTile,
+    reset,
+    restartTimer,
+    setSize
   };
 }
 
@@ -131,13 +127,10 @@ function pixelsPerTileEstimate(gl) {
   const maxRenderbufferSize = gl.getParameter(gl.MAX_RENDERBUFFER_SIZE);
 
   if (maxRenderbufferSize <= 8192) {
-    console.log(0);
     return 200000;
   } else if (maxRenderbufferSize === 16384) {
-    console.log(1);
     return 400000;
   } else if (maxRenderbufferSize >= 32768) {
-    console.log(2);
     return 600000;
   }
 }
