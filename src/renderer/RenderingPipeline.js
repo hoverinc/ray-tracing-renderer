@@ -80,7 +80,7 @@ export function makeRenderingPipeline({
   }
 
   function setPreviewBufferDimensions() {
-    const desiredTimeForPreview = 8; // 60 fps
+    const desiredTimeForPreview = 8;
     const numPixelsForPreview = desiredTimeForPreview / tileRender.getTimePerPixel();
 
     const aspectRatio = hdrBuffer.width / hdrBuffer.height;
