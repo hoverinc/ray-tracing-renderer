@@ -84,17 +84,10 @@ export function makeTileRender(gl) {
     setTileDimensions(pixelsPerTile);
   }
 
-  let lastTime = Date.now();
-  let sampleTime = 0;
   function nextTile() {
     currentTile++;
 
     if (currentTile % numTiles === 0) {
-      const thisSampleTime = Date.now() - lastTime;
-      sampleTime = 0.9 * sampleTime + 0.1 * thisSampleTime;
-      // console.log('sample time:', sampleTime);
-      lastTime = Date.now();
-
       initTiles();
       currentTile = 0;
     }
