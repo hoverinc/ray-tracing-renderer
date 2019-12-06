@@ -75,7 +75,7 @@ export function generateBackgroundMapFromSceneBackground(background) {
   return backgroundImage;
 }
 
-function setBufferToColor(buffer, color, intensity) {
+function setBufferToColor(buffer, color, intensity = 1) {
   buffer.forEach(function(part, index) {
     const component = index % 3;
     if (component === 0) {
