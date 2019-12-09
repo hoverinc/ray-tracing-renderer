@@ -122,7 +122,7 @@ function makeProgramFromScene({
   }) {
   const { OES_texture_float_linear } = optionalExtensions;
 
-  const { meshes, directionalLights, environmentLights } = decomposeScene(scene);
+  const { meshes, directionalLights, ambientLights, environmentLights } = decomposeScene(scene);
   if (meshes.length === 0) {
     throw 'RayTracingRenderer: Scene contains no renderable meshes.';
   }
@@ -224,7 +224,7 @@ function makeProgramFromScene({
     makeDataTexture(gl, flattenedBvh.buffer, 4)
   );
 
-  const envImage = generateEnvMapFromSceneComponents(directionalLights, environmentLights);
+  const envImage = generateEnvMapFromSceneComponents(directionalLights, ambientLights, environmentLights);
   const envImageTextureObject = makeTexture(gl, {
     data: envImage.data,
     minFilter: OES_texture_float_linear ? gl.LINEAR : gl.NEAREST,
@@ -268,6 +268,7 @@ function makeProgramFromScene({
 function decomposeScene(scene) {
   const meshes = [];
   const directionalLights = [];
+  const ambientLights = [];
   const environmentLights = [];
   scene.traverse(child => {
     if (child.isMesh) {
@@ -283,14 +284,15 @@ function decomposeScene(scene) {
     if (child.isDirectionalLight) {
       directionalLights.push(child);
     }
+    if (child.isAmbientLight) {
+      ambientLights.push(child);
+    }
     if (child.isEnvironmentLight) {
       if (environmentLights.length > 1) {
         console.warn(environmentLights, 'only one environment light can be used per scene');
       }
-      // Valid lights have either an HDR texture map in RGBEEncoding or a valid THREE.Color property
+      // Valid lights have HDR texture map in RGBEEncoding
       if (isHDRTexture(child)) {
-        environmentLights.push(child);
-      } else if (child.color && child.color.isColor) {
         environmentLights.push(child);
       } else {
         console.warn(child, 'environment light does not use color value or map with THREE.RGBEEncoding');
@@ -299,7 +301,7 @@ function decomposeScene(scene) {
   });
 
   return {
-    meshes, directionalLights, environmentLights
+    meshes, directionalLights, ambientLights, environmentLights
   };
 }
 

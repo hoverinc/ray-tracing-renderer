@@ -141,7 +141,7 @@ void bounce(inout Path path, int i) {
     #endif
     #ifdef USE_SHADOW_CATCHER
       if (si.materialType == SHADOW_CATCHER) {
-        path.li += sampleShadowCatcher(si, i, path.ray, path.beta, path.alpha, path.li, path.abort);
+        path.li += sampleShadowCatcher(si, i, path.specularBounce, path.ray, path.beta, path.alpha, path.li, path.abort);
         path.specularBounce = false;
       }
     #endif
