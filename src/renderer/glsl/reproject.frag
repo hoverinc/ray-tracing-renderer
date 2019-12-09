@@ -1,4 +1,4 @@
-import { addDefines } from '../glslUtil';
+import { addDefines, unrollLoop } from '../glslUtil';
 
 export default function({ rayTracingRenderTargets, defines }) {
   return `#version 300 es
@@ -56,16 +56,22 @@ void main() {
   vec4 history;
   float sum;
 
-  // bilinear sampling, rejecting samples that don't have a matching mesh id
-  for (int i = 0; i < 4; i++) {
-    float histMeshId = texelFetch(historyBuffer, ivec3(texel[i], historyBuffer_position), 0).w;
+    // bilinear sampling, rejecting samples that don't have a matching mesh id
 
-    float isValid = histMeshId != currentMeshId ? 0.0 : 1.0;
+  float histMeshId;
+  float isValid;
+  float weight;
 
-    float weight = isValid * weights[i];
+  int i;
+  ${unrollLoop('i', 0, 4, 1, `
+    histMeshId = texelFetch(historyBuffer, ivec3(texel[i], historyBuffer_position), 0).w;
+
+    isValid = histMeshId != currentMeshId ? 0.0 : 1.0;
+
+    weight = isValid * weights[i];
     history += weight * texelFetch(historyBuffer, ivec3(texel[i], historyBuffer_light), 0);
     sum += weight;
-  }
+  `)}
 
   if (sum > 0.0) {
     history /= sum;
@@ -73,20 +79,29 @@ void main() {
     // If all samples of bilinear fail, try a 3x3 box filter
     hTexel = ivec2(hTexelf + 0.5);
 
-    for (int x = -1; x <= 1; x++) {
-      for (int y = -1; y <= 1; y++) {
-        ivec2 texel = hTexel + ivec2(x, y);
+    ivec2 texel;
+    float histMeshId;
+    float isValid;
+    float weight;
+    vec4 h;
 
-        float histMeshId = texelFetch(historyBuffer, ivec3(texel, historyBuffer_position), 0).w;
+    int x;
+    int y;
+    ${unrollLoop('x', -1, 2, 1, `
+      ${unrollLoop('y', -1, 2, 1, `
+        texel = hTexel + ivec2(x, y);
 
-        float isValid = histMeshId != currentMeshId ? 0.0 : 1.0;
+        histMeshId = texelFetch(historyBuffer, ivec3(texel, historyBuffer_position), 0).w;
 
-        float weight = isValid;
-        vec4 h = texelFetch(historyBuffer, ivec3(texel, historyBuffer_light), 0);
+        isValid = histMeshId != currentMeshId ? 0.0 : 1.0;
+
+        weight = isValid;
+        h = texelFetch(historyBuffer, ivec3(texel, historyBuffer_light), 0);
         history += weight * h;
         sum += weight;
-      }
-    }
+      `)}
+    `)}
+
     history = sum > 0.0 ? history / sum : history;
   }
 
