@@ -16,7 +16,7 @@ export function generateBackgroundMapFromSceneBackground(background) {
   let backgroundImage;
 
   if (background.isColor) {
-    backgroundImage = generateSolidMap(DEFAULT_MAP_RESOLUTION.width, DEFAULT_MAP_RESOLUTION.height, background);
+    backgroundImage = generateSolidMap(1, 1, background);
   } else if (background.encoding === THREE.RGBEEncoding) {
       backgroundImage = {
         width: background.image.width,
@@ -30,7 +30,7 @@ export function generateBackgroundMapFromSceneBackground(background) {
 
 export function generateEnvMapFromSceneComponents(directionalLights, ambientLights, environmentLights) {
   let envImage = initializeEnvMap(environmentLights);
-  ambientLights.forEach( light => { addAmbientLightToEnvMap(light, envImage) });
+  ambientLights.forEach( light => { addAmbientLightToEnvMap(light, envImage); });
   directionalLights.forEach( light => { envImage.data = addDirectionalLightToEnvMap(light, envImage); });
 
   return envImage;
@@ -99,7 +99,7 @@ export function addAmbientLightToEnvMap(light, image) {
     else if (component === 2) {
       image.data[index] += color.b * light.intensity;
     }
-  })
+  });
 }
 
 export function addDirectionalLightToEnvMap(light, image) {
