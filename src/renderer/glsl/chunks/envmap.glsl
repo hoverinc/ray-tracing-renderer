@@ -6,6 +6,7 @@ export default function(defines) {
 
 uniform sampler2D envmap;
 uniform sampler2D envmapDistribution;
+uniform sampler2D backgroundMap;
 
 vec2 cartesianToEquirect(vec3 pointOnSphere) {
   float phi = mod(atan(-pointOnSphere.z, -pointOnSphere.x), TWOPI);
@@ -103,6 +104,11 @@ float envmapPdf(vec2 uv) {
 vec3 sampleEnvmapFromDirection(vec3 d) {
   vec2 uv = cartesianToEquirect(d);
   return textureLinear(envmap, uv).rgb;
+}
+
+vec3 sampleBackgroundFromDirection(vec3 d) {
+  vec2 uv = cartesianToEquirect(d);
+  return textureLinear(backgroundMap, uv).rgb;
 }
 
 `;

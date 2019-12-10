@@ -30,7 +30,7 @@ vec3 sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Ray ray, inout
   const int usedSamples = 1;
   sampleIndex += SAMPLES_PER_MATERIAL - usedSamples;
 
-  return bounce == BOUNCES ? beta * sampleEnvmapFromDirection(lightDir) : vec3(0.0);
+  return bounce == BOUNCES ? beta * sampleBackgroundFromDirection(lightDir) : vec3(0.0);
 }
 
 #endif
