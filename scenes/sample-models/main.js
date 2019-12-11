@@ -87,13 +87,15 @@ function resize() {
   }
 }
 
+let animationFrameId;
+
 const tick = () => {
   controls.update();
   camera.focus = controls.target.distanceTo(camera.position);
   stats.begin();
   renderer.render(scene, camera);
   stats.end();
-  requestAnimationFrame(tick);
+  animationFrameId = requestAnimationFrame(tick);
 };
 
 function load(loader, url) {
@@ -231,11 +233,13 @@ async function init() {
     .name('env map');
 
   modelController.onChange(async (value) => {
-    selectModelFromName(value)
+    cancelAnimationFrame(animationFrameId);
+    selectModelFromName(value);
   });
 
   envMapController.onChange(async (value) => {
-    selectEnvMapFromName(value)
+    cancelAnimationFrame(animationFrameId);
+    selectEnvMapFromName(value);
   });
 
   THREE.DefaultLoadingManager.onLoad = tick;
