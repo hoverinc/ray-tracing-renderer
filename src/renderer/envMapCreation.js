@@ -6,13 +6,31 @@ import { clamp } from './util';
 import * as THREE from 'three';
 
 const DEFAULT_MAP_RESOLUTION = {
-  width: 4096,
-  height: 2048,
+  width: 2048,
+  height: 1024,
 };
 
 // Tools for generating and modify env maps for lighting from scene component data
-export function generateEnvMapFromSceneComponents(directionalLights, environmentLights) {
+
+export function generateBackgroundMapFromSceneBackground(background) {
+  let backgroundImage;
+
+  if (background.isColor) {
+    backgroundImage = generateSolidMap(1, 1, background);
+  } else if (background.encoding === THREE.RGBEEncoding) {
+      backgroundImage = {
+        width: background.image.width,
+        height: background.image.height,
+        data: background.image.data,
+      };
+      backgroundImage.data = rgbeToFloat(backgroundImage.data)
+  }
+  return backgroundImage;
+}
+
+export function generateEnvMapFromSceneComponents(directionalLights, ambientLights, environmentLights) {
   let envImage = initializeEnvMap(environmentLights);
+  ambientLights.forEach( light => { addAmbientLightToEnvMap(light, envImage); });
   directionalLights.forEach( light => { envImage.data = addDirectionalLightToEnvMap(light, envImage); });
 
   return envImage;
@@ -25,31 +43,63 @@ export function initializeEnvMap(environmentLights) {
   if (environmentLights.length > 0) {
     // TODO: support multiple environment lights (what if they have different resolutions?)
     const environmentLight = environmentLights[0];
-
     envImage = {
       width: environmentLight.map.image.width,
       height: environmentLight.map.image.height,
       data: environmentLight.map.image.data,
     };
-
     envImage.data = rgbeToFloat(envImage.data, environmentLight.intensity);
   } else {
     // initialize blank map
-    envImage = generateBlankMap(DEFAULT_MAP_RESOLUTION.width, DEFAULT_MAP_RESOLUTION.height);
+    envImage = generateSolidMap(DEFAULT_MAP_RESOLUTION.width, DEFAULT_MAP_RESOLUTION.height);
   }
 
   return envImage;
 }
 
-export function generateBlankMap(width, height) {
+export function generateSolidMap(width, height, color, intensity) {
   const texels = width * height;
   const floatBuffer = new Float32Array(texels * 3);
-
+  if (color && color.isColor) {
+    setBufferToColor(floatBuffer, color, intensity);
+  }
   return {
     width: width,
     height: height,
     data: floatBuffer,
   };
+}
+
+function setBufferToColor(buffer, color, intensity = 1) {
+  buffer.forEach(function(part, index) {
+    const component = index % 3;
+    if (component === 0) {
+      buffer[index] = color.r * intensity;
+    }
+    else if (component === 1) {
+      buffer[index] = color.g * intensity;
+    }
+    else if (component === 2) {
+      buffer[index] = color.b * intensity;
+    }
+  });
+  return buffer;
+}
+
+export function addAmbientLightToEnvMap(light, image) {
+  const color = light.color;
+  image.data.forEach(function(part, index) {
+    const component = index % 3;
+    if (component === 0) {
+      image.data[index] += color.r * light.intensity;
+    }
+    else if (component === 1) {
+      image.data[index] += color.g * light.intensity;
+    }
+    else if (component === 2) {
+      image.data[index] += color.b * light.intensity;
+    }
+  });
 }
 
 export function addDirectionalLightToEnvMap(light, image) {

@@ -5,7 +5,7 @@ import { createShader, createProgram, getUniforms } from './glUtil';
 import { mergeMeshesToGeometry } from './mergeMeshesToGeometry';
 import { bvhAccel, flattenBvh } from './bvhAccel';
 import { envmapDistribution } from './envmapDistribution';
-import { generateEnvMapFromSceneComponents } from './envMapCreation';
+import { generateEnvMapFromSceneComponents, generateBackgroundMapFromSceneBackground } from './envMapCreation';
 import { getTexturesFromMaterials, mergeTexturesFromMaterials } from './texturesFromMaterials';
 import { makeTexture } from './Texture';
 import { uploadBuffers } from './uploadBuffers';
@@ -122,7 +122,7 @@ function makeProgramFromScene({
   }) {
   const { OES_texture_float_linear } = optionalExtensions;
 
-  const { meshes, directionalLights, environmentLights } = decomposeScene(scene);
+  const { meshes, directionalLights, ambientLights, environmentLights } = decomposeScene(scene);
   if (meshes.length === 0) {
     throw 'RayTracingRenderer: Scene contains no renderable meshes.';
   }
@@ -224,15 +224,31 @@ function makeProgramFromScene({
     makeDataTexture(gl, flattenedBvh.buffer, 4)
   );
 
-  const envImage = generateEnvMapFromSceneComponents(directionalLights, environmentLights);
-
-  textureAllocator.bind(uniforms.envmap, makeTexture(gl, {
+  const envImage = generateEnvMapFromSceneComponents(directionalLights, ambientLights, environmentLights);
+  const envImageTextureObject = makeTexture(gl, {
     data: envImage.data,
     minFilter: OES_texture_float_linear ? gl.LINEAR : gl.NEAREST,
     magFilter: OES_texture_float_linear ? gl.LINEAR : gl.NEAREST,
     width: envImage.width,
     height: envImage.height,
-  }));
+  });
+
+  textureAllocator.bind(uniforms.envmap, envImageTextureObject);
+
+  let backgroundImageTextureObject;
+  if (scene.background) {
+    const backgroundImage = generateBackgroundMapFromSceneBackground(scene.background);
+    backgroundImageTextureObject = makeTexture(gl, {
+      data: backgroundImage.data,
+      minFilter: OES_texture_float_linear ? gl.LINEAR : gl.NEAREST,
+      magFilter: OES_texture_float_linear ? gl.LINEAR : gl.NEAREST,
+      width: backgroundImage.width,
+      height: backgroundImage.height,
+    });
+  } else {
+    backgroundImageTextureObject = envImageTextureObject;
+  }
+  textureAllocator.bind(uniforms.backgroundMap, backgroundImageTextureObject);
 
   const distribution = envmapDistribution(envImage);
   textureAllocator.bind(uniforms.envmapDistribution, makeTexture(gl, {
@@ -252,6 +268,7 @@ function makeProgramFromScene({
 function decomposeScene(scene) {
   const meshes = [];
   const directionalLights = [];
+  const ambientLights = [];
   const environmentLights = [];
   scene.traverse(child => {
     if (child.isMesh) {
@@ -267,20 +284,24 @@ function decomposeScene(scene) {
     if (child.isDirectionalLight) {
       directionalLights.push(child);
     }
+    if (child.isAmbientLight) {
+      ambientLights.push(child);
+    }
     if (child.isEnvironmentLight) {
       if (environmentLights.length > 1) {
         console.warn(environmentLights, 'only one environment light can be used per scene');
       }
-      else if (isHDRTexture(child)) {
+      // Valid lights have HDR texture map in RGBEEncoding
+      if (isHDRTexture(child)) {
         environmentLights.push(child);
       } else {
-        console.warn(child, 'environment light does not use THREE.RGBEEncoding');
+        console.warn(child, 'environment light does not use color value or map with THREE.RGBEEncoding');
       }
     }
   });
 
   return {
-    meshes, directionalLights, environmentLights
+    meshes, directionalLights, ambientLights, environmentLights
   };
 }
 
