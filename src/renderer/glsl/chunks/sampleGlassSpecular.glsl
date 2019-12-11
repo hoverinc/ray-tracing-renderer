@@ -30,7 +30,7 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
   const int usedSamples = 1;
   sampleIndex += SAMPLES_PER_MATERIAL - usedSamples;
 
-  path.li += bounce == BOUNCES ? path.beta * sampleEnvmapFromDirection(lightDir) : vec3(0.0);
+  path.li += bounce == BOUNCES ? path.beta * sampleBackgroundFromDirection(lightDir) : vec3(0.0);
 }
 
 #endif

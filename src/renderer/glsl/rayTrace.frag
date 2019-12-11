@@ -131,7 +131,7 @@ void bounce(inout Path path, int i, inout SurfaceInteraction si) {
 
   if (!si.hit) {
     if (path.specularBounce) {
-      path.li += path.beta * sampleEnvmapFromDirection(path.ray.d);
+      path.li += path.beta * sampleBackgroundFromDirection(path.ray.d);
     }
 
     path.abort = true;
