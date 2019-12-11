@@ -61,6 +61,10 @@ void surfaceInteractionFromIntersection(inout SurfaceInteraction si, Triangle tr
 
   si.materialType = int(materials.colorAndMaterialType[materialIndex].w);
 
+  // TODO: meshId should be the actual mesh id instead of the material id, which can be shared amoung meshes.
+  // This will involve storing the mesh id AND the material id in the BVH texture
+  si.meshId = materialIndex + 1; // +1 so that the mesh id is never 0
+
   #if defined(NUM_DIFFUSE_MAPS) || defined(NUM_NORMAL_MAPS) || defined(NUM_PBR_MAPS)
     vec2 uv0 = texelFetch(uvs, i0, 0).xy;
     vec2 uv1 = texelFetch(uvs, i1, 0).xy;

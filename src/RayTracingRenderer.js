@@ -4,6 +4,7 @@ import * as THREE from 'three';
 
 const glRequiredExtensions = [
   'EXT_color_buffer_float', // enables rendering to float buffers
+  'EXT_float_blend',
 ];
 
 const glOptionalExtensions = [
@@ -27,7 +28,6 @@ export function RayTracingRenderer(params = {}) {
 
   let pipeline = null;
   const size = new THREE.Vector2();
-  let renderTime = 22;
   let pixelRatio = 1;
 
   const module = {
@@ -62,7 +62,6 @@ export function RayTracingRenderer(params = {}) {
       }
     };
 
-    module.setRenderTime(renderTime);
     module.setSize(size.width, size.height);
     module.needsUpdate = false;
   }
@@ -105,17 +104,6 @@ export function RayTracingRenderer(params = {}) {
   };
 
   module.getPixelRatio = () => pixelRatio;
-
-  module.setRenderTime = (time) => {
-    renderTime = time;
-    if (pipeline) {
-      pipeline.setRenderTime(time);
-    }
-  };
-
-  module.getRenderTime = () => {
-    return renderTime;
-  };
 
   module.getTotalSamplesRendered = () => {
     if (pipeline) {

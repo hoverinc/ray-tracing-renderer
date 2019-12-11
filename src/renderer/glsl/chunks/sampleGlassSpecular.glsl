@@ -3,8 +3,8 @@ export default function (defines) {
 
 #ifdef USE_GLASS
 
-vec3 sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Ray ray, inout vec3 beta) {
-  vec3 viewDir = -ray.d;
+void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
+  vec3 viewDir = -path.ray.d;
   float cosTheta = dot(si.normal, viewDir);
 
   float F = si.materialType == THIN_GLASS ?
@@ -21,16 +21,16 @@ vec3 sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Ray ray, inout
     lightDir = si.materialType == THIN_GLASS ?
       refract(-viewDir, sign(cosTheta) * si.normal, INV_IOR_THIN) : // thin glass
       refract(-viewDir, sign(cosTheta) * si.normal, cosTheta < 0.0 ? IOR : INV_IOR); // thick glass
-    beta *= si.color;
+    path.beta *= si.color;
   }
 
-  initRay(ray, si.position + EPS * lightDir, lightDir);
+  initRay(path.ray, si.position + EPS * lightDir, lightDir);
 
   // advance sample index by unused stratified samples
   const int usedSamples = 1;
   sampleIndex += SAMPLES_PER_MATERIAL - usedSamples;
 
-  return bounce == BOUNCES ? beta * sampleEnvmapFromDirection(lightDir) : vec3(0.0);
+  path.li += bounce == BOUNCES ? path.beta * sampleBackgroundFromDirection(lightDir) : vec3(0.0);
 }
 
 #endif
