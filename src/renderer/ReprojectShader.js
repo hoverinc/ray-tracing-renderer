@@ -37,7 +37,7 @@ export function makeReprojectShader(params) {
 
   function setBlendAmount(x) {
     gl.useProgram(program);
-    gl.uniform1f(uniforms.blendAmount, clamp(x, 0, 1));
+    gl.uniform1f(uniforms.blendAmount, x);
   }
 
   function setJitter(x, y) {

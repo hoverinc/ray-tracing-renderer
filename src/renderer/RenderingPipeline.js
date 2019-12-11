@@ -73,7 +73,7 @@ export function makeRenderingPipeline({
     linearFiltering: true
   });
 
-  let lastUsedBuffer = reprojectPreviewBuffer;
+  let lastToneMappedBuffer = reprojectPreviewBuffer;
 
   const clearToBlack = new Float32Array([0, 0, 0, 0]);
 
@@ -151,7 +151,7 @@ export function makeRenderingPipeline({
   function toneMapToScreen(buffer) {
     gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
     toneMapShader.draw(buffer.texture);
-    lastUsedBuffer = buffer;
+    lastToneMappedBuffer = buffer;
   }
 
   function renderTile(buffer, x, y, width, height) {
@@ -203,7 +203,7 @@ export function makeRenderingPipeline({
 
       reprojectPreviewBuffer.bind();
       gl.viewport(0, 0, reprojectPreviewBuffer.width, reprojectPreviewBuffer.height);
-      reprojectShader.draw(hdrPreviewBuffer.texture, lastUsedBuffer.texture);
+      reprojectShader.draw(hdrPreviewBuffer.texture, lastToneMappedBuffer.texture);
       reprojectPreviewBuffer.unbind();
 
       toneMapToScreen(reprojectPreviewBuffer);
@@ -223,9 +223,9 @@ export function makeRenderingPipeline({
       if (isLastTile) {
         let blendAmount = clamp(1.0 - sampleCount / maxReprojectedSamples, 0, 1);
         blendAmount *= blendAmount;
-        reprojectShader.setBlendAmount(blendAmount);
 
         if (blendAmount > 0.0) {
+          reprojectShader.setBlendAmount(blendAmount);
           reprojectBuffer.bind();
           gl.viewport(0, 0, reprojectBuffer.width, reprojectBuffer.height);
           reprojectShader.draw(hdrBuffer.texture, reprojectPreviewBuffer.texture);

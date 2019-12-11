@@ -174,12 +174,13 @@ vec4 integrator(inout Ray ray, inout SurfaceInteraction si) {
 
   bounce(path, 1, si);
 
+  SurfaceInteraction indirectSi;
+
   // Manually unroll for loop.
   // Some hardware fails to interate over a GLSL loop, so we provide this workaround
-  SurfaceInteraction indirectSi;
-  ${unrollLoop('i', 2, defines.BOUNCES + 1, 1, `
-  // equivelant to
   // for (int i = 1; i < defines.bounces + 1, i += 1)
+  // equivelant to
+  ${unrollLoop('i', 2, defines.BOUNCES + 1, 1, `
     bounce(path, i, indirectSi);
   `)}
 
