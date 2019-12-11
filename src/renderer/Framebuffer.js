@@ -30,10 +30,12 @@ export function makeFramebuffer(params) {
     width = Math.floor(w);
     height = Math.floor(h);
 
-    if (Array.isArray(renderTarget)) {
-      texture = initMultipleTextures(gl, width, height, linearFiltering, renderTarget);
+    if (renderTarget.isRenderTargets) {
+      // RenderTargets object
+      texture = initArrayTexture(gl, width, height, linearFiltering, renderTarget);
     } else {
-      texture = initSingleTexture(gl, width, height, linearFiltering, renderTarget);
+      // single render target in the form { storage }
+      texture = initTexture(gl, width, height, linearFiltering, renderTarget);
     }
 
     this.unbind();
@@ -62,7 +64,7 @@ export function makeFramebuffer(params) {
   };
 }
 
-function initSingleTexture(gl, width, height, linearFiltering, { storage }) {
+function initTexture(gl, width, height, linearFiltering, { storage }) {
   const texture = makeTexture(gl, {
     width,
     height,
@@ -76,24 +78,22 @@ function initSingleTexture(gl, width, height, linearFiltering, { storage }) {
   return texture;
 }
 
-function initMultipleTextures(gl, width, height, linearFiltering, renderTargets) {
-  const texture = {};
+function initArrayTexture(gl, width, height, linearFiltering, { storage, names }) {
   const drawBuffers = [];
 
-  for (const { name, storage, index } of renderTargets.targets) {
-    const t = makeTexture(gl, {
-      width,
-      height,
-      storage,
-      minFilter: linearFiltering ? gl.LINEAR : gl.NEAREST,
-      magFilter: linearFiltering ? gl.LINEAR : gl.NEAREST,
-      channels: 4
-    });
+  const texture = makeTexture(gl, {
+    width,
+    height,
+    length: names.length,
+    storage: storage,
+    minFilter: linearFiltering ? gl.LINEAR : gl.NEAREST,
+    magFilter: linearFiltering ? gl.LINEAR : gl.NEAREST,
+    channels: 4
+  });
 
-    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0 + index, t.target, t.texture, 0);
-
-    texture[name] = t;
-    drawBuffers.push(gl.COLOR_ATTACHMENT0 + index);
+  for (let i = 0; i < names.length; i++) {
+    gl.framebufferTextureLayer(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0 + i, texture.texture, 0, i);
+    drawBuffers.push(gl.COLOR_ATTACHMENT0 + i);
   }
 
   gl.drawBuffers(drawBuffers);

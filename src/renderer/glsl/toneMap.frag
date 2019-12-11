@@ -1,6 +1,6 @@
 import textureLinear from './chunks/textureLinear.glsl';
 
-export default function(defines) {
+export default function({ rayTracingRenderTargets, defines }) {
   return `#version 300 es
 
 precision mediump float;
@@ -10,7 +10,7 @@ in vec2 vCoord;
 
 out vec4 fragColor;
 
-uniform sampler2D image;
+${rayTracingRenderTargets.get('hdrBuffer')}
 
 ${textureLinear(defines)}
 
@@ -42,7 +42,7 @@ vec3 acesFilmic( vec3 color ) {
 }
 
 void main() {
-  vec4 tex = textureLinear(image, vCoord);
+  vec4 tex = texture(hdrBuffer, vec3(vCoord, hdrBuffer_light));
 
   // alpha channel stores the number of samples progressively rendered
   // divide the sum of light by alpha to obtain average contribution of light

@@ -10,13 +10,15 @@ import sampleGlass from './chunks/sampleGlassSpecular.glsl';
 // import sampleGlass from './chunks/sampleGlassMicrofacet.glsl';
 import { unrollLoop, addDefines } from '../glslUtil';
 
-export default function(defines) {
+export default function({ rayTracingRenderTargets, defines }) {
   return `#version 300 es
 
 precision mediump float;
 precision mediump int;
 
 ${addDefines(defines)}
+
+${rayTracingRenderTargets.set()}
 
 #define PI 3.14159265359
 #define TWOPI 6.28318530718
@@ -60,6 +62,7 @@ struct SurfaceInteraction {
   float roughness;
   float metalness;
   int materialType;
+  int meshId;
 };
 
 struct Camera {
@@ -72,10 +75,9 @@ struct Camera {
 
 uniform Camera camera;
 uniform vec2 pixelSize; // 1 / screenResolution
+uniform vec2 jitter;
 
 in vec2 vCoord;
-
-out vec4 fragColor;
 
 void initRay(inout Ray ray, vec3 origin, vec3 direction) {
   ray.o = origin;
@@ -100,6 +102,16 @@ ivec4 fetchData(isampler2D s, int i, int columnsLog2) {
   return texelFetch(s, unpackTexel(i, columnsLog2), 0);
 }
 
+struct Path {
+  Ray ray;
+  vec3 li;
+  vec3 albedo;
+  float alpha;
+  vec3 beta;
+  bool specularBounce;
+  bool abort;
+};
+
 ${textureLinear(defines)}
 ${intersect(defines)}
 ${random(defines)}
@@ -110,21 +122,12 @@ ${sampleMaterial(defines)}
 ${sampleGlass(defines)}
 ${sampleShadowCatcher(defines)}
 
-struct Path {
-  Ray ray;
-  vec3 li;
-  float alpha;
-  vec3 beta;
-  bool specularBounce;
-  bool abort;
-};
-
-void bounce(inout Path path, int i) {
+void bounce(inout Path path, int i, inout SurfaceInteraction si) {
   if (path.abort) {
     return;
   }
 
-  SurfaceInteraction si = intersectScene(path.ray);
+  si = intersectScene(path.ray);
 
   if (!si.hit) {
     if (path.specularBounce) {
@@ -135,19 +138,16 @@ void bounce(inout Path path, int i) {
   } else {
     #ifdef USE_GLASS
       if (si.materialType == THIN_GLASS || si.materialType == THICK_GLASS) {
-        path.li += sampleGlassSpecular(si, i, path.ray, path.beta);
-        path.specularBounce = true;
+        sampleGlassSpecular(si, i, path);
       }
     #endif
     #ifdef USE_SHADOW_CATCHER
       if (si.materialType == SHADOW_CATCHER) {
-        path.li += sampleShadowCatcher(si, i, path.specularBounce, path.ray, path.beta, path.alpha, path.li, path.abort);
-        path.specularBounce = false;
+        sampleShadowCatcher(si, i, path);
       }
     #endif
     if (si.materialType == STANDARD) {
-      path.li += sampleMaterial(si, i, path.ray, path.beta, path.abort);
-      path.specularBounce = false;
+      sampleMaterial(si, i, path);
     }
 
     // Russian Roulette sampling
@@ -163,7 +163,7 @@ void bounce(inout Path path, int i) {
 
 // Path tracing integrator as described in
 // http://www.pbr-book.org/3ed-2018/Light_Transport_I_Surface_Reflection/Path_Tracing.html#
-vec4 integrator(inout Ray ray) {
+vec4 integrator(inout Ray ray, inout SurfaceInteraction si) {
   Path path;
   path.ray = ray;
   path.li = vec3(0);
@@ -172,13 +172,16 @@ vec4 integrator(inout Ray ray) {
   path.specularBounce = true;
   path.abort = false;
 
+  bounce(path, 1, si);
+
+  SurfaceInteraction indirectSi;
+
   // Manually unroll for loop.
   // Some hardware fails to interate over a GLSL loop, so we provide this workaround
-
-  ${unrollLoop('i', 1, defines.BOUNCES + 1, 1, `
-  // equivelant to
   // for (int i = 1; i < defines.bounces + 1, i += 1)
-    bounce(path, i);
+  // equivelant to
+  ${unrollLoop('i', 2, defines.BOUNCES + 1, 1, `
+    bounce(path, i, indirectSi);
   `)}
 
   return vec4(path.li, path.alpha);
@@ -187,31 +190,41 @@ vec4 integrator(inout Ray ray) {
 void main() {
   initRandom();
 
-  vec2 vCoordAntiAlias = vCoord + pixelSize * (randomSampleVec2() - 0.5);
+  vec2 vCoordAntiAlias = vCoord + jitter;
 
   vec3 direction = normalize(vec3(vCoordAntiAlias - 0.5, -1.0) * vec3(camera.aspect, 1.0, camera.fov));
 
   // Thin lens model with depth-of-field
   // http://www.pbr-book.org/3ed-2018/Camera_Models/Projective_Camera_Models.html#TheThinLensModelandDepthofField
-  vec2 lensPoint = camera.aperture * sampleCircle(randomSampleVec2());
-  vec3 focusPoint = -direction * camera.focus / direction.z; // intersect ray direction with focus plane
+  // vec2 lensPoint = camera.aperture * sampleCircle(randomSampleVec2());
+  // vec3 focusPoint = -direction * camera.focus / direction.z; // intersect ray direction with focus plane
 
-  vec3 origin = vec3(lensPoint, 0.0);
-  direction = normalize(focusPoint - origin);
+  // vec3 origin = vec3(lensPoint, 0.0);
+  // direction = normalize(focusPoint - origin);
 
-  origin = vec3(camera.transform * vec4(origin, 1.0));
+  // origin = vec3(camera.transform * vec4(origin, 1.0));
+  // direction = mat3(camera.transform) * direction;
+
+  vec3 origin = camera.transform[3].xyz;
   direction = mat3(camera.transform) * direction;
 
   Ray cam;
   initRay(cam, origin, direction);
 
-  vec4 liAndAlpha = integrator(cam);
+  SurfaceInteraction si;
+
+  vec4 liAndAlpha = integrator(cam, si);
+
+  if (dot(si.position, si.position) == 0.0) {
+    si.position = origin + direction * RAY_MAX_DISTANCE;
+  }
 
   if (!(liAndAlpha.x < INF && liAndAlpha.x > -EPS)) {
     liAndAlpha = vec4(0, 0, 0, 1);
   }
 
-  fragColor = liAndAlpha;
+  out_light = liAndAlpha;
+  out_position = vec4(si.position, si.meshId);
 
   // Stratified Sampling Sample Count Test
   // ---------------

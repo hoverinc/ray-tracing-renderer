@@ -1,19 +1,22 @@
-import * as THREE from 'three';
-import fragString from './glsl/rayTrace.frag';
-import { EnvironmentLight } from '../EnvironmentLight';
-import { createShader, createProgram, getUniforms } from './glUtil';
-import { mergeMeshesToGeometry } from './mergeMeshesToGeometry';
 import { bvhAccel, flattenBvh } from './bvhAccel';
-import { envmapDistribution } from './envmapDistribution';
-import { generateEnvMapFromSceneComponents, generateBackgroundMapFromSceneBackground } from './envMapCreation';
-import { getTexturesFromMaterials, mergeTexturesFromMaterials } from './texturesFromMaterials';
-import { makeTexture } from './Texture';
-import { uploadBuffers } from './uploadBuffers';
 import { ThinMaterial, ThickMaterial, ShadowCatcherMaterial } from '../constants';
-import { clamp } from './util';
+import { generateEnvMapFromSceneComponents, generateBackgroundMapFromSceneBackground } from './envMapCreation';
+import { envmapDistribution } from './envmapDistribution';
+import { createShader, createProgram, getUniforms } from './glUtil';
+import fragString from './glsl/rayTrace.frag';
+import { mergeMeshesToGeometry } from './mergeMeshesToGeometry';
 import { makeStratifiedSamplerCombined } from './StratifiedSamplerCombined';
+import { makeTexture } from './Texture';
+import { getTexturesFromMaterials, mergeTexturesFromMaterials } from './texturesFromMaterials';
+import * as THREE from 'three';
+import { uploadBuffers } from './uploadBuffers';
+import { clamp } from './util';
+import { makeRenderTargets } from './RenderTargets';
 
-//Important TODO: Refactor this file to get rid of duplicate and confusing code
+export const rayTracingRenderTargets = makeRenderTargets({
+  storage: 'float',
+  names: ['light', 'position']
+});
 
 export function makeRayTracingShader({
     bounces, // number of global illumination bounces
@@ -27,16 +30,18 @@ export function makeRayTracingShader({
   bounces = clamp(bounces, 1, 6);
 
   const samplingDimensions = [];
-  samplingDimensions.push(2, 2); // anti aliasing, depth of field
-  for (let i = 0; i < bounces; i++) {
+
+  for (let i = 1; i <= bounces; i++) {
     // specular or diffuse reflection, light importance sampling, material sampling, next path direction
     samplingDimensions.push(2, 2, 2, 2);
-    if (i >= 1) {
+    if (i >= 2) {
       // russian roulette sampling
       // this step is skipped on the first bounce
       samplingDimensions.push(1);
     }
   }
+
+  let samples;
 
   const { program, uniforms } = makeProgramFromScene({
     bounces, fullscreenQuad, gl, optionalExtensions, samplingDimensions, scene, textureAllocator
@@ -66,7 +71,10 @@ export function makeRayTracingShader({
     gl.uniform1f(uniforms['camera.aperture'], camera.aperture || 0);
   }
 
-  let samples;
+  function setJitter(x, y) {
+    gl.useProgram(program);
+    gl.uniform2f(uniforms.jitter, x, y);
+  }
 
   function nextSeed() {
     gl.useProgram(program);
@@ -89,11 +97,6 @@ export function makeRayTracingShader({
     nextSeed();
   }
 
-  function useStratifiedSampling(stratifiedSampling) {
-    gl.useProgram(program);
-    gl.uniform1f(uniforms.useStratifiedSampling, stratifiedSampling ? 1.0 : 0.0);
-  }
-
   function draw() {
     gl.useProgram(program);
     fullscreenQuad.draw();
@@ -105,10 +108,10 @@ export function makeRayTracingShader({
     draw,
     nextSeed,
     setCamera,
+    setJitter,
     setNoise,
     setSize,
     setStrataCount,
-    useStratifiedSampling
   };
 }
 function makeProgramFromScene({
@@ -143,20 +146,23 @@ function makeProgramFromScene({
   const useShadowCatcher = materials.some(m => m.shadowCatcher);
 
   const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragString({
-    OES_texture_float_linear,
-    BVH_COLUMNS: textureDimensionsFromArray(flattenedBvh.count).columnsLog,
-    INDEX_COLUMNS: textureDimensionsFromArray(numTris).columnsLog,
-    VERTEX_COLUMNS: textureDimensionsFromArray(geometry.attributes.position.count).columnsLog,
-    STACK_SIZE: flattenedBvh.maxDepth,
-    NUM_TRIS: numTris,
-    NUM_MATERIALS: materials.length,
-    NUM_DIFFUSE_MAPS: maps.map.textures.length,
-    NUM_NORMAL_MAPS: maps.normalMap.textures.length,
-    NUM_PBR_MAPS: pbrMap.textures.length,
-    BOUNCES: bounces,
-    USE_GLASS: useGlass,
-    USE_SHADOW_CATCHER: useShadowCatcher,
-    SAMPLING_DIMENSIONS: samplingDimensions.reduce((a, b) => a + b)
+    rayTracingRenderTargets,
+    defines: {
+      OES_texture_float_linear,
+      BVH_COLUMNS: textureDimensionsFromArray(flattenedBvh.count).columnsLog,
+      INDEX_COLUMNS: textureDimensionsFromArray(numTris).columnsLog,
+      VERTEX_COLUMNS: textureDimensionsFromArray(geometry.attributes.position.count).columnsLog,
+      STACK_SIZE: flattenedBvh.maxDepth,
+      NUM_TRIS: numTris,
+      NUM_MATERIALS: materials.length,
+      NUM_DIFFUSE_MAPS: maps.map.textures.length,
+      NUM_NORMAL_MAPS: maps.normalMap.textures.length,
+      NUM_PBR_MAPS: pbrMap.textures.length,
+      BOUNCES: bounces,
+      USE_GLASS: useGlass,
+      USE_SHADOW_CATCHER: useShadowCatcher,
+      SAMPLING_DIMENSIONS: samplingDimensions.reduce((a, b) => a + b)
+    }
   }));
 
   const program = createProgram(gl, fullscreenQuad.vertexShader, fragmentShader);
