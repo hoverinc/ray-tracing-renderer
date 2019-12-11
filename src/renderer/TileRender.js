@@ -31,31 +31,17 @@ export function makeTileRender(gl) {
 
   let pixelsPerTileQuantized = pixelsPerTile;
 
-  let desiredTimePerTile = 22; // 45 fps
+  let desiredTimePerTile = 20;
 
-  let timePerPixelSum = desiredTimePerTile / pixelsPerTile;
-  let samples = 1;
-  let resetSum = true;
+  let timePerPixel = desiredTimePerTile / pixelsPerTile;
 
-  function addToTimePerPixel(t) {
-    if (resetSum) {
-      timePerPixelSum = 0;
-      samples = 0;
-      resetSum = false;
-    }
-
-    timePerPixelSum += t;
-    samples++;
-  }
-
-  function getTimePerPixel() {
-    return timePerPixelSum / samples;
+  function restartTimer() {
+    firstTileTime = 0;
   }
 
   function reset() {
     currentTile = -1;
     firstTileTime = 0;
-    resetSum = true;
   }
 
   function setSize(w, h) {
@@ -81,14 +67,14 @@ export function makeTileRender(gl) {
     if (firstTileTime) {
       const timeElapsed = Date.now() - firstTileTime;
       const timePerTile = timeElapsed / numTiles;
-      const error = desiredTimePerTile - timePerTile;
 
-      // higher number means framerate converges to targetRenderTime faster
-      // if set too high, the framerate fluctuates rapidly with small variations in frame-by-frame performance
-      const convergenceStrength = 1000;
+      const expAvg = 0.5;
 
-      pixelsPerTile = pixelsPerTile + convergenceStrength * error;
-      addToTimePerPixel(timePerTile / pixelsPerTileQuantized);
+      const newPixelsPerTile = pixelsPerTile * desiredTimePerTile / timePerTile;
+      pixelsPerTile = expAvg * pixelsPerTile + (1 - expAvg) * newPixelsPerTile;
+
+      const newTimePerPixel = timePerTile / pixelsPerTileQuantized;
+      timePerPixel = expAvg * timePerPixel + (1 - expAvg) * newTimePerPixel;
     }
 
     firstTileTime = Date.now();
@@ -120,32 +106,24 @@ export function makeTileRender(gl) {
   }
 
   return {
-    setSize,
-    reset,
+    getTimePerPixel() {
+      return timePerPixel;
+    },
     nextTile,
-    getTimePerPixel,
-    restartTimer() {
-      firstTileTime = 0;
-    },
-    setRenderTime(time) {
-      desiredTimePerTile = time;
-    },
+    reset,
+    restartTimer,
+    setSize
   };
 }
 
 function pixelsPerTileEstimate(gl) {
   const maxRenderbufferSize = gl.getParameter(gl.MAX_RENDERBUFFER_SIZE);
-  const maxViewportDims = gl.getParameter(gl.MAX_VIEWPORT_DIMS);
 
   if (maxRenderbufferSize <= 8192) {
-    return 25000;
-  } else if (maxRenderbufferSize === 16384 && maxViewportDims[0] <= 16384) {
-    return 50000;
-  } else if (maxRenderbufferSize === 16384 && maxViewportDims[0] >= 32768) {
-    return 100000;
-  } else if (maxRenderbufferSize >= 32768) {
     return 200000;
-  } else {
-    return 50000;
+  } else if (maxRenderbufferSize === 16384) {
+    return 400000;
+  } else if (maxRenderbufferSize >= 32768) {
+    return 600000;
   }
 }
