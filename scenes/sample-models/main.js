@@ -12,6 +12,10 @@ const ENV_MAPS_SAMPLES = [
     path: `${PREFIX}/scenes/envmaps/blurry-sunset-with-dirlight.hdr`,
     name: 'Sunset + Dir Light',
   },
+  {
+    path: `${PREFIX}/scenes/envmaps/street-by-water.hdr`,
+    name: 'Street by Water',
+  },
 ];
 
 // Sample models from BabylonJS: http://models.babylonjs.com/

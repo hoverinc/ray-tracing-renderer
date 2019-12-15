@@ -49,8 +49,8 @@ const renderer = new RayTracingRenderer();
 ## Introduction
 Ray Tracing Renderer serves as a drop-in replacement to Three.js's [WebGLRenderer](https://threejs.org/docs/#api/en/renderers/WebGLRenderer). By simply swapping renderers, you can get instant photorealistic lighting.
 
-[![](preview.jpg)](https://hover-demos.s3.amazonaws.com/ray-tracing-renderer/readme-example/index.html)
-[(Click to run example)](https://hover-demos.s3.amazonaws.com/ray-tracing-renderer/readme-example/index.html)
+[![](preview.jpg)](https://hoverinc.github.io/ray-tracing-renderer/scenes/webgl-comparison/)
+[(Click to run example)](https://hoverinc.github.io/ray-tracing-renderer/scenes/webgl-comparison/)
 
 Ray Tracing Renderer runs on WebGL2, and does so by implementing a [path tracing](https://en.wikipedia.org/wiki/Path_tracing) algorithm inside a shader. It supports arbitrary Three.js scenes, with some restrictions.
 

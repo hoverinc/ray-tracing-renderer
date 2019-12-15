@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Ray Tracing Example</title>
+  <script src="/node_modules/three/build/three.js"></script>
+  <script src="/node_modules/three/examples/js/loaders/GLTFLoader.js"></script>
+  <script src="/node_modules/three/examples/js/controls/OrbitControls.js"></script>
+  <script src="/node_modules/three/examples/js/loaders/RGBELoader.js"></script>
+  <script src="/node_modules/three/examples/js/loaders/EquirectangularToCubeGenerator.js"></script>
+  <script src="/node_modules/stats.js/build/stats.min.js"></script>
+  <script src="/node_modules/dat.gui/build/dat.gui.min.js"></script>
+  <script src="/build/RayTracingRenderer.js"></script>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+    }
+
+    canvas {
+      display: block;
+    }
+
+    #loading {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+    }
+  </style>
+</head>
+
+<body>
+  <h1 id="loading">Loading...</h1>
+  <script src="main.js"></script>
+</body>
+</html>
