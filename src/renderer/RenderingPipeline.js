@@ -216,6 +216,7 @@ export function makeRenderingPipeline({
       const { x, y, tileWidth, tileHeight, isFirstTile, isLastTile } = tileRender.nextTile();
 
       if (isFirstTile) {
+        sampleRenderedCallback(100);
         sampleCount++;
         updateSeed(hdrBuffer.width, hdrBuffer.height);
       }
