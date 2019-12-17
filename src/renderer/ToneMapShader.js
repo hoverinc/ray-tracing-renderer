@@ -1,6 +1,5 @@
-import fragString from './glsl/toneMap.frag';
-import { createShader, createProgram, getUniforms } from './glUtil';
-import { rayTracingRenderTargets } from './RayTracingShader.js';
+import fragment from './glsl/toneMap.frag';
+import { makeShaderPass } from './ShaderPass';
 import * as THREE from 'three';
 
 const toneMapFunctions = {
@@ -23,24 +22,26 @@ export function makeToneMapShader(params) {
   const { OES_texture_float_linear } = optionalExtensions;
   const { toneMapping, whitePoint, exposure } = toneMappingParams;
 
-  const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragString({
-    rayTracingRenderTargets,
+  const shaderPass = makeShaderPass({
+    gl,
     defines: {
       OES_texture_float_linear,
-      toneMapping: toneMapFunctions[toneMapping] || 'linear',
-      whitePoint: whitePoint.toExponential(), // toExponential allows integers to be represented as GLSL floats
-      exposure: exposure.toExponential()
-    }
-  }));
-  const program = createProgram(gl, fullscreenQuad.vertexShader, fragmentShader);
+      TONE_MAPPING: toneMapFunctions[toneMapping] || 'linear',
+      WHITE_POINT: whitePoint.toExponential(), // toExponential allows integers to be represented as GLSL floats
+      EXPOSURE: exposure.toExponential()
+    },
+    vertex: fullscreenQuad.vertexShader,
+    fragment,
+  });
 
-  const uniforms = getUniforms(gl, program);
+  const program = shaderPass.program;
+
   const hdrBufferLocation = textureAllocator.reserveSlot();
 
   function draw(texture) {
     gl.useProgram(program);
 
-    hdrBufferLocation.bind(uniforms.hdrBuffer, texture);
+    hdrBufferLocation.bind(shaderPass.uniforms.hdrBuffer, texture);
 
     fullscreenQuad.draw();
   }

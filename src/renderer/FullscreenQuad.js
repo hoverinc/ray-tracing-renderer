@@ -1,5 +1,5 @@
 import vertString from './glsl/fullscreenQuad.vert';
-import { createShader } from './glUtil';
+import { compileShader } from './glUtil';
 
 export function makeFullscreenQuad(gl) {
   // TODO: use VAOs
@@ -12,7 +12,7 @@ export function makeFullscreenQuad(gl) {
   gl.enableVertexAttribArray(posLoc);
   gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0);
 
-  const vertexShader = createShader(gl, gl.VERTEX_SHADER, vertString());
+  const vertexShader = compileShader(gl, gl.VERTEX_SHADER, vertString());
 
   function draw() {
     gl.drawArrays(gl.TRIANGLES, 0, 6);

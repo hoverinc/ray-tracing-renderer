@@ -6,7 +6,7 @@ export function loadExtensions(gl, extensions) {
   return supported;
 }
 
-export function createShader(gl, type, source) {
+export function compileShader(gl, type, source) {
   const shader = gl.createShader(type);
   gl.shaderSource(shader, source);
   gl.compileShader(shader);

@@ -1,5 +1,5 @@
 import fragString from './glsl/reproject.frag';
-import { createShader, createProgram, getUniforms } from './glUtil';
+import { compileShader, createProgram, getUniforms } from './glUtil';
 import { rayTracingRenderTargets } from './RayTracingShader';
 import { clamp } from './util';
 import * as THREE from 'three';
@@ -12,7 +12,7 @@ export function makeReprojectShader(params) {
     textureAllocator,
   } = params;
 
-  const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragString({
+  const fragmentShader = compileShader(gl, gl.FRAGMENT_SHADER, fragString({
     rayTracingRenderTargets,
     defines: {
       MAX_SAMPLES: maxReprojectedSamples.toFixed(1)

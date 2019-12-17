@@ -112,7 +112,7 @@ struct Path {
   bool abort;
 };
 
-${textureLinear(defines)}
+${textureLinear}
 ${intersect(defines)}
 ${random(defines)}
 ${envmap(defines)}

@@ -1,8 +1,6 @@
 // Manually performs linear filtering if the extension OES_texture_float_linear is not supported
 
-export default function(defines) {
-  return `
-
+export default `
   vec4 textureLinear(sampler2D map, vec2 uv) {
     #ifdef OES_texture_float_linear
       return texture(map, uv);
@@ -23,4 +21,3 @@ export default function(defines) {
     #endif
   }
 `;
-};

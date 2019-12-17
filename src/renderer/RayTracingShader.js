@@ -2,7 +2,7 @@ import { bvhAccel, flattenBvh } from './bvhAccel';
 import { ThinMaterial, ThickMaterial, ShadowCatcherMaterial } from '../constants';
 import { generateEnvMapFromSceneComponents, generateBackgroundMapFromSceneBackground } from './envMapCreation';
 import { envmapDistribution } from './envmapDistribution';
-import { createShader, createProgram, getUniforms } from './glUtil';
+import { compileShader, createProgram, getUniforms } from './glUtil';
 import fragString from './glsl/rayTrace.frag';
 import { mergeMeshesToGeometry } from './mergeMeshesToGeometry';
 import { makeStratifiedSamplerCombined } from './StratifiedSamplerCombined';
@@ -145,7 +145,7 @@ function makeProgramFromScene({
   const useGlass = materials.some(m => m.transparent);
   const useShadowCatcher = materials.some(m => m.shadowCatcher);
 
-  const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragString({
+  const fragmentShader = compileShader(gl, gl.FRAGMENT_SHADER, fragString({
     rayTracingRenderTargets,
     defines: {
       OES_texture_float_linear,
