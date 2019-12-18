@@ -182,14 +182,19 @@ export function makeRenderingPipeline({
 
   function drawTile(camera) {
     if (!ready) {
+      console.log("NOT READY");
       return;
     }
-
+    console.log("Callback at begin of drawTile");
+    sampleRenderedCallback(sampleCount);
     if (sampleCount === 1) {
+      console.log("FIRST:",camera);
+      console.log("LAST:",lastCamera);
       reprojectShader.setPreviousCamera(lastCamera);
     }
 
     if (!areCamerasEqual(camera, lastCamera)) {
+      console.log("cameras not equal");
       initFirstSample();
       setPreviewBufferDimensions();
 
@@ -213,10 +218,11 @@ export function makeRenderingPipeline({
       clearBuffer(hdrBuffer);
       lastCamera.copy(camera);
     } else {
+      console.log("cameras are equal");
       const { x, y, tileWidth, tileHeight, isFirstTile, isLastTile } = tileRender.nextTile();
 
       if (isFirstTile) {
-        sampleRenderedCallback(100);
+        // sampleRenderedCallback(100);
         sampleCount++;
         updateSeed(hdrBuffer.width, hdrBuffer.height);
       }
