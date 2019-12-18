@@ -42,9 +42,24 @@ export function makeFragmentShader({ defines, fragment, gl }) {
 function makeShaderPassFromProgram(gl, program) {
   const uniforms = getUniforms(gl, program);
 
+  const textures = {};
+
+  function setTexture(name, texture) {
+    if (!uniforms[name]) {
+      console.error('Sampler with name', name, 'does not exist');
+    }
+
+    textures[name] = texture;
+  }
+
   return {
     program,
+    setTexture,
+    textures,
     uniforms,
+    useProgram() {
+      gl.useProgram(program);
+    }
   };
 }
 

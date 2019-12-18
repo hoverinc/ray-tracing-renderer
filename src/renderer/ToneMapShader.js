@@ -1,6 +1,7 @@
 import fragment from './glsl/toneMap.frag';
 import { makeShaderPass } from './ShaderPass';
 import * as THREE from 'three';
+import { makeTextureAllocator2 } from './TextureAllocator2';
 
 const toneMapFunctions = {
   [THREE.LinearToneMapping]: 'linear',
@@ -36,12 +37,12 @@ export function makeToneMapShader(params) {
 
   const program = shaderPass.program;
 
-  const hdrBufferLocation = textureAllocator.reserveSlot();
-
   function draw(texture) {
-    gl.useProgram(program);
+    shaderPass.useProgram();
 
-    hdrBufferLocation.bind(shaderPass.uniforms.hdrBuffer, texture);
+    shaderPass.setTexture('hdrBuffer', texture);
+
+    textureAllocator.bind(shaderPass);
 
     fullscreenQuad.draw();
   }
