@@ -3935,7 +3935,7 @@ void main() {
 
     const gl = canvas.getContext('webgl2', {
       alpha: false,
-      depth: false,
+      deptch: false,
       stencil: false,
       antialias: false,
       powerPreference: 'high-performance',
@@ -3948,6 +3948,8 @@ void main() {
     let pipeline = null;
     const size = new THREE$1.Vector2();
     let pixelRatio = 1;
+    // let renderTime = 22;
+    // let pixelRatio = 1.0;
 
     const module = {
       bounces: 3,
@@ -3981,6 +3983,7 @@ void main() {
         }
       };
 
+      // module.setRenderTime(renderTime);
       module.setSize(size.width, size.height);
       module.needsUpdate = false;
     }
@@ -4024,6 +4027,17 @@ void main() {
 
     module.getPixelRatio = () => pixelRatio;
 
+    // module.setRenderTime = (time) => {
+    //   renderTime = time;
+    //   if (pipeline) {
+    //     pipeline.setRenderTime(time);
+    //   }
+    // };
+
+    // module.getRenderTime = () => {
+    //   return renderTime;
+    // };
+
     module.getTotalSamplesRendered = () => {
       if (pipeline) {
         return pipeline.getTotalSamplesRendered();
@@ -4038,6 +4052,7 @@ void main() {
 
     let lastFocus = false;
     module.render = (scene, camera) => {
+      console.log("RENDERING");
       if (!module.renderWhenOffFocus) {
         const hasFocus = document.hasFocus();
         if (!hasFocus) {

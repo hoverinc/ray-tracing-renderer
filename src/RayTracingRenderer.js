@@ -16,7 +16,7 @@ export function RayTracingRenderer(params = {}) {
 
   const gl = canvas.getContext('webgl2', {
     alpha: false,
-    depth: false,
+    deptch: false,
     stencil: false,
     antialias: false,
     powerPreference: 'high-performance',
@@ -29,6 +29,8 @@ export function RayTracingRenderer(params = {}) {
   let pipeline = null;
   const size = new THREE.Vector2();
   let pixelRatio = 1;
+  // let renderTime = 22;
+  // let pixelRatio = 1.0;
 
   const module = {
     bounces: 3,
@@ -62,6 +64,7 @@ export function RayTracingRenderer(params = {}) {
       }
     };
 
+    // module.setRenderTime(renderTime);
     module.setSize(size.width, size.height);
     module.needsUpdate = false;
   }
@@ -105,6 +108,17 @@ export function RayTracingRenderer(params = {}) {
 
   module.getPixelRatio = () => pixelRatio;
 
+  // module.setRenderTime = (time) => {
+  //   renderTime = time;
+  //   if (pipeline) {
+  //     pipeline.setRenderTime(time);
+  //   }
+  // };
+
+  // module.getRenderTime = () => {
+  //   return renderTime;
+  // };
+
   module.getTotalSamplesRendered = () => {
     if (pipeline) {
       return pipeline.getTotalSamplesRendered();
@@ -119,6 +133,7 @@ export function RayTracingRenderer(params = {}) {
 
   let lastFocus = false;
   module.render = (scene, camera) => {
+    console.log("RENDERING");
     if (!module.renderWhenOffFocus) {
       const hasFocus = document.hasFocus();
       if (!hasFocus) {
