@@ -3808,7 +3808,7 @@ void main() {
         reprojectPreviewBuffer.unbind();
 
         toneMapToScreen(reprojectPreviewBuffer);
-
+        sampleRenderedCallback(sampleCount);
         clearBuffer(hdrBuffer);
         lastCamera.copy(camera);
       } else {
