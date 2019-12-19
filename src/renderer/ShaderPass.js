@@ -64,7 +64,6 @@ function makeShaderPassFromProgram(gl, program) {
 }
 
 function makeShaderStage(gl, type, shader, defines) {
-
   let str = '#version 300 es\nprecision mediump float;\nprecision mediump int;\n';
 
   str += addDefines(defines);
@@ -122,7 +121,7 @@ function addOutputs(outputs) {
 function addIncludes(includes) {
   let str = '';
 
-  if (Array.isArray(includes)) {
+  if (!Array.isArray(includes)) {
     return str;
   }
 

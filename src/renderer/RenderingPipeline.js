@@ -32,7 +32,7 @@ export function makeRenderingPipeline({
 
   const rayTracingShader = makeRayTracingShader({bounces, fullscreenQuad, gl, optionalExtensions, scene, textureAllocator});
 
-  const reprojectShader = makeReprojectShader({ fullscreenQuad, gl, maxReprojectedSamples, textureAllocator });
+  const reprojectShader = makeReprojectShader({ fullscreenQuad, gl, maxReprojectedSamples, textureAllocator: textureAllocator2 });
 
   const toneMapShader = makeToneMapShader({
     fullscreenQuad, gl, optionalExtensions, textureAllocator: textureAllocator2, toneMappingParams

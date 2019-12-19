@@ -1,7 +1,6 @@
 import fragment from './glsl/toneMap.frag';
 import { makeShaderPass } from './ShaderPass';
 import * as THREE from 'three';
-import { makeTextureAllocator2 } from './TextureAllocator2';
 
 const toneMapFunctions = {
   [THREE.LinearToneMapping]: 'linear',
@@ -15,18 +14,18 @@ export function makeToneMapShader(params) {
   const {
     fullscreenQuad,
     gl,
-    optionalExtensions,
+    // optionalExtensions,
     textureAllocator,
     toneMappingParams
   } = params;
 
-  const { OES_texture_float_linear } = optionalExtensions;
+  // const { OES_texture_float_linear } = optionalExtensions;
   const { toneMapping, whitePoint, exposure } = toneMappingParams;
 
   const shaderPass = makeShaderPass({
     gl,
     defines: {
-      OES_texture_float_linear,
+      // OES_texture_float_linear,
       TONE_MAPPING: toneMapFunctions[toneMapping] || 'linear',
       WHITE_POINT: whitePoint.toExponential(), // toExponential allows integers to be represented as GLSL floats
       EXPOSURE: exposure.toExponential()
@@ -34,8 +33,6 @@ export function makeToneMapShader(params) {
     vertex: fullscreenQuad.vertexShader,
     fragment,
   });
-
-  const program = shaderPass.program;
 
   function draw(texture) {
     shaderPass.useProgram();

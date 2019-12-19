@@ -1,7 +1,5 @@
-import fragString from './glsl/reproject.frag';
-import { compileShader, createProgram, getUniforms } from './glUtil';
-import { rayTracingRenderTargets } from './RayTracingShader';
-import { clamp } from './util';
+import fragment from './glsl/reproject.frag';
+import { makeShaderPass } from './ShaderPass';
 import * as THREE from 'three';
 
 export function makeReprojectShader(params) {
@@ -12,44 +10,42 @@ export function makeReprojectShader(params) {
     textureAllocator,
   } = params;
 
-  const fragmentShader = compileShader(gl, gl.FRAGMENT_SHADER, fragString({
-    rayTracingRenderTargets,
-    defines: {
-      MAX_SAMPLES: maxReprojectedSamples.toFixed(1)
-    }
-  }));
-
-  const program = createProgram(gl, fullscreenQuad.vertexShader, fragmentShader);
-  const uniforms = getUniforms(gl, program);
-
-  const hdrBufferLocation = textureAllocator.reserveSlot();
-  const historyBufferLocation = textureAllocator.reserveSlot();
+  const shaderPass = makeShaderPass({
+      gl,
+      defines: {
+        MAX_SAMPLES: maxReprojectedSamples.toFixed(1)
+      },
+      vertex: fullscreenQuad.vertexShader,
+      fragment
+    });
 
   const historyCamera = new THREE.Matrix4();
 
   function setPreviousCamera(camera) {
-    gl.useProgram(program);
+    shaderPass.useProgram();
 
     historyCamera.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
 
-    gl.uniformMatrix4fv(uniforms.historyCamera, false, historyCamera.elements);
+    gl.uniformMatrix4fv(shaderPass.uniforms.historyCamera, false, historyCamera.elements);
   }
 
   function setBlendAmount(x) {
-    gl.useProgram(program);
-    gl.uniform1f(uniforms.blendAmount, x);
+    shaderPass.useProgram();
+    gl.uniform1f(shaderPass.uniforms.blendAmount, x);
   }
 
   function setJitter(x, y) {
-    gl.useProgram(program);
-    gl.uniform2f(uniforms.jitter, x, y);
+    shaderPass.useProgram();
+    gl.uniform2f(shaderPass.uniforms.jitter, x, y);
   }
 
   function draw(hdrBuffer, historyBuffer) {
-    gl.useProgram(program);
+    shaderPass.useProgram();
 
-    hdrBufferLocation.bind(uniforms.hdrBuffer, hdrBuffer);
-    historyBufferLocation.bind(uniforms.historyBuffer, historyBuffer);
+    shaderPass.setTexture('hdrBuffer', hdrBuffer);
+    shaderPass.setTexture('historyBuffer', historyBuffer);
+
+    textureAllocator.bind(shaderPass);
 
     fullscreenQuad.draw();
   }
