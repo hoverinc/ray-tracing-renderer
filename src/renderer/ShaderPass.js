@@ -64,6 +64,8 @@ function makeShaderPassFromProgram(gl, program) {
 }
 
 function makeShaderStage(gl, type, shader, defines) {
+
+
   let str = '#version 300 es\nprecision mediump float;\nprecision mediump int;\n';
 
   str += addDefines(defines);
@@ -72,9 +74,11 @@ function makeShaderStage(gl, type, shader, defines) {
     str += addOutputs(shader.outputs);
   }
 
-  str += addIncludes(shader.includes);
+  str += addIncludes(shader.includes, defines);
 
-  if (typeof shader.source === 'string') {
+  if (typeof shader.source === 'function') {
+    str += shader.source(defines);
+  } else if (typeof shader.source === 'string') {
     str += shader.source;
   } else {
     console.error('Provide a shader source string');
@@ -118,7 +122,7 @@ function addOutputs(outputs) {
   return str;
 }
 
-function addIncludes(includes) {
+function addIncludes(includes, defines) {
   let str = '';
 
   if (!Array.isArray(includes)) {
@@ -126,7 +130,11 @@ function addIncludes(includes) {
   }
 
   for (let include of includes) {
-    str += include;
+    if (typeof include === 'function') {
+      str += include(defines);
+    } else {
+      str += include;
+    }
   }
 
   return str;

@@ -52,12 +52,6 @@ export default `
     float aperture;
   };
 
-  uniform Camera camera;
-  uniform vec2 pixelSize; // 1 / screenResolution
-  uniform vec2 jitter;
-
-  in vec2 vCoord;
-
   void initRay(inout Ray ray, vec3 origin, vec3 direction) {
     ray.o = origin;
     ray.d = direction;
@@ -90,4 +84,10 @@ export default `
     bool specularBounce;
     bool abort;
   };
+
+  uniform Camera camera;
+  uniform vec2 pixelSize; // 1 / screenResolution
+  uniform vec2 jitter;
+
+  in vec2 vCoord;
 `;
