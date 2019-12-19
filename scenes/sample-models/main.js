@@ -1,17 +1,13 @@
-const ORIGIN = window.location.origin;
-const REMOTE_ORIGIN = 'https://hoverinc.github.io/ray-tracing-renderer/';
-const PREFIX = ORIGIN.includes('localhost') ? ORIGIN : REMOTE_ORIGIN;
-
 // Envinronment maps
 const ENV_MAPS_SAMPLES = [
   {
-    path: `${PREFIX}/scenes/envmaps/gray-background-with-dirlight.hdr`,
+    path: '../envmaps/gray-background-with-dirlight.hdr',
     name: 'Gray + Dir Light',
   },
   {
-    path: `${PREFIX}/scenes/envmaps/blurry-sunset-with-dirlight.hdr`,
+    path: '../envmaps/blurry-sunset-with-dirlight.hdr',
     name: 'Sunset + Dir Light',
-  },
+  }
 ];
 
 // Sample models from BabylonJS: http://models.babylonjs.com/

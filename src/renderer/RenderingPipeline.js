@@ -4,10 +4,8 @@ import { makeToneMapShader } from './ToneMapShader';
 import { makeFramebuffer } from './Framebuffer';
 import { numberArraysEqual, clamp } from './util';
 import { makeTileRender } from './TileRender';
-import { LensCamera } from '../LensCamera';
 import { makeTextureAllocator } from './TextureAllocator';
 import { makeReprojectShader } from './ReprojectShader';
-import * as THREE from 'three';
 import noiseBase64 from './texture/noise';
 import { PerspectiveCamera } from 'three';
 
@@ -92,6 +90,10 @@ export function makeRenderingPipeline({
   const tileRender = makeTileRender(gl);
 
   const lastCamera = new PerspectiveCamera();
+
+  // an initial camera position of 0 causes division by zero in the reprojection shader
+  lastCamera.position.set(1, 1, 1);
+  lastCamera.updateMatrixWorld();
 
   let previewCount = 1;
   let inPreviewMode = true;
