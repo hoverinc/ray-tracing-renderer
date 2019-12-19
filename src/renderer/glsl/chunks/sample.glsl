@@ -1,5 +1,4 @@
-export default function(defines) {
-  return `
+export default `
 
 // https://graphics.pixar.com/library/OrthonormalB/paper.pdf
 mat3 orthonormalBasis(vec3 n) {
@@ -55,4 +54,3 @@ float powerHeuristic(float f, float g) {
 }
 
 `;
-};

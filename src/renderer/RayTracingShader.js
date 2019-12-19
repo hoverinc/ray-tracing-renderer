@@ -2,9 +2,9 @@ import { bvhAccel, flattenBvh } from './bvhAccel';
 import { ThinMaterial, ThickMaterial, ShadowCatcherMaterial } from '../constants';
 import { generateEnvMapFromSceneComponents, generateBackgroundMapFromSceneBackground } from './envMapCreation';
 import { envmapDistribution } from './envmapDistribution';
-import { compileShader, createProgram, getUniforms } from './glUtil';
-import fragString from './glsl/rayTrace.frag';
+import fragment from './glsl/rayTrace.frag';
 import { mergeMeshesToGeometry } from './mergeMeshesToGeometry';
+import { makeShaderPass } from './ShaderPass';
 import { makeStratifiedSamplerCombined } from './StratifiedSamplerCombined';
 import { makeTexture } from './Texture';
 import { getTexturesFromMaterials, mergeTexturesFromMaterials } from './texturesFromMaterials';
@@ -43,18 +43,20 @@ export function makeRayTracingShader({
 
   let samples;
 
-  const { program, uniforms } = makeProgramFromScene({
-    bounces, fullscreenQuad, gl, optionalExtensions, samplingDimensions, scene, textureAllocator
+  const shaderPass = makeShaderPassFromScene({
+    bounces, fullscreenQuad, gl, optionalExtensions, samplingDimensions, scene
   });
 
+  const uniforms = shaderPass.uniforms;
+
   function setSize(width, height) {
-    gl.useProgram(program);
+    shaderPass.useProgram();
     gl.uniform2f(uniforms.pixelSize, 1 / width, 1 / height);
   }
 
   // noiseImage is a 32-bit PNG image
   function setNoise(noiseImage) {
-    textureAllocator.bind(uniforms.noise, makeTexture(gl, {
+    shaderPass.setTexture('noise', makeTexture(gl, {
       data: noiseImage,
       minFilter: gl.NEAREST,
       magFilter: gl.NEAREST,
@@ -63,7 +65,7 @@ export function makeRayTracingShader({
   }
 
   function setCamera(camera) {
-    gl.useProgram(program);
+    shaderPass.useProgram();
     gl.uniformMatrix4fv(uniforms['camera.transform'], false, camera.matrixWorld.elements);
     gl.uniform1f(uniforms['camera.aspect'], camera.aspect);
     gl.uniform1f(uniforms['camera.fov'], 0.5 / Math.tan(0.5 * Math.PI * camera.fov / 180));
@@ -72,17 +74,17 @@ export function makeRayTracingShader({
   }
 
   function setJitter(x, y) {
-    gl.useProgram(program);
+    shaderPass.useProgram();
     gl.uniform2f(uniforms.jitter, x, y);
   }
 
   function nextSeed() {
-    gl.useProgram(program);
+    shaderPass.useProgram();
     gl.uniform1fv(uniforms['stratifiedSamples[0]'], samples.next());
   }
 
   function setStrataCount(strataCount) {
-    gl.useProgram(program);
+    shaderPass.useProgram();
 
     if (strataCount > 1 && strataCount !== samples.strataCount) {
       // reinitailizing random has a performance cost. we can skip it if
@@ -98,7 +100,8 @@ export function makeRayTracingShader({
   }
 
   function draw() {
-    gl.useProgram(program);
+    shaderPass.useProgram();
+    textureAllocator.bind(shaderPass);
     fullscreenQuad.draw();
   }
 
@@ -114,14 +117,13 @@ export function makeRayTracingShader({
     setStrataCount,
   };
 }
-function makeProgramFromScene({
+function makeShaderPassFromScene({
     bounces,
     fullscreenQuad,
     gl,
     optionalExtensions,
     samplingDimensions,
     scene,
-    textureAllocator
   }) {
   const { OES_texture_float_linear } = optionalExtensions;
 
@@ -145,8 +147,8 @@ function makeProgramFromScene({
   const useGlass = materials.some(m => m.transparent);
   const useShadowCatcher = materials.some(m => m.shadowCatcher);
 
-  const fragmentShader = compileShader(gl, gl.FRAGMENT_SHADER, fragString({
-    rayTracingRenderTargets,
+  const shaderPass = makeShaderPass({
+    gl,
     defines: {
       OES_texture_float_linear,
       BVH_COLUMNS: textureDimensionsFromArray(flattenedBvh.count).columnsLog,
@@ -157,18 +159,18 @@ function makeProgramFromScene({
       NUM_MATERIALS: materials.length,
       NUM_DIFFUSE_MAPS: maps.map.textures.length,
       NUM_NORMAL_MAPS: maps.normalMap.textures.length,
+      NUM_DIFFUSE_NORMAL_MAPS: Math.max(maps.map.textures.length, maps.normalMap.textures.length),
       NUM_PBR_MAPS: pbrMap.textures.length,
       BOUNCES: bounces,
       USE_GLASS: useGlass,
       USE_SHADOW_CATCHER: useShadowCatcher,
       SAMPLING_DIMENSIONS: samplingDimensions.reduce((a, b) => a + b)
-    }
-  }));
+    },
+    fragment,
+    vertex: fullscreenQuad.vertexShader
+  });
 
-  const program = createProgram(gl, fullscreenQuad.vertexShader, fragmentShader);
-  gl.useProgram(program);
-
-  const uniforms = getUniforms(gl, program);
+  shaderPass.useProgram();
 
   const bufferData = {};
 
@@ -188,47 +190,35 @@ function makeProgramFromScene({
 
   if (maps.map.textures.length > 0) {
     const { relativeSizes, texture } = makeTextureArray(gl, maps.map.textures, true);
-    textureAllocator.bind(uniforms.diffuseMap, texture);
+    shaderPass.setTexture('diffuseMap', texture);
     bufferData.diffuseMapSize = relativeSizes;
     bufferData.diffuseMapIndex = maps.map.indices;
   }
 
   if (maps.normalMap.textures.length > 0) {
     const { relativeSizes, texture } = makeTextureArray(gl, maps.normalMap.textures, false);
-    textureAllocator.bind(uniforms.normalMap, texture);
+    shaderPass.setTexture('normalMap', texture);
     bufferData.normalMapSize = relativeSizes;
     bufferData.normalMapIndex = maps.normalMap.indices;
   }
 
   if (pbrMap.textures.length > 0) {
     const { relativeSizes, texture } = makeTextureArray(gl, pbrMap.textures, false);
-    textureAllocator.bind(uniforms.pbrMap, texture);
+    shaderPass.setTexture('pbrMap', texture);
     bufferData.pbrMapSize = relativeSizes;
     bufferData.roughnessMapIndex = pbrMap.indices.roughnessMap;
     bufferData.metalnessMapIndex = pbrMap.indices.metalnessMap;
   }
 
-  uploadBuffers(gl, program, bufferData);
+  uploadBuffers(gl, shaderPass.program, bufferData);
 
-  textureAllocator.bind(
-    uniforms.positions,
-    makeDataTexture(gl, geometry.getAttribute('position').array, 3)
-  );
+  shaderPass.setTexture('positions', makeDataTexture(gl, geometry.getAttribute('position').array, 3));
 
-  textureAllocator.bind(
-    uniforms.normals,
-    makeDataTexture(gl, geometry.getAttribute('normal').array, 3)
-  );
+  shaderPass.setTexture('normals', makeDataTexture(gl, geometry.getAttribute('normal').array, 3));
 
-  textureAllocator.bind(
-    uniforms.uvs,
-    makeDataTexture(gl, geometry.getAttribute('uv').array, 2)
-  );
+  shaderPass.setTexture('uvs', makeDataTexture(gl, geometry.getAttribute('uv').array, 2));
 
-  textureAllocator.bind(
-    uniforms.bvh,
-    makeDataTexture(gl, flattenedBvh.buffer, 4)
-  );
+  shaderPass.setTexture('bvh', makeDataTexture(gl, flattenedBvh.buffer, 4));
 
   const envImage = generateEnvMapFromSceneComponents(directionalLights, ambientLights, environmentLights);
   const envImageTextureObject = makeTexture(gl, {
@@ -239,7 +229,7 @@ function makeProgramFromScene({
     height: envImage.height,
   });
 
-  textureAllocator.bind(uniforms.envmap, envImageTextureObject);
+  shaderPass.setTexture('envmap', envImageTextureObject);
 
   let backgroundImageTextureObject;
   if (scene.background) {
@@ -254,10 +244,12 @@ function makeProgramFromScene({
   } else {
     backgroundImageTextureObject = envImageTextureObject;
   }
-  textureAllocator.bind(uniforms.backgroundMap, backgroundImageTextureObject);
+
+  shaderPass.setTexture('backgroundMap', backgroundImageTextureObject);
 
   const distribution = envmapDistribution(envImage);
-  textureAllocator.bind(uniforms.envmapDistribution, makeTexture(gl, {
+
+  shaderPass.setTexture('envmapDistribution', makeTexture(gl, {
     data: distribution.data,
     minFilter: gl.NEAREST,
     magFilter: gl.NEAREST,
@@ -265,10 +257,7 @@ function makeProgramFromScene({
     height: distribution.height,
   }));
 
-  return {
-    program,
-    uniforms,
-  };
+  return shaderPass;
 }
 
 function decomposeScene(scene) {

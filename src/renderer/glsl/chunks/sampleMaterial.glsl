@@ -1,8 +1,7 @@
 // Estimate the direct lighting integral using multiple importance sampling
 // http://www.pbr-book.org/3ed-2018/Light_Transport_I_Surface_Reflection/Direct_Lighting.html#EstimatingtheDirectLightingIntegral
 
-export default function(defines) {
-  return `
+export default `
 
 vec3 importanceSampleLight(SurfaceInteraction si, vec3 viewDir, bool lastBounce, vec2 random) {
   vec3 li;
@@ -120,4 +119,3 @@ void sampleMaterial(SurfaceInteraction si, int bounce, inout Path path) {
 }
 
 `;
-}

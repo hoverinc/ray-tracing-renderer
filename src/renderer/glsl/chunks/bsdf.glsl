@@ -1,5 +1,4 @@
-export default function(defines) {
-  return `
+export default `
 
 // Computes the exact value of the Fresnel factor
 // https://seblagarde.wordpress.com/2013/04/29/memo-on-fresnel-equations/
@@ -93,4 +92,3 @@ vec3 materialBrdf(SurfaceInteraction si, vec3 viewDir, vec3 lightDir, float cosT
 }
 
 `;
-}

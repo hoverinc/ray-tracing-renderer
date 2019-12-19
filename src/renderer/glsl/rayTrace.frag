@@ -1,3 +1,4 @@
+import core from './chunks/core.glsl';
 import textureLinear from './chunks/textureLinear.glsl';
 import intersect from './chunks/intersect.glsl';
 import random from './chunks/random.glsl';
@@ -8,119 +9,23 @@ import sampleMaterial from './chunks/sampleMaterial.glsl';
 import sampleShadowCatcher from './chunks/sampleShadowCatcher.glsl';
 import sampleGlass from './chunks/sampleGlassSpecular.glsl';
 // import sampleGlass from './chunks/sampleGlassMicrofacet.glsl';
-import { unrollLoop, addDefines } from '../glslUtil';
+import { unrollLoop } from '../glslUtil';
 
-export default function({ rayTracingRenderTargets, defines }) {
-  return `#version 300 es
-
-precision mediump float;
-precision mediump int;
-
-${addDefines(defines)}
-
-${rayTracingRenderTargets.set()}
-
-#define PI 3.14159265359
-#define TWOPI 6.28318530718
-#define INVPI 0.31830988618
-#define INVPI2 0.10132118364
-#define EPS 0.0005
-#define INF 1.0e999
-#define RAY_MAX_DISTANCE 9999.0
-
-#define STANDARD 0
-#define THIN_GLASS 1
-#define THICK_GLASS 2
-#define SHADOW_CATCHER 3
-
-#define SAMPLES_PER_MATERIAL 8
-
-const float IOR = 1.5;
-const float INV_IOR = 1.0 / IOR;
-
-const float IOR_THIN = 1.015;
-const float INV_IOR_THIN = 1.0 / IOR_THIN;
-
-const float R0 = (1.0 - IOR) * (1.0 - IOR)  / ((1.0 + IOR) * (1.0 + IOR));
-
-// https://www.w3.org/WAI/GL/wiki/Relative_luminance
-const vec3 luminance = vec3(0.2126, 0.7152, 0.0722);
-
-struct Ray {
-  vec3 o;
-  vec3 d;
-  vec3 invD;
-  float tMax;
-};
-
-struct SurfaceInteraction {
-  bool hit;
-  vec3 position;
-  vec3 normal; // smoothed normal from the three triangle vertices
-  vec3 faceNormal; // normal of the triangle
-  vec3 color;
-  float roughness;
-  float metalness;
-  int materialType;
-  int meshId;
-};
-
-struct Camera {
-  mat4 transform;
-  float aspect;
-  float fov;
-  float focus;
-  float aperture;
-};
-
-uniform Camera camera;
-uniform vec2 pixelSize; // 1 / screenResolution
-uniform vec2 jitter;
-
-in vec2 vCoord;
-
-void initRay(inout Ray ray, vec3 origin, vec3 direction) {
-  ray.o = origin;
-  ray.d = direction;
-  ray.invD = 1.0 / ray.d;
-  ray.tMax = RAY_MAX_DISTANCE;
-}
-
-// given the index from a 1D array, retrieve corresponding position from packed 2D texture
-ivec2 unpackTexel(int i, int columnsLog2) {
-  ivec2 u;
-  u.y = i >> columnsLog2; // equivalent to (i / 2^columnsLog2)
-  u.x = i - (u.y << columnsLog2); // equivalent to (i % 2^columnsLog2)
-  return u;
-}
-
-vec4 fetchData(sampler2D s, int i, int columnsLog2) {
-  return texelFetch(s, unpackTexel(i, columnsLog2), 0);
-}
-
-ivec4 fetchData(isampler2D s, int i, int columnsLog2) {
-  return texelFetch(s, unpackTexel(i, columnsLog2), 0);
-}
-
-struct Path {
-  Ray ray;
-  vec3 li;
-  vec3 albedo;
-  float alpha;
-  vec3 beta;
-  bool specularBounce;
-  bool abort;
-};
-
-${textureLinear}
-${intersect(defines)}
-${random(defines)}
-${envmap(defines)}
-${bsdf(defines)}
-${sample(defines)}
-${sampleMaterial(defines)}
-${sampleGlass(defines)}
-${sampleShadowCatcher(defines)}
+export default {
+  includes: [
+    core,
+    textureLinear,
+    intersect,
+    random,
+    envmap,
+    bsdf,
+    sample,
+    sampleMaterial,
+    sampleGlass,
+    sampleShadowCatcher,
+  ],
+  outputs: ['light', 'position'],
+  source: `
 
 void bounce(inout Path path, int i, inout SurfaceInteraction si) {
   if (path.abort) {
@@ -176,13 +81,10 @@ vec4 integrator(inout Ray ray, inout SurfaceInteraction si) {
 
   SurfaceInteraction indirectSi;
 
-  // Manually unroll for loop.
-  // Some hardware fails to interate over a GLSL loop, so we provide this workaround
-  // for (int i = 1; i < defines.bounces + 1, i += 1)
-  // equivelant to
-  ${unrollLoop('i', 2, defines.BOUNCES + 1, 1, `
+  // #pragma unroll_loop
+  for ( int i = 2; i < BOUNCES + 1; i++) {
     bounce(path, i, indirectSi);
-  `)}
+  }
 
   return vec4(path.li, path.alpha);
 }
@@ -244,6 +146,6 @@ void main() {
   // } else if (sampleIndex > SAMPLING_DIMENSIONS) {
   //   fragColor = vec4(1, 0, 0, 1);
   // }
-}
-`;
+  }
+`
 }

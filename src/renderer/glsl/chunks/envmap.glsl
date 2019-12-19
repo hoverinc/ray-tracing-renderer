@@ -1,8 +1,7 @@
 // Sample the environment map using a cumulative distribution function as described in
 // http://www.pbr-book.org/3ed-2018/Light_Transport_I_Surface_Reflection/Sampling_Light_Sources.html#InfiniteAreaLights
 
-export default function(defines) {
-  return `
+export default `
 
 uniform sampler2D envmap;
 uniform sampler2D envmapDistribution;
@@ -112,4 +111,3 @@ vec3 sampleBackgroundFromDirection(vec3 d) {
 }
 
 `;
-}
