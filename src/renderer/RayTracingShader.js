@@ -99,15 +99,19 @@ export function makeRayTracingShader({
     nextSeed();
   }
 
+  function bindTextures() {
+    textureAllocator.bind(shaderPass);
+  }
+
   function draw() {
     shaderPass.useProgram();
-    textureAllocator.bind(shaderPass);
     fullscreenQuad.draw();
   }
 
   samples = makeStratifiedSamplerCombined(1, samplingDimensions);
 
   return {
+    bindTextures,
     draw,
     nextSeed,
     setCamera,

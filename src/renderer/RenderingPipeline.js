@@ -178,6 +178,8 @@ export function makeRenderingPipeline({
     } else {
       rayTracingShader.nextSeed();
     }
+
+    rayTracingShader.bindTextures();
   }
 
   function drawTile(camera) {
@@ -268,6 +270,7 @@ export function makeRenderingPipeline({
 
     updateSeed(hdrBuffer.width, hdrBuffer.height);
 
+    rayTracingShader.bindTextures();
     addSampleToBuffer(hdrBuffer);
 
     let blendAmount = clamp(1.0 - sampleCount / maxReprojectedSamples, 0, 1);
