@@ -1,33 +1,20 @@
 export function makeTextureAllocator(gl) {
-  // texture unit 0 reserved for setting parameters on new textures
-  let nextUnit = 1;
+  function bind(shaderPass) {
+    const textures = shaderPass.textures;
 
-  function bindGl(uniform, { target, texture }, unit) {
-    if (!uniform) {
-      // uniform location does not exist
-      return;
+    let i = 0;
+    for (let name in textures) {
+      const tex = shaderPass.textures[name];
+
+      let unit = 1 + i++;
+
+      gl.activeTexture(gl.TEXTURE0 + unit);
+      gl.bindTexture(tex.target, tex.texture);
+      gl.uniform1i(shaderPass.uniforms[name], unit);
     }
-
-    gl.activeTexture(gl.TEXTURE0 + unit);
-    gl.bindTexture(target, texture);
-    gl.uniform1i(uniform, unit);
-  }
-
-  function bind(uniform, textureObj) {
-    bindGl(uniform, textureObj, nextUnit++);
-  }
-
-  function reserveSlot() {
-    const unit = nextUnit++;
-    return {
-      bind(uniform, textureObj) {
-        bindGl(uniform, textureObj, unit);
-      }
-    };
   }
 
   return {
-    bind,
-    reserveSlot
+    bind
   };
 }

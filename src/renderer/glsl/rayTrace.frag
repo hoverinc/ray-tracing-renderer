@@ -9,7 +9,6 @@ import sampleMaterial from './chunks/sampleMaterial.glsl';
 import sampleShadowCatcher from './chunks/sampleShadowCatcher.glsl';
 import sampleGlass from './chunks/sampleGlassSpecular.glsl';
 // import sampleGlass from './chunks/sampleGlassMicrofacet.glsl';
-import { unrollLoop } from '../glslUtil';
 
 export default {
   includes: [

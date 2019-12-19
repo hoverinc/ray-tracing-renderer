@@ -5,7 +5,6 @@ import { makeFramebuffer } from './Framebuffer';
 import { numberArraysEqual, clamp } from './util';
 import { makeTileRender } from './TileRender';
 import { makeTextureAllocator } from './TextureAllocator';
-import { makeTextureAllocator2 } from './TextureAllocator2';
 import { makeReprojectShader } from './ReprojectShader';
 import noiseBase64 from './texture/noise';
 import { PerspectiveCamera } from 'three';
@@ -28,14 +27,13 @@ export function makeRenderingPipeline({
   const fullscreenQuad = makeFullscreenQuad(gl);
 
   const textureAllocator = makeTextureAllocator(gl);
-  const textureAllocator2 = makeTextureAllocator2(gl);
 
-  const rayTracingShader = makeRayTracingShader({bounces, fullscreenQuad, gl, optionalExtensions, scene, textureAllocator: textureAllocator2});
+  const rayTracingShader = makeRayTracingShader({bounces, fullscreenQuad, gl, optionalExtensions, scene, textureAllocator});
 
-  const reprojectShader = makeReprojectShader({ fullscreenQuad, gl, maxReprojectedSamples, textureAllocator: textureAllocator2 });
+  const reprojectShader = makeReprojectShader({ fullscreenQuad, gl, maxReprojectedSamples, textureAllocator });
 
   const toneMapShader = makeToneMapShader({
-    fullscreenQuad, gl, optionalExtensions, textureAllocator: textureAllocator2, toneMappingParams
+    fullscreenQuad, gl, optionalExtensions, textureAllocator, toneMappingParams
   });
 
   const noiseImage = new Image();
