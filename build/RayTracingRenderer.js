@@ -2,13 +2,14 @@
   typeof exports === 'object' && typeof module !== 'undefined' ? factory(exports, require('three')) :
   typeof define === 'function' && define.amd ? define(['exports', 'three'], factory) :
   (global = global || self, factory(global.RayTracingRenderer = {}, global.THREE));
-}(this, function (exports, THREE$1) { 'use strict';
+}(this, (function (exports, THREE$1) { 'use strict';
 
   const ThinMaterial = 1;
   const ThickMaterial = 2;
   const ShadowCatcherMaterial = 3;
 
   var constants = /*#__PURE__*/Object.freeze({
+    __proto__: null,
     ThinMaterial: ThinMaterial,
     ThickMaterial: ThickMaterial,
     ShadowCatcherMaterial: ShadowCatcherMaterial
@@ -3621,7 +3622,7 @@ void main() {
 
     let ready = false;
 
-    const reprojectDecay = 0.975;
+    const reprojectDecay = 0.95;
     const maxReprojectedSamples = Math.round(reprojectDecay / (1 - reprojectDecay));
 
     const fullscreenQuad = makeFullscreenQuad(gl);
@@ -3649,6 +3650,11 @@ void main() {
       renderTarget: rayTracingRenderTargets,
     });
 
+    let lowResHdrBuffer = makeFramebuffer({
+      gl,
+      renderTarget: rayTracingRenderTargets,
+    });
+
     let hdrPreviewBuffer = makeFramebuffer({
       gl,
       renderTarget: rayTracingRenderTargets,
@@ -3663,6 +3669,12 @@ void main() {
     let reprojectBuffer = makeFramebuffer({
       gl,
       renderTarget: rayTracingRenderTargets
+    });
+
+    let lowResReprojectBuffer = makeFramebuffer({
+      gl,
+      renderTarget: rayTracingRenderTargets,
+      linearFiltering: true
     });
 
     let reprojectPreviewBuffer = makeFramebuffer({
@@ -3680,8 +3692,17 @@ void main() {
 
     const lastCamera = new THREE$1.PerspectiveCamera();
 
+    // an initial camera position of 0 causes division by zero in the reprojection shader
+    lastCamera.position.set(1, 1, 1);
+    lastCamera.updateMatrixWorld();
+
+    let previewCount = 1;
+    let inPreviewMode = true;
+    const numPreviewSamples = 20;
+    let lowResComplete = false;
     // how many samples to render with uniform noise before switching to stratified noise
-    const numUniformSamples = 6;
+    // const numUniformSamples = 3 + numPreviewSamples;
+    const numUniformSamples = 12;
 
     // how many partitions of stratified noise should be created
     // higher number results in faster convergence over time, but with lower quality initial samples
@@ -3689,26 +3710,34 @@ void main() {
 
     let sampleCount = 1;
 
+
     let sampleRenderedCallback = () => {};
 
     function initFirstSample() {
       sampleCount = 1;
+      previewCount = 1;
+      inPreviewMode = true;
       tileRender.reset();
     }
 
     function setPreviewBufferDimensions() {
-      const desiredTimeForPreview = 10;
+      const desiredTimeForPreview = 5;
       const numPixelsForPreview = desiredTimeForPreview / tileRender.getTimePerPixel();
-
       const aspectRatio = hdrBuffer.width / hdrBuffer.height;
       const previewWidth = Math.round(clamp(Math.sqrt(numPixelsForPreview * aspectRatio), 1, hdrBuffer.width));
       const previewHeight = Math.round(clamp(previewWidth / aspectRatio, 1, hdrBuffer.height));
+
+      const numPixelsForLowRes = numPixelsForPreview * 4;
+      const lowResWidth = Math.round(clamp(Math.sqrt(numPixelsForLowRes * aspectRatio), 1, hdrBuffer.width));
+      const lowResHeight = Math.round(clamp(lowResWidth / aspectRatio, 1, hdrBuffer.height));
 
       const diff = Math.abs(previewWidth - hdrPreviewBuffer.width) / previewWidth;
       if (diff > 0.05) { // don't bother resizing if the buffer size is only slightly different
         hdrPreviewBuffer.setSize(previewWidth, previewHeight);
         reprojectPreviewBuffer.setSize(previewWidth, previewHeight);
         historyBuffer.setSize(previewWidth, previewHeight);
+        lowResReprojectBuffer.setSize(lowResWidth, lowResHeight);
+        lowResHdrBuffer.setSize(lowResWidth, lowResHeight);
       }
     }
 
@@ -3809,10 +3838,44 @@ void main() {
         toneMapToScreen(reprojectPreviewBuffer);
 
         clearBuffer(hdrBuffer);
+        clearBuffer(lowResHdrBuffer);
         lastCamera.copy(camera);
-      } else {
-        const { x, y, tileWidth, tileHeight, isFirstTile, isLastTile } = tileRender.nextTile();
 
+      } else if ( previewCount < numPreviewSamples && inPreviewMode ) {
+        // rayTracingShader.setCamera(camera);
+        updateSeed(lowResReprojectBuffer.width, lowResReprojectBuffer.height);
+        addSampleToBuffer(lowResHdrBuffer);
+
+
+        let blendAmount = clamp(1.0 - previewCount / maxReprojectedSamples, 0, 1);
+        blendAmount *= blendAmount;
+        blendAmount = Math.max(blendAmount, 0.01);
+
+        if (blendAmount > 0.0) {
+          reprojectShader.setBlendAmount(reprojectDecay);
+          console.log("blending");
+          lowResReprojectBuffer.bind();
+          gl.viewport(0, 0, lowResReprojectBuffer.width, lowResReprojectBuffer.height);
+          reprojectShader.draw(lowResHdrBuffer.texture, reprojectPreviewBuffer.texture);
+          lowResReprojectBuffer.unbind();
+
+          toneMapToScreen(lowResReprojectBuffer);
+
+          lowResComplete = false;
+        } else {
+          console.log("NO BLENDING IN PREVIEW");
+          toneMapToScreen(lowResHdrBuffer);
+          lowResComplete = true;
+        }
+
+        previewCount++;
+        sampleCount++;
+
+
+      } else {
+        inPreviewMode = false;
+        const { x, y, tileWidth, tileHeight, isFirstTile, isLastTile } = tileRender.nextTile();
+        const histBuffer = lowResComplete ? lowResHdrBuffer : lowResReprojectBuffer;
         if (isFirstTile) {
           sampleCount++;
           updateSeed(hdrBuffer.width, hdrBuffer.height);
@@ -3821,14 +3884,14 @@ void main() {
         renderTile(hdrBuffer, x, y, tileWidth, tileHeight);
 
         if (isLastTile) {
-          let blendAmount = clamp(1.0 - sampleCount / maxReprojectedSamples, 0, 1);
+          let blendAmount = clamp(1.0 - (sampleCount - previewCount) / maxReprojectedSamples, 0, 1);
           blendAmount *= blendAmount;
 
           if (blendAmount > 0.0) {
             reprojectShader.setBlendAmount(blendAmount);
             reprojectBuffer.bind();
             gl.viewport(0, 0, reprojectBuffer.width, reprojectBuffer.height);
-            reprojectShader.draw(hdrBuffer.texture, reprojectPreviewBuffer.texture);
+            reprojectShader.draw(hdrBuffer.texture, histBuffer.texture);
             reprojectBuffer.unbind();
 
             toneMapToScreen(reprojectBuffer);
@@ -4115,4 +4178,4 @@ void main() {
 
   Object.defineProperty(exports, '__esModule', { value: true });
 
-}));
+})));
