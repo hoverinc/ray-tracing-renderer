@@ -3840,6 +3840,7 @@ void main() {
         clearBuffer(hdrBuffer);
         clearBuffer(lowResHdrBuffer);
         lastCamera.copy(camera);
+        sampleRenderedCallback(sampleCount);
 
       } else if ( previewCount < numPreviewSamples && inPreviewMode ) {
         // rayTracingShader.setCamera(camera);
@@ -3860,12 +3861,13 @@ void main() {
           lowResReprojectBuffer.unbind();
 
           toneMapToScreen(lowResReprojectBuffer);
-
+          sampleRenderedCallback(sampleCount);
           lowResComplete = false;
         } else {
           console.log("NO BLENDING IN PREVIEW");
           toneMapToScreen(lowResHdrBuffer);
           lowResComplete = true;
+          sampleRenderedCallback(sampleCount);
         }
 
         previewCount++;
