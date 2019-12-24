@@ -1,17 +1,3 @@
-/*
-makeShaderPass({
-  fragment: GLShader | {outputs: Array[string], source: string}
-  vertex: GLShader | { source: string }
-  defines: Object~
-}) : shader
-
-shader.setTexture(samplerName: string, tex: Texture)
-shader.bindTextures() // calls GlBindTexture on each texture set with setTexture
-
-shader.program : GlProgram
-shader.uniforms: { [uniformName: string] : GLUniformLocation }
-*/
-
 import { compileShader, createProgram, getUniforms } from './glUtil';
 
 export function makeShaderPass(params) {
@@ -28,7 +14,18 @@ export function makeShaderPass(params) {
 
   const program = createProgram(gl, vertexCompiled, fragmentCompiled);
 
-  return makeShaderPassFromProgram(gl, program);
+  let outputs;
+  if (Array.isArray(fragment.outputs)) {
+    outputs = {};
+    for (let i = 0; i < fragment.outputs.length; i++) {
+      outputs[fragment.outputs[i]] = i;
+    }
+  }
+
+  return {
+    ...makeShaderPassFromProgram(gl, program),
+    outputs
+  };
 }
 
 export function makeVertexShader({ defines, gl, vertex }) {
@@ -64,8 +61,6 @@ function makeShaderPassFromProgram(gl, program) {
 }
 
 function makeShaderStage(gl, type, shader, defines) {
-
-
   let str = '#version 300 es\nprecision mediump float;\nprecision mediump int;\n';
 
   str += addDefines(defines);

@@ -6,7 +6,7 @@ outputs: ['color'],
 source: `
   in vec2 vCoord;
 
-  uniform mediump sampler2DArray hdrBuffer;
+  uniform mediump sampler2D hdrBuffer;
 
   // Tonemapping functions from THREE.js
 
@@ -36,7 +36,7 @@ source: `
   }
 
   void main() {
-    vec4 tex = texture(hdrBuffer, vec3(vCoord, 0));
+    vec4 tex = texture(hdrBuffer, vCoord);
 
     // alpha channel stores the number of samples progressively rendered
     // divide the sum of light by alpha to obtain average contribution of light
