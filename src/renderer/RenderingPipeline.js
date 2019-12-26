@@ -8,6 +8,7 @@ import { makeTexture } from './Texture';
 import { makeTextureAllocator } from './TextureAllocator';
 import { makeReprojectShader } from './ReprojectShader';
 import noiseBase64 from './texture/noise';
+import { clamp } from './util';
 import { PerspectiveCamera } from 'three';
 
 // Important TODO: Refactor this file to get rid of duplicate and confusing code
@@ -44,11 +45,15 @@ export function makeRenderingPipeline({
     ready = true;
   };
 
-  let width = 0;
-  let height = 0;
+  let screenWidth = 0;
+  let screenHeight = 0;
+
+  let previewWidth = 0;
+  let previewHeight = 0;
+
+  let previewScale = 1;
 
   let hdrBuffer;
-  let hdrPreviewBuffer;
 
   // let lastToneMappedBuffer = reprojectPreviewBuffer;
 
@@ -88,19 +93,14 @@ export function makeRenderingPipeline({
   }
 
   function setPreviewBufferDimensions() {
-    // const desiredTimeForPreview = 10;
-    // const numPixelsForPreview = desiredTimeForPreview / tileRender.getTimePerPixel();
+    const desiredTimeForPreview = 10;
+    const numPixelsForPreview = desiredTimeForPreview / tileRender.getTimePerPixel();
 
-    // const aspectRatio = hdrBuffer.width / hdrBuffer.height;
-    // const previewWidth = Math.round(clamp(Math.sqrt(numPixelsForPreview * aspectRatio), 1, hdrBuffer.width));
-    // const previewHeight = Math.round(clamp(previewWidth / aspectRatio, 1, hdrBuffer.height));
+    const aspectRatio = screenWidth / screenHeight;
 
-    // const diff = Math.abs(previewWidth - hdrPreviewBuffer.width) / previewWidth;
-    // if (diff > 0.05) { // don't bother resizing if the buffer size is only slightly different
-    //   hdrPreviewBuffer.setSize(previewWidth, previewHeight);
-    //   reprojectPreviewBuffer.setSize(previewWidth, previewHeight);
-    //   historyBuffer.setSize(previewWidth, previewHeight);
-    // }
+    previewWidth = Math.round(clamp(Math.sqrt(numPixelsForPreview * aspectRatio), 1, screenWidth));
+    previewHeight = Math.round(clamp(previewWidth / aspectRatio, 1, screenHeight));
+    previewScale = previewWidth / screenWidth;
   }
 
   function areCamerasEqual(cam1, cam2) {
@@ -116,7 +116,7 @@ export function makeRenderingPipeline({
     buffer.unbind();
   }
 
-  function addSampleToBuffer(buffer) {
+  function addSampleToBuffer(buffer, width, height) {
     buffer.bind();
 
     gl.blendEquation(gl.FUNC_ADD);
@@ -132,23 +132,23 @@ export function makeRenderingPipeline({
     buffer.unbind();
   }
 
-  function newSampleToBuffer(buffer) {
+  function newSampleToBuffer(buffer, width, height) {
     buffer.bind();
     gl.viewport(0, 0, width, height);
     rayTracingShader.draw();
     buffer.unbind();
   }
 
-  function toneMapToScreen(buffer) {
+  function toneMapToScreen(buffer, textureScale) {
     gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
-    toneMapShader.draw(buffer.attachments[rayTracingShader.outputs.light]);
+    toneMapShader.draw(buffer.attachments[rayTracingShader.outputs.light], textureScale);
     // lastToneMappedBuffer = buffer;
   }
 
   function renderTile(buffer, x, y, width, height) {
     gl.scissor(x, y, width, height);
     gl.enable(gl.SCISSOR_TEST);
-    addSampleToBuffer(buffer);
+    addSampleToBuffer(buffer, screenWidth, screenHeight);
     gl.disable(gl.SCISSOR_TEST);
   }
 
@@ -185,8 +185,9 @@ export function makeRenderingPipeline({
       setPreviewBufferDimensions();
 
       rayTracingShader.setCamera(camera);
-      updateSeed(width, height); // scale this
-      newSampleToBuffer(hdrPreviewBuffer);
+
+      updateSeed(previewWidth, previewHeight); // scale this
+      newSampleToBuffer(hdrBuffer, previewWidth, previewHeight);
 
       // reprojectShader.setBlendAmount(reprojectDecay);
 
@@ -201,7 +202,7 @@ export function makeRenderingPipeline({
 
       // toneMapToScreen(reprojectPreviewBuffer);
 
-      toneMapToScreen(hdrPreviewBuffer);
+      toneMapToScreen(hdrBuffer, previewScale);
 
       clearBuffer(hdrBuffer);
       lastCamera.copy(camera);
@@ -210,7 +211,7 @@ export function makeRenderingPipeline({
 
       if (isFirstTile) {
         sampleCount++;
-        updateSeed(width, height);
+        updateSeed(screenWidth, screenHeight);
       }
 
       renderTile(hdrBuffer, x, y, tileWidth, tileHeight);
@@ -228,7 +229,7 @@ export function makeRenderingPipeline({
 
         //   toneMapToScreen(reprojectBuffer);
         // } else {
-          toneMapToScreen(hdrBuffer);
+          toneMapToScreen(hdrBuffer, 1);
         // }
 
         sampleRenderedCallback(sampleCount);
@@ -259,9 +260,9 @@ export function makeRenderingPipeline({
       sampleCount++;
     }
 
-    updateSeed(width, height);
+    updateSeed(screenWidth, screenHeight);
 
-    addSampleToBuffer(hdrBuffer);
+    addSampleToBuffer(hdrBuffer, screenWidth, screenHeight);
 
     // let blendAmount = clamp(1.0 - sampleCount / maxReprojectedSamples, 0, 1);
     // blendAmount *= blendAmount;
@@ -285,8 +286,8 @@ export function makeRenderingPipeline({
   }
 
   function setSize(w, h) {
-    width = w;
-    height = h;
+    screenWidth = w;
+    screenHeight = h;
 
     tileRender.setSize(w, h);
     hdrBuffer = makeRayTracingFrameBuffer(w, h);
@@ -297,7 +298,7 @@ export function makeRenderingPipeline({
   }
 
   return {
-    drawTile: drawFull,
+    drawTile,
     drawFull,
     restartTimer: tileRender.restartTimer,
     setSize,

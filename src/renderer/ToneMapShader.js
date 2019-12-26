@@ -34,8 +34,10 @@ export function makeToneMapShader(params) {
     fragment,
   });
 
-  function draw(texture) {
+  function draw(texture, textureScale) {
     shaderPass.useProgram();
+
+    gl.uniform1f(shaderPass.uniforms.textureScale, textureScale);
 
     shaderPass.setTexture('hdrBuffer', texture);
 
