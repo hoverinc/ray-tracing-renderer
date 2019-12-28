@@ -272,11 +272,9 @@ export function makeRenderingPipeline({
 
     if (!areCamerasEqual(camera, lastCamera)) {
       sampleCount = 1;
-
       rayTracingShader.setCamera(camera);
-
-      clearBuffer(hdrBuffer);
       lastCamera.copy(camera);
+      clearBuffer(hdrBuffer);
     } else {
       sampleCount++;
     }
@@ -285,17 +283,7 @@ export function makeRenderingPipeline({
 
     addSampleToBuffer(hdrBuffer, screenWidth, screenHeight);
 
-    let blendAmount = clamp(1.0 - sampleCount / maxReprojectedSamples, 0, 1);
-    reprojectShader.setBlendAmount(blendAmount);
-
-    let temp;
-    temp = hdrBuffer;
-    hdrBuffer = hdrBufferBack;
-    hdrBufferBack = temp;
-
-    temp = reprojectBuffer;
-    reprojectBuffer = reprojectBufferBack;
-    reprojectBufferBack = temp;
+    reprojectShader.setBlendAmount(1.0);
 
     reprojectBuffer.bind();
     gl.viewport(0, 0, screenWidth, screenHeight);
@@ -308,7 +296,15 @@ export function makeRenderingPipeline({
     reprojectBuffer.unbind();
 
     toneMapToScreen(reprojectBuffer.attachments[0]);
-    // toneMapToScreen(hdrBuffer.attachments[rayTracingShader.outputs.position]);
+
+    let temp;
+    temp = hdrBuffer;
+    hdrBuffer = hdrBufferBack;
+    hdrBufferBack = temp;
+
+    temp = reprojectBuffer;
+    reprojectBuffer = reprojectBufferBack;
+    reprojectBufferBack = temp;
   }
 
   function setSize(w, h) {

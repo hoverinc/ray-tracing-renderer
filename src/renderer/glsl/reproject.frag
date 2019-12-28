@@ -26,7 +26,6 @@ source: `
     float currentMeshId = positionTex.w;
 
     vec2 hCoord = reproject(currentPosition) - jitter;
-    // vec2 hCoord = vCoord;
 
     ivec2 hSize = textureSize(historyPosition, 0);
     vec2 hSizef = vec2(hSize);
@@ -52,50 +51,47 @@ source: `
     vec4 history;
     float sum;
 
-    // history = texture(historyLight, hCoord);
-
     // bilinear sampling, rejecting samples that don't have a matching mesh id
-    // for (int i = 0; i < 4; i++) {
-    //   float histMeshId = texelFetch(historyPosition, texel[i], 0).w;
+    for (int i = 0; i < 4; i++) {
+      float histMeshId = texelFetch(historyPosition, texel[i], 0).w;
 
-    //   // float isValid = histMeshId != currentMeshId ? 0.0 : 1.0;
-    //   float isValid = 1.0;
+      float isValid = histMeshId != currentMeshId ? 0.0 : 1.0;
 
-    //   float weight = isValid * weights[i];
-    //   history += weight * texelFetch(historyLight, texel[i], 0);
-    //   sum += weight;
-    // }
+      float weight = isValid * weights[i];
+      history += weight * texelFetch(historyLight, texel[i], 0);
+      sum += weight;
+    }
 
-    // if (sum > 0.0) {
-    //   history /= sum;
-    // } else {
-    //   // If all samples of bilinear fail, try a 3x3 box filter
-    //   hTexel = ivec2(hTexelf + 0.5);
+    if (sum > 0.0) {
+      history /= sum;
+    } else {
+      // If all samples of bilinear fail, try a 3x3 box filter
+      hTexel = ivec2(hTexelf + 0.5);
 
-    //   for (int x = -1; x <= 1; x++) {
-    //     for (int y = -1; y <= 1; y++) {
-    //       ivec2 texel = hTexel + ivec2(x, y);
+      for (int x = -1; x <= 1; x++) {
+        for (int y = -1; y <= 1; y++) {
+          ivec2 texel = hTexel + ivec2(x, y);
 
-    //       float histMeshId = texelFetch(historyPosition, texel, 0).w;
+          float histMeshId = texelFetch(historyPosition, texel, 0).w;
 
-    //       float isValid = histMeshId != currentMeshId ? 0.0 : 1.0;
+          float isValid = histMeshId != currentMeshId ? 0.0 : 1.0;
 
-    //       float weight = isValid;
-    //       vec4 h = texelFetch(historyLight, texel, 0);
-    //       history += weight * h;
-    //       sum += weight;
-    //     }
-    //   }
-    //   history = sum > 0.0 ? history / sum : history;
-    // }
+          float weight = isValid;
+          vec4 h = texelFetch(historyLight, texel, 0);
+          history += weight * h;
+          sum += weight;
+        }
+      }
+      history = sum > 0.0 ? history / sum : history;
+    }
 
     if (history.w > MAX_SAMPLES) {
       history.xyz *= MAX_SAMPLES / history.w;
       history.w = MAX_SAMPLES;
     }
 
-    // out_light = blendAmount * history + lightTex;
-    out_light = vec4(hCoord - vCoord, 0, 1);
+    out_light = blendAmount * history + lightTex;
+    // out_light = vec4(abs(hCoord - vCoord), 0, 1);
   }
 `
 }
