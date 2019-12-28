@@ -2,16 +2,14 @@ import fragment from './glsl/reproject.frag';
 import { makeShaderPass } from './ShaderPass';
 import * as THREE from 'three';
 
-export function makeReprojectShader(params) {
+export function makeReprojectShader(gl, params) {
   const {
     fullscreenQuad,
-    gl,
     maxReprojectedSamples,
     textureAllocator,
   } = params;
 
-  const shaderPass = makeShaderPass({
-      gl,
+  const shaderPass = makeShaderPass(gl, {
       defines: {
         MAX_SAMPLES: maxReprojectedSamples.toFixed(1)
       },
@@ -39,11 +37,13 @@ export function makeReprojectShader(params) {
     gl.uniform2f(shaderPass.uniforms.jitter, x, y);
   }
 
-  function draw(hdrBuffer, historyBuffer) {
+  function draw(light, position, historyLight, historyPosition) {
     shaderPass.useProgram();
 
-    shaderPass.setTexture('hdrBuffer', hdrBuffer);
-    shaderPass.setTexture('historyBuffer', historyBuffer);
+    shaderPass.setTexture('light', light);
+    shaderPass.setTexture('position', position);
+    shaderPass.setTexture('historyLight', historyLight);
+    shaderPass.setTexture('historyPosition', historyPosition);
 
     textureAllocator.bind(shaderPass);
 

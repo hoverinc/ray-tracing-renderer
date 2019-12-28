@@ -12,10 +12,9 @@ import * as THREE from 'three';
 import { uploadBuffers } from './uploadBuffers';
 import { clamp } from './util';
 
-export function makeRayTracingShader({
+export function makeRayTracingShader(gl, {
     bounces, // number of global illumination bounces
     fullscreenQuad,
-    gl,
     optionalExtensions,
     scene,
     textureAllocator,
@@ -146,8 +145,7 @@ function makeShaderPassFromScene({
   const useGlass = materials.some(m => m.transparent);
   const useShadowCatcher = materials.some(m => m.shadowCatcher);
 
-  const shaderPass = makeShaderPass({
-    gl,
+  const shaderPass = makeShaderPass(gl, {
     defines: {
       OES_texture_float_linear,
       BVH_COLUMNS: textureDimensionsFromArray(flattenedBvh.count).columnsLog,

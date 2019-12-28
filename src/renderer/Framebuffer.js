@@ -1,4 +1,4 @@
-export function makeFramebuffer({ gl, attachments }) {
+export function makeFramebuffer(gl, { attachments }) {
 
   const framebuffer = gl.createFramebuffer();
 

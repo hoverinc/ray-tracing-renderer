@@ -12,10 +12,7 @@ export function makeFullscreenQuad(gl) {
   gl.enableVertexAttribArray(posLoc);
   gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0);
 
-  const vertexShader = makeVertexShader({
-    gl,
-    vertex
-  });
+  const vertexShader = makeVertexShader(gl, { vertex });
 
   function draw() {
     gl.drawArrays(gl.TRIANGLES, 0, 6);

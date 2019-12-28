@@ -1,16 +1,15 @@
 import { compileShader, createProgram, getUniforms } from './glUtil';
 
-export function makeShaderPass(params) {
+export function makeShaderPass(gl, params) {
   const {
     defines,
     fragment,
-    gl,
     vertex,
   } = params;
 
-  const vertexCompiled = vertex instanceof WebGLShader ? vertex : makeVertexShader(params);
+  const vertexCompiled = vertex instanceof WebGLShader ? vertex : makeVertexShader(gl, params);
 
-  const fragmentCompiled = fragment instanceof WebGLShader ? fragment : makeFragmentShader(params);
+  const fragmentCompiled = fragment instanceof WebGLShader ? fragment : makeFragmentShader(gl, params);
 
   const program = createProgram(gl, vertexCompiled, fragmentCompiled);
 
@@ -28,11 +27,11 @@ export function makeShaderPass(params) {
   };
 }
 
-export function makeVertexShader({ defines, gl, vertex }) {
+export function makeVertexShader(gl, { defines, vertex }) {
   return makeShaderStage(gl, gl.VERTEX_SHADER, vertex, defines);
 }
 
-export function makeFragmentShader({ defines, fragment, gl }) {
+export function makeFragmentShader(gl, { defines, fragment }) {
   return makeShaderStage(gl, gl.FRAGMENT_SHADER, fragment, defines);
 }
 
@@ -43,7 +42,7 @@ function makeShaderPassFromProgram(gl, program) {
 
   function setTexture(name, texture) {
     if (!uniforms[name]) {
-      console.error('Sampler with name', name, 'does not exist');
+      // console.error('Sampler with name', name, 'does not exist');
     }
 
     textures[name] = texture;

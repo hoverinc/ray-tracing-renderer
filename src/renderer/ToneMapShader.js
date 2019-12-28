@@ -10,10 +10,9 @@ const toneMapFunctions = {
   [THREE.ACESFilmicToneMapping]: 'acesFilmic'
 };
 
-export function makeToneMapShader(params) {
+export function makeToneMapShader(gl, params) {
   const {
     fullscreenQuad,
-    gl,
     // optionalExtensions,
     textureAllocator,
     toneMappingParams
@@ -22,7 +21,7 @@ export function makeToneMapShader(params) {
   // const { OES_texture_float_linear } = optionalExtensions;
   const { toneMapping, whitePoint, exposure } = toneMappingParams;
 
-  const shaderPass = makeShaderPass({
+  const shaderPass = makeShaderPass(gl, {
     gl,
     defines: {
       // OES_texture_float_linear,
@@ -34,7 +33,7 @@ export function makeToneMapShader(params) {
     fragment,
   });
 
-  function draw(texture, textureScale) {
+  function draw(texture, textureScale = 1) {
     shaderPass.useProgram();
 
     gl.uniform1f(shaderPass.uniforms.textureScale, textureScale);
