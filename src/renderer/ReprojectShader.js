@@ -27,23 +27,30 @@ export function makeReprojectShader(gl, params) {
     gl.uniformMatrix4fv(shaderPass.uniforms.historyCamera, false, historyCamera.elements);
   }
 
-  function setBlendAmount(x) {
-    shaderPass.useProgram();
-    gl.uniform1f(shaderPass.uniforms.blendAmount, x);
-  }
-
   function setJitter(x, y) {
     shaderPass.useProgram();
     gl.uniform2f(shaderPass.uniforms.jitter, x, y);
   }
 
-  function draw(light, position, historyLight, historyPosition) {
+  function draw(params) {
+    const {
+      blendAmount,
+      light,
+      position,
+      previousLight,
+      previousPosition,
+      textureScale = 1.0,
+    } = params;
+
     shaderPass.useProgram();
+
+    gl.uniform1f(shaderPass.uniforms.blendAmount, blendAmount);
+    gl.uniform1f(shaderPass.uniforms.textureScale, textureScale);
 
     shaderPass.setTexture('light', light);
     shaderPass.setTexture('position', position);
-    shaderPass.setTexture('historyLight', historyLight);
-    shaderPass.setTexture('historyPosition', historyPosition);
+    shaderPass.setTexture('previousLight', previousLight);
+    shaderPass.setTexture('previousPosition', previousPosition);
 
     textureAllocator.bind(shaderPass);
 
@@ -52,7 +59,6 @@ export function makeReprojectShader(gl, params) {
 
   return {
     draw,
-    setBlendAmount,
     setJitter,
     setPreviousCamera,
   };

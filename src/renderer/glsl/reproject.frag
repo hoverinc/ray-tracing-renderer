@@ -6,12 +6,14 @@ source: `
   uniform mediump sampler2D light;
   uniform mediump sampler2D position;
 
-  uniform mediump sampler2D historyLight;
-  uniform mediump sampler2D historyPosition;
+  uniform mediump sampler2D previousLight;
+  uniform mediump sampler2D previousPosition;
 
   uniform mat4 historyCamera;
   uniform float blendAmount;
   uniform vec2 jitter;
+
+  uniform float textureScale;
 
   vec2 reproject(vec3 position) {
     vec4 historyCoord = historyCamera * vec4(position, 1.0);
@@ -19,16 +21,18 @@ source: `
   }
 
   void main() {
-    vec4 positionTex = texture(position, vCoord);
-    vec4 lightTex = texture(light, vCoord);
+    vec2 scaledCoord = textureScale * vCoord;
+
+    vec4 positionTex = texture(position, scaledCoord);
+    vec4 lightTex = texture(light, scaledCoord);
 
     vec3 currentPosition = positionTex.xyz;
     float currentMeshId = positionTex.w;
 
     vec2 hCoord = reproject(currentPosition) - jitter;
 
-    ivec2 hSize = textureSize(historyPosition, 0);
-    vec2 hSizef = vec2(hSize);
+    ivec2 hSize = textureSize(previousPosition, 0);
+    vec2 hSizef = textureScale * vec2(hSize);
 
     vec2 hTexelf = hCoord * hSizef - 0.5;
     ivec2 hTexel = ivec2(hTexelf);
@@ -53,12 +57,12 @@ source: `
 
     // bilinear sampling, rejecting samples that don't have a matching mesh id
     for (int i = 0; i < 4; i++) {
-      float histMeshId = texelFetch(historyPosition, texel[i], 0).w;
+      float histMeshId = texelFetch(previousPosition, texel[i], 0).w;
 
       float isValid = histMeshId != currentMeshId ? 0.0 : 1.0;
 
       float weight = isValid * weights[i];
-      history += weight * texelFetch(historyLight, texel[i], 0);
+      history += weight * texelFetch(previousLight, texel[i], 0);
       sum += weight;
     }
 
@@ -66,23 +70,23 @@ source: `
       history /= sum;
     } else {
       // If all samples of bilinear fail, try a 3x3 box filter
-      hTexel = ivec2(hTexelf + 0.5);
+      // hTexel = ivec2(hTexelf + 0.5);
 
-      for (int x = -1; x <= 1; x++) {
-        for (int y = -1; y <= 1; y++) {
-          ivec2 texel = hTexel + ivec2(x, y);
+      // for (int x = -1; x <= 1; x++) {
+      //   for (int y = -1; y <= 1; y++) {
+      //     ivec2 texel = hTexel + ivec2(x, y);
 
-          float histMeshId = texelFetch(historyPosition, texel, 0).w;
+      //     float histMeshId = texelFetch(previousPosition, texel, 0).w;
 
-          float isValid = histMeshId != currentMeshId ? 0.0 : 1.0;
+      //     float isValid = histMeshId != currentMeshId ? 0.0 : 1.0;
 
-          float weight = isValid;
-          vec4 h = texelFetch(historyLight, texel, 0);
-          history += weight * h;
-          sum += weight;
-        }
-      }
-      history = sum > 0.0 ? history / sum : history;
+      //     float weight = isValid;
+      //     vec4 h = texelFetch(previousLight, texel, 0);
+      //     history += weight * h;
+      //     sum += weight;
+      //   }
+      // }
+      // history = sum > 0.0 ? history / sum : history;
     }
 
     if (history.w > MAX_SAMPLES) {
@@ -91,7 +95,7 @@ source: `
     }
 
     out_light = blendAmount * history + lightTex;
-    // out_light = vec4(abs(hCoord - vCoord), 0, 1);
+
   }
 `
 }
