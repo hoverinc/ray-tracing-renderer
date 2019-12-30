@@ -13,7 +13,7 @@ source: `
   uniform float blendAmount;
   uniform vec2 jitter;
 
-  uniform float textureScale;
+  uniform vec2 textureScale;
 
   vec2 reproject(vec3 position) {
     vec4 historyCoord = historyCamera * vec4(position, 1.0);
@@ -29,10 +29,9 @@ source: `
     vec3 currentPosition = positionTex.xyz;
     float currentMeshId = positionTex.w;
 
-    vec2 hCoord = reproject(currentPosition) - jitter;
+    vec2 hCoord = textureScale * reproject(currentPosition) - jitter;
 
-    ivec2 hSize = textureSize(previousPosition, 0);
-    vec2 hSizef = textureScale * vec2(hSize);
+    vec2 hSizef = vec2(textureSize(previousPosition, 0));
 
     vec2 hTexelf = hCoord * hSizef - 0.5;
     ivec2 hTexel = ivec2(hTexelf);

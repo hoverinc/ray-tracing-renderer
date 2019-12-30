@@ -8,7 +8,7 @@ source: `
 
   uniform mediump sampler2D hdrBuffer;
 
-  uniform float textureScale;
+  uniform vec2 textureScale;
 
   // Tonemapping functions from THREE.js
 

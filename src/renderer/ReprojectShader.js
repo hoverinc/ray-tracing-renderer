@@ -39,13 +39,14 @@ export function makeReprojectShader(gl, params) {
       position,
       previousLight,
       previousPosition,
-      textureScale = 1.0,
+      textureScaleX = 1,
+      textureScaleY = 1
     } = params;
 
     shaderPass.useProgram();
 
     gl.uniform1f(shaderPass.uniforms.blendAmount, blendAmount);
-    gl.uniform1f(shaderPass.uniforms.textureScale, textureScale);
+    gl.uniform2f(shaderPass.uniforms.textureScale, textureScaleX, textureScaleY);
 
     shaderPass.setTexture('light', light);
     shaderPass.setTexture('position', position);
