@@ -328,6 +328,8 @@ export function makeRenderingPipeline({
       position: hdrBuffer.attachments[rayTracingShader.outputs.position],
       previousLight: reprojectBackBuffer.attachments[0],
       previousPosition: hdrBackBuffer.attachments[rayTracingShader.outputs.position],
+      textureScale: fullscreenScale,
+      previousTextureScale: fullscreenScale
 
     });
     reprojectBuffer.unbind();

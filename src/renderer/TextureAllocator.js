@@ -10,7 +10,7 @@ export function makeTextureAllocator(gl) {
 
       gl.activeTexture(gl.TEXTURE0 + unit);
       gl.bindTexture(tex.target, tex.texture);
-      gl.uniform1i(shaderPass.uniforms[name], unit);
+      shaderPass.uniforms[name].set(unit);
     }
   }
 

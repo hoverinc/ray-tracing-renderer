@@ -46,14 +46,16 @@ export function createProgram(gl, vertexShader, fragmentShader, transformVarying
 }
 
 export function getUniforms(gl, program) {
-  const uniforms = {};
+  const uniforms = [];
 
   const count = gl.getProgramParameter(program, gl.ACTIVE_UNIFORMS);
   for (let i = 0; i < count; i++) {
-    const { name } = gl.getActiveUniform(program, i);
+    const { name, type } = gl.getActiveUniform(program, i);
     const location = gl.getUniformLocation(program, name);
     if (location) {
-      uniforms[name] = location;
+      uniforms.push({
+        name, type, location
+      });
     }
   }
 

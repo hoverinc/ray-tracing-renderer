@@ -20,16 +20,13 @@ export function makeReprojectShader(gl, params) {
   const historyCamera = new THREE.Matrix4();
 
   function setPreviousCamera(camera) {
-    shaderPass.useProgram();
-
     historyCamera.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
 
-    gl.uniformMatrix4fv(shaderPass.uniforms.historyCamera, false, historyCamera.elements);
+    shaderPass.uniforms.historyCamera.set(historyCamera.elements);
   }
 
   function setJitter(x, y) {
-    shaderPass.useProgram();
-    gl.uniform2f(shaderPass.uniforms.jitter, x, y);
+    shaderPass.uniforms.jitter.set(x, y);
   }
 
   function draw(params) {
@@ -43,11 +40,9 @@ export function makeReprojectShader(gl, params) {
       previousTextureScale,
     } = params;
 
-    shaderPass.useProgram();
-
-    gl.uniform1f(shaderPass.uniforms.blendAmount, blendAmount);
-    gl.uniform2f(shaderPass.uniforms.textureScale, textureScale.x, textureScale.y);
-    gl.uniform2f(shaderPass.uniforms.previousTextureScale, previousTextureScale.x, previousTextureScale.y);
+    shaderPass.uniforms.blendAmount.set(blendAmount);
+    shaderPass.uniforms.textureScale.set(textureScale.x, textureScale.y);
+    shaderPass.uniforms.previousTextureScale.set(previousTextureScale.x, previousTextureScale.y);
 
     shaderPass.setTexture('light', light);
     shaderPass.setTexture('position', position);
@@ -56,6 +51,7 @@ export function makeReprojectShader(gl, params) {
 
     textureAllocator.bind(shaderPass);
 
+    shaderPass.useProgram();
     fullscreenQuad.draw();
   }
 

@@ -40,11 +40,8 @@ export function makeRayTracingShader(gl, {
     bounces, fullscreenQuad, gl, optionalExtensions, samplingDimensions, scene
   });
 
-  const uniforms = shaderPass.uniforms;
-
   function setSize(width, height) {
-    shaderPass.useProgram();
-    gl.uniform2f(uniforms.pixelSize, 1 / width, 1 / height);
+    shaderPass.uniforms.pixelSize.set(1 / width, 1 / height);
   }
 
   // noiseImage is a 32-bit PNG image
@@ -58,26 +55,20 @@ export function makeRayTracingShader(gl, {
   }
 
   function setCamera(camera) {
-    shaderPass.useProgram();
-    gl.uniformMatrix4fv(uniforms['camera.transform'], false, camera.matrixWorld.elements);
-    gl.uniform1f(uniforms['camera.aspect'], camera.aspect);
-    gl.uniform1f(uniforms['camera.fov'], 0.5 / Math.tan(0.5 * Math.PI * camera.fov / 180));
-    gl.uniform1f(uniforms['camera.focus'], camera.focus || 0);
-    gl.uniform1f(uniforms['camera.aperture'], camera.aperture || 0);
+    shaderPass.uniforms['camera.transform'].set(camera.matrixWorld.elements);
+    shaderPass.uniforms['camera.aspect'].set(camera.aspect);
+    shaderPass.uniforms['camera.fov'].set(0.5 / Math.tan(0.5 * Math.PI * camera.fov / 180));
   }
 
   function setJitter(x, y) {
-    shaderPass.useProgram();
-    gl.uniform2f(uniforms.jitter, x, y);
+    shaderPass.uniforms.jitter.set(x, y);
   }
 
   function nextSeed() {
-    shaderPass.useProgram();
-    gl.uniform1fv(uniforms['stratifiedSamples[0]'], samples.next());
+    shaderPass.uniforms['stratifiedSamples[0]'].set(samples.next());
   }
 
   function setStrataCount(strataCount) {
-    shaderPass.useProgram();
 
     if (strataCount > 1 && strataCount !== samples.strataCount) {
       // reinitailizing random has a performance cost. we can skip it if
@@ -88,7 +79,7 @@ export function makeRayTracingShader(gl, {
       samples.restart();
     }
 
-    gl.uniform1f(uniforms.strataSize, 1.0 / strataCount);
+    shaderPass.uniforms.strataSize.set(1.0 / strataCount);
     nextSeed();
   }
 
@@ -166,8 +157,6 @@ function makeShaderPassFromScene({
     fragment,
     vertex: fullscreenQuad.vertexShader
   });
-
-  shaderPass.useProgram();
 
   const bufferData = {};
 

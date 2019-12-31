@@ -1,4 +1,5 @@
-import { compileShader, createProgram, getUniforms } from './glUtil';
+import { compileShader, createProgram } from './glUtil';
+import { makeUniformSetter } from './UniformSetter';
 
 export function makeShaderPass(gl, params) {
   const {
@@ -36,16 +37,23 @@ export function makeFragmentShader(gl, { defines, fragment }) {
 }
 
 function makeShaderPassFromProgram(gl, program) {
-  const uniforms = getUniforms(gl, program);
+
+  const uniformSetter = makeUniformSetter(gl, program);
+  const uniforms = uniformSetter.uniforms;
 
   const textures = {};
 
   function setTexture(name, texture) {
     if (!uniforms[name]) {
-      // console.error('Sampler with name', name, 'does not exist');
+      console.error('Sampler with name', name, 'does not exist');
     }
 
     textures[name] = texture;
+  }
+
+  function useProgram() {
+    gl.useProgram(program);
+    uniformSetter.upload();
   }
 
   return {
@@ -53,9 +61,7 @@ function makeShaderPassFromProgram(gl, program) {
     setTexture,
     textures,
     uniforms,
-    useProgram() {
-      gl.useProgram(program);
-    }
+    useProgram,
   };
 }
 
