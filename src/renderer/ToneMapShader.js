@@ -1,5 +1,5 @@
 import fragment from './glsl/toneMap.frag';
-import { makeShaderPass } from './ShaderPass';
+import { makeRenderPass } from './RenderPass';
 import * as THREE from 'three';
 
 const toneMapFunctions = {
@@ -21,7 +21,7 @@ export function makeToneMapShader(gl, params) {
   // const { OES_texture_float_linear } = optionalExtensions;
   const { toneMapping, whitePoint, exposure } = toneMappingParams;
 
-  const shaderPass = makeShaderPass(gl, {
+  const renderPass = makeRenderPass(gl, {
     gl,
     defines: {
       // OES_texture_float_linear,
@@ -39,13 +39,13 @@ export function makeToneMapShader(gl, params) {
       textureScale
     } = params;
 
-    shaderPass.uniforms.textureScale.set(textureScale.x, textureScale.y);
+    renderPass.uniforms.textureScale.set(textureScale.x, textureScale.y);
 
-    shaderPass.setTexture('hdrBuffer', hdrTexture);
+    renderPass.setTexture('hdrBuffer', hdrTexture);
 
-    textureAllocator.bind(shaderPass);
+    textureAllocator.bind(renderPass);
 
-    shaderPass.useProgram();
+    renderPass.useProgram();
     fullscreenQuad.draw();
   }
 

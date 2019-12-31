@@ -1,7 +1,7 @@
 import { compileShader, createProgram } from './glUtil';
 import { makeUniformSetter } from './UniformSetter';
 
-export function makeShaderPass(gl, params) {
+export function makeRenderPass(gl, params) {
   const {
     defines,
     fragment,
@@ -23,7 +23,7 @@ export function makeShaderPass(gl, params) {
   }
 
   return {
-    ...makeShaderPassFromProgram(gl, program),
+    ...makeRenderPassFromProgram(gl, program),
     outputs
   };
 }
@@ -36,7 +36,7 @@ export function makeFragmentShader(gl, { defines, fragment }) {
   return makeShaderStage(gl, gl.FRAGMENT_SHADER, fragment, defines);
 }
 
-function makeShaderPassFromProgram(gl, program) {
+function makeRenderPassFromProgram(gl, program) {
 
   const uniformSetter = makeUniformSetter(gl, program);
   const uniforms = uniformSetter.uniforms;

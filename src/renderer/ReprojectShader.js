@@ -1,5 +1,5 @@
 import fragment from './glsl/reproject.frag';
-import { makeShaderPass } from './ShaderPass';
+import { makeRenderPass } from './RenderPass';
 import * as THREE from 'three';
 
 export function makeReprojectShader(gl, params) {
@@ -9,7 +9,7 @@ export function makeReprojectShader(gl, params) {
     textureAllocator,
   } = params;
 
-  const shaderPass = makeShaderPass(gl, {
+  const renderPass = makeRenderPass(gl, {
       defines: {
         MAX_SAMPLES: maxReprojectedSamples.toFixed(1)
       },
@@ -22,11 +22,11 @@ export function makeReprojectShader(gl, params) {
   function setPreviousCamera(camera) {
     historyCamera.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
 
-    shaderPass.uniforms.historyCamera.set(historyCamera.elements);
+    renderPass.uniforms.historyCamera.set(historyCamera.elements);
   }
 
   function setJitter(x, y) {
-    shaderPass.uniforms.jitter.set(x, y);
+    renderPass.uniforms.jitter.set(x, y);
   }
 
   function draw(params) {
@@ -40,18 +40,18 @@ export function makeReprojectShader(gl, params) {
       previousTextureScale,
     } = params;
 
-    shaderPass.uniforms.blendAmount.set(blendAmount);
-    shaderPass.uniforms.textureScale.set(textureScale.x, textureScale.y);
-    shaderPass.uniforms.previousTextureScale.set(previousTextureScale.x, previousTextureScale.y);
+    renderPass.uniforms.blendAmount.set(blendAmount);
+    renderPass.uniforms.textureScale.set(textureScale.x, textureScale.y);
+    renderPass.uniforms.previousTextureScale.set(previousTextureScale.x, previousTextureScale.y);
 
-    shaderPass.setTexture('light', light);
-    shaderPass.setTexture('position', position);
-    shaderPass.setTexture('previousLight', previousLight);
-    shaderPass.setTexture('previousPosition', previousPosition);
+    renderPass.setTexture('light', light);
+    renderPass.setTexture('position', position);
+    renderPass.setTexture('previousLight', previousLight);
+    renderPass.setTexture('previousPosition', previousPosition);
 
-    textureAllocator.bind(shaderPass);
+    textureAllocator.bind(renderPass);
 
-    shaderPass.useProgram();
+    renderPass.useProgram();
     fullscreenQuad.draw();
   }
 

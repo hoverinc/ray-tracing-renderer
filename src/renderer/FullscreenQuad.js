@@ -1,5 +1,5 @@
 import vertex from './glsl/fullscreenQuad.vert';
-import { makeVertexShader } from './ShaderPass';
+import { makeVertexShader } from './RenderPass';
 
 export function makeFullscreenQuad(gl) {
   // TODO: use VAOs

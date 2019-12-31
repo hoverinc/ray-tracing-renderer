@@ -4,7 +4,7 @@ import { generateEnvMapFromSceneComponents, generateBackgroundMapFromSceneBackgr
 import { envmapDistribution } from './envmapDistribution';
 import fragment from './glsl/rayTrace.frag';
 import { mergeMeshesToGeometry } from './mergeMeshesToGeometry';
-import { makeShaderPass } from './ShaderPass';
+import { makeRenderPass } from './RenderPass';
 import { makeStratifiedSamplerCombined } from './StratifiedSamplerCombined';
 import { makeTexture } from './Texture';
 import { getTexturesFromMaterials, mergeTexturesFromMaterials } from './texturesFromMaterials';
@@ -36,17 +36,17 @@ export function makeRayTracingShader(gl, {
 
   let samples;
 
-  const shaderPass = makeShaderPassFromScene({
+  const renderPass = makeRenderPassFromScene({
     bounces, fullscreenQuad, gl, optionalExtensions, samplingDimensions, scene
   });
 
   function setSize(width, height) {
-    shaderPass.uniforms.pixelSize.set(1 / width, 1 / height);
+    renderPass.uniforms.pixelSize.set(1 / width, 1 / height);
   }
 
   // noiseImage is a 32-bit PNG image
   function setNoise(noiseImage) {
-    shaderPass.setTexture('noise', makeTexture(gl, {
+    renderPass.setTexture('noise', makeTexture(gl, {
       data: noiseImage,
       minFilter: gl.NEAREST,
       magFilter: gl.NEAREST,
@@ -55,17 +55,17 @@ export function makeRayTracingShader(gl, {
   }
 
   function setCamera(camera) {
-    shaderPass.uniforms['camera.transform'].set(camera.matrixWorld.elements);
-    shaderPass.uniforms['camera.aspect'].set(camera.aspect);
-    shaderPass.uniforms['camera.fov'].set(0.5 / Math.tan(0.5 * Math.PI * camera.fov / 180));
+    renderPass.uniforms['camera.transform'].set(camera.matrixWorld.elements);
+    renderPass.uniforms['camera.aspect'].set(camera.aspect);
+    renderPass.uniforms['camera.fov'].set(0.5 / Math.tan(0.5 * Math.PI * camera.fov / 180));
   }
 
   function setJitter(x, y) {
-    shaderPass.uniforms.jitter.set(x, y);
+    renderPass.uniforms.jitter.set(x, y);
   }
 
   function nextSeed() {
-    shaderPass.uniforms['stratifiedSamples[0]'].set(samples.next());
+    renderPass.uniforms['stratifiedSamples[0]'].set(samples.next());
   }
 
   function setStrataCount(strataCount) {
@@ -79,16 +79,16 @@ export function makeRayTracingShader(gl, {
       samples.restart();
     }
 
-    shaderPass.uniforms.strataSize.set(1.0 / strataCount);
+    renderPass.uniforms.strataSize.set(1.0 / strataCount);
     nextSeed();
   }
 
   function bindTextures() {
-    textureAllocator.bind(shaderPass);
+    textureAllocator.bind(renderPass);
   }
 
   function draw() {
-    shaderPass.useProgram();
+    renderPass.useProgram();
     fullscreenQuad.draw();
   }
 
@@ -98,7 +98,7 @@ export function makeRayTracingShader(gl, {
     bindTextures,
     draw,
     nextSeed,
-    outputs: shaderPass.outputs,
+    outputs: renderPass.outputs,
     setCamera,
     setJitter,
     setNoise,
@@ -106,7 +106,7 @@ export function makeRayTracingShader(gl, {
     setStrataCount,
   };
 }
-function makeShaderPassFromScene({
+function makeRenderPassFromScene({
     bounces,
     fullscreenQuad,
     gl,
@@ -136,7 +136,7 @@ function makeShaderPassFromScene({
   const useGlass = materials.some(m => m.transparent);
   const useShadowCatcher = materials.some(m => m.shadowCatcher);
 
-  const shaderPass = makeShaderPass(gl, {
+  const renderPass = makeRenderPass(gl, {
     defines: {
       OES_texture_float_linear,
       BVH_COLUMNS: textureDimensionsFromArray(flattenedBvh.count).columnsLog,
@@ -176,35 +176,35 @@ function makeShaderPassFromScene({
 
   if (maps.map.textures.length > 0) {
     const { relativeSizes, texture } = makeTextureArray(gl, maps.map.textures, true);
-    shaderPass.setTexture('diffuseMap', texture);
+    renderPass.setTexture('diffuseMap', texture);
     bufferData.diffuseMapSize = relativeSizes;
     bufferData.diffuseMapIndex = maps.map.indices;
   }
 
   if (maps.normalMap.textures.length > 0) {
     const { relativeSizes, texture } = makeTextureArray(gl, maps.normalMap.textures, false);
-    shaderPass.setTexture('normalMap', texture);
+    renderPass.setTexture('normalMap', texture);
     bufferData.normalMapSize = relativeSizes;
     bufferData.normalMapIndex = maps.normalMap.indices;
   }
 
   if (pbrMap.textures.length > 0) {
     const { relativeSizes, texture } = makeTextureArray(gl, pbrMap.textures, false);
-    shaderPass.setTexture('pbrMap', texture);
+    renderPass.setTexture('pbrMap', texture);
     bufferData.pbrMapSize = relativeSizes;
     bufferData.roughnessMapIndex = pbrMap.indices.roughnessMap;
     bufferData.metalnessMapIndex = pbrMap.indices.metalnessMap;
   }
 
-  uploadBuffers(gl, shaderPass.program, bufferData);
+  uploadBuffers(gl, renderPass.program, bufferData);
 
-  shaderPass.setTexture('positions', makeDataTexture(gl, geometry.getAttribute('position').array, 3));
+  renderPass.setTexture('positions', makeDataTexture(gl, geometry.getAttribute('position').array, 3));
 
-  shaderPass.setTexture('normals', makeDataTexture(gl, geometry.getAttribute('normal').array, 3));
+  renderPass.setTexture('normals', makeDataTexture(gl, geometry.getAttribute('normal').array, 3));
 
-  shaderPass.setTexture('uvs', makeDataTexture(gl, geometry.getAttribute('uv').array, 2));
+  renderPass.setTexture('uvs', makeDataTexture(gl, geometry.getAttribute('uv').array, 2));
 
-  shaderPass.setTexture('bvh', makeDataTexture(gl, flattenedBvh.buffer, 4));
+  renderPass.setTexture('bvh', makeDataTexture(gl, flattenedBvh.buffer, 4));
 
   const envImage = generateEnvMapFromSceneComponents(directionalLights, ambientLights, environmentLights);
   const envImageTextureObject = makeTexture(gl, {
@@ -215,7 +215,7 @@ function makeShaderPassFromScene({
     height: envImage.height,
   });
 
-  shaderPass.setTexture('envmap', envImageTextureObject);
+  renderPass.setTexture('envmap', envImageTextureObject);
 
   let backgroundImageTextureObject;
   if (scene.background) {
@@ -231,11 +231,11 @@ function makeShaderPassFromScene({
     backgroundImageTextureObject = envImageTextureObject;
   }
 
-  shaderPass.setTexture('backgroundMap', backgroundImageTextureObject);
+  renderPass.setTexture('backgroundMap', backgroundImageTextureObject);
 
   const distribution = envmapDistribution(envImage);
 
-  shaderPass.setTexture('envmapDistribution', makeTexture(gl, {
+  renderPass.setTexture('envmapDistribution', makeTexture(gl, {
     data: distribution.data,
     minFilter: gl.NEAREST,
     magFilter: gl.NEAREST,
@@ -243,7 +243,7 @@ function makeShaderPassFromScene({
     height: distribution.height,
   }));
 
-  return shaderPass;
+  return renderPass;
 }
 
 function decomposeScene(scene) {
