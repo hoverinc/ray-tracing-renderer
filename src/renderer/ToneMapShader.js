@@ -36,13 +36,12 @@ export function makeToneMapShader(gl, params) {
   function draw(params) {
     const {
       hdrTexture,
-      textureScaleX = 1,
-      textureScaleY = 1
+      textureScale
     } = params;
 
     shaderPass.useProgram();
 
-    gl.uniform2f(shaderPass.uniforms.textureScale, textureScaleX, textureScaleY);
+    gl.uniform2f(shaderPass.uniforms.textureScale, textureScale.x, textureScale.y);
 
     shaderPass.setTexture('hdrBuffer', hdrTexture);
 
