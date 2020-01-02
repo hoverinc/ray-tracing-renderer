@@ -69,23 +69,23 @@ source: `
       history /= sum;
     } else {
       // If all samples of bilinear fail, try a 3x3 box filter
-      // hTexel = ivec2(hTexelf + 0.5);
+      hTexel = ivec2(hTexelf + 0.5);
 
-      // for (int x = -1; x <= 1; x++) {
-      //   for (int y = -1; y <= 1; y++) {
-      //     ivec2 texel = hTexel + ivec2(x, y);
+      for (int x = -1; x <= 1; x++) {
+        for (int y = -1; y <= 1; y++) {
+          ivec2 texel = hTexel + ivec2(x, y);
 
-      //     float histMeshId = texelFetch(previousPosition, texel, 0).w;
+          float histMeshId = texelFetch(previousPosition, texel, 0).w;
 
-      //     float isValid = histMeshId != currentMeshId ? 0.0 : 1.0;
+          float isValid = histMeshId != currentMeshId ? 0.0 : 1.0;
 
-      //     float weight = isValid;
-      //     vec4 h = texelFetch(previousLight, texel, 0);
-      //     history += weight * h;
-      //     sum += weight;
-      //   }
-      // }
-      // history = sum > 0.0 ? history / sum : history;
+          float weight = isValid;
+          vec4 h = texelFetch(previousLight, texel, 0);
+          history += weight * h;
+          sum += weight;
+        }
+      }
+      history = sum > 0.0 ? history / sum : history;
     }
 
     if (history.w > MAX_SAMPLES) {

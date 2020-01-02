@@ -14,17 +14,9 @@ export function makeRenderPass(gl, params) {
 
   const program = createProgram(gl, vertexCompiled, fragmentCompiled);
 
-  let outputs;
-  if (Array.isArray(fragment.outputs)) {
-    outputs = {};
-    for (let i = 0; i < fragment.outputs.length; i++) {
-      outputs[fragment.outputs[i]] = i;
-    }
-  }
-
   return {
     ...makeRenderPassFromProgram(gl, program),
-    outputs
+    outputs: outputLocations(fragment.outputs)
   };
 }
 
@@ -115,8 +107,11 @@ function addOutputs(outputs) {
     return str;
   }
 
-  for (let i = 0; i < outputs.length; i++) {
-    str += `layout(location = ${i}) out vec4 out_${outputs[i]};\n`;
+  const locations = outputLocations(outputs);
+
+  for (let name in locations) {
+    const location = locations[name];
+    str += `layout(location = ${location}) out vec4 out_${name};\n`;
   }
 
   return str;
@@ -138,4 +133,16 @@ function addIncludes(includes, defines) {
   }
 
   return str;
+}
+
+function outputLocations(outputs) {
+  let locations = {};
+
+  if (Array.isArray(outputs)) {
+    for (let i = 0; i < outputs.length; i++) {
+      locations[outputs[i]] = i;
+    }
+  }
+
+  return locations;
 }

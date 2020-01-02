@@ -142,7 +142,7 @@ export function RayTracingRenderer(params = {}) {
         pipeline.drawFull(camera);
       } else {
         // render new sample for a tiled subset of the screen
-        pipeline.drawTile(camera);
+        pipeline.drawTiled(camera);
       }
 
     } else {
