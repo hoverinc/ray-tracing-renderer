@@ -39,7 +39,7 @@ export function makeToneMapShader(gl, params) {
       textureScale
     } = params;
 
-    renderPass.uniforms.textureScale.set(textureScale.x, textureScale.y);
+    renderPass.setUniform('textureScale', textureScale.x, textureScale.y);
 
     renderPass.setTexture('hdrBuffer', hdrTexture);
 

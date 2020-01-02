@@ -26,18 +26,28 @@ export function makeUniformSetter(gl, program) {
   for (let { name, type, location } of uniformInfo) {
     const uniform = {
       type,
-      location
-    };
-
-    uniform.set = (v0, v1, v2, v3) => {
-      uniform.v0 = v0;
-      uniform.v1 = v1;
-      uniform.v2 = v2;
-      uniform.v3 = v3;
-      needsUpload.push(uniform);
+      location,
+      v0: 0,
+      v1: 0,
+      v2: 0,
+      v3: 0
     };
 
     uniforms[name] = uniform;
+  }
+
+  function setUniform(name, v0, v1, v2, v3) {
+    const uni = uniforms[name];
+
+    if (!uni) {
+      return;
+    }
+
+    uni.v0 = v0;
+    uni.v1 = v1;
+    uni.v2 = v2;
+    uni.v3 = v3;
+    needsUpload.push(uni);
   }
 
   function upload() {
@@ -61,7 +71,7 @@ export function makeUniformSetter(gl, program) {
   }
 
   return {
-    uniforms,
+    setUniform,
     upload,
   };
 }

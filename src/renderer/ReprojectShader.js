@@ -22,11 +22,11 @@ export function makeReprojectShader(gl, params) {
   function setPreviousCamera(camera) {
     historyCamera.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
 
-    renderPass.uniforms.historyCamera.set(historyCamera.elements);
+    renderPass.setUniform('historyCamera', historyCamera.elements);
   }
 
   function setJitter(x, y) {
-    renderPass.uniforms.jitter.set(x, y);
+    renderPass.setUniform('jitter', x, y);
   }
 
   function draw(params) {
@@ -40,9 +40,9 @@ export function makeReprojectShader(gl, params) {
       previousTextureScale,
     } = params;
 
-    renderPass.uniforms.blendAmount.set(blendAmount);
-    renderPass.uniforms.textureScale.set(textureScale.x, textureScale.y);
-    renderPass.uniforms.previousTextureScale.set(previousTextureScale.x, previousTextureScale.y);
+    renderPass.setUniform('blendAmount', blendAmount);
+    renderPass.setUniform('textureScale', textureScale.x, textureScale.y);
+    renderPass.setUniform('previousTextureScale', previousTextureScale.x, previousTextureScale.y);
 
     renderPass.setTexture('light', light);
     renderPass.setTexture('position', position);

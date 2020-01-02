@@ -31,15 +31,10 @@ export function makeFragmentShader(gl, { defines, fragment }) {
 function makeRenderPassFromProgram(gl, program) {
 
   const uniformSetter = makeUniformSetter(gl, program);
-  const uniforms = uniformSetter.uniforms;
 
   const textures = {};
 
   function setTexture(name, texture) {
-    if (!uniforms[name]) {
-      console.error('Sampler with name', name, 'does not exist');
-    }
-
     textures[name] = texture;
   }
 
@@ -51,8 +46,8 @@ function makeRenderPassFromProgram(gl, program) {
   return {
     program,
     setTexture,
+    setUniform: uniformSetter.setUniform,
     textures,
-    uniforms,
     useProgram,
   };
 }

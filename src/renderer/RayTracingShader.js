@@ -41,7 +41,7 @@ export function makeRayTracingShader(gl, {
   });
 
   function setSize(width, height) {
-    renderPass.uniforms.pixelSize.set(1 / width, 1 / height);
+    renderPass.setUniform('pixelSize', 1 / width, 1 / height);
   }
 
   // noiseImage is a 32-bit PNG image
@@ -55,17 +55,17 @@ export function makeRayTracingShader(gl, {
   }
 
   function setCamera(camera) {
-    renderPass.uniforms['camera.transform'].set(camera.matrixWorld.elements);
-    renderPass.uniforms['camera.aspect'].set(camera.aspect);
-    renderPass.uniforms['camera.fov'].set(0.5 / Math.tan(0.5 * Math.PI * camera.fov / 180));
+    renderPass.setUniform('camera.transform', camera.matrixWorld.elements);
+    renderPass.setUniform('camera.aspect', camera.aspect);
+    renderPass.setUniform('camera.fov', 0.5 / Math.tan(0.5 * Math.PI * camera.fov / 180));
   }
 
   function setJitter(x, y) {
-    renderPass.uniforms.jitter.set(x, y);
+    renderPass.setUniform('jitter', x, y);
   }
 
   function nextSeed() {
-    renderPass.uniforms['stratifiedSamples[0]'].set(samples.next());
+    renderPass.setUniform('stratifiedSamples[0]', samples.next());
   }
 
   function setStrataCount(strataCount) {
@@ -79,7 +79,7 @@ export function makeRayTracingShader(gl, {
       samples.restart();
     }
 
-    renderPass.uniforms.strataSize.set(1.0 / strataCount);
+    renderPass.setUniform('strataSize', 1.0 / strataCount);
     nextSeed();
   }
 
