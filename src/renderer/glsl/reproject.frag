@@ -32,6 +32,7 @@ source: `
     vec2 hCoord = previousTextureScale * reproject(currentPosition) - jitter;
 
     vec2 hSizef = vec2(textureSize(previousPosition, 0));
+    ivec2 hSize = ivec2(previousTextureScale * hSizef);
 
     vec2 hTexelf = hCoord * hSizef - 0.5;
     ivec2 hTexel = ivec2(hTexelf);
@@ -58,7 +59,8 @@ source: `
     for (int i = 0; i < 4; i++) {
       float histMeshId = texelFetch(previousPosition, texel[i], 0).w;
 
-      float isValid = histMeshId != currentMeshId ? 0.0 : 1.0;
+      float isValid = histMeshId != currentMeshId || any(greaterThanEqual(texel[i], hSize)) ? 0.0 : 1.0;
+      // float isValid = 0.0;
 
       float weight = isValid * weights[i];
       history += weight * texelFetch(previousLight, texel[i], 0);
@@ -77,7 +79,7 @@ source: `
 
           float histMeshId = texelFetch(previousPosition, texel, 0).w;
 
-          float isValid = histMeshId != currentMeshId ? 0.0 : 1.0;
+          float isValid = histMeshId != currentMeshId || any(greaterThanEqual(texel, hSize)) ? 0.0 : 1.0;
 
           float weight = isValid;
           vec4 h = texelFetch(previousLight, texel, 0);
