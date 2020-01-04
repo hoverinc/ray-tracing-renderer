@@ -14,7 +14,6 @@ export function makeToneMapShader(gl, params) {
   const {
     fullscreenQuad,
     // optionalExtensions,
-    textureAllocator,
     toneMappingParams
   } = params;
 
@@ -42,8 +41,6 @@ export function makeToneMapShader(gl, params) {
     renderPass.setUniform('textureScale', textureScale.x, textureScale.y);
 
     renderPass.setTexture('hdrBuffer', hdrTexture);
-
-    textureAllocator.bind(renderPass);
 
     renderPass.useProgram();
     fullscreenQuad.draw();

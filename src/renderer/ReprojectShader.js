@@ -6,7 +6,6 @@ export function makeReprojectShader(gl, params) {
   const {
     fullscreenQuad,
     maxReprojectedSamples,
-    textureAllocator,
   } = params;
 
   const renderPass = makeRenderPass(gl, {
@@ -48,8 +47,6 @@ export function makeReprojectShader(gl, params) {
     renderPass.setTexture('position', position);
     renderPass.setTexture('previousLight', previousLight);
     renderPass.setTexture('previousPosition', previousPosition);
-
-    textureAllocator.bind(renderPass);
 
     renderPass.useProgram();
     fullscreenQuad.draw();

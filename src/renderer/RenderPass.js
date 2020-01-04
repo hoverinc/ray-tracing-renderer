@@ -28,22 +28,48 @@ export function makeFragmentShader(gl, { defines, fragment }) {
   return makeShaderStage(gl, gl.FRAGMENT_SHADER, fragment, defines);
 }
 
+
 function makeRenderPassFromProgram(gl, program) {
 
   const uniformSetter = makeUniformSetter(gl, program);
 
   const textures = {};
 
+  let nextTexUnit = 1;
+
   function setTexture(name, texture) {
-    textures[name] = texture;
+    let cachedTex = textures[name];
+
+    if (!cachedTex) {
+      const unit = nextTexUnit++;
+
+      uniformSetter.setUniform(name, unit);
+
+      cachedTex = { unit };
+
+      textures[name] = cachedTex;
+    }
+
+    cachedTex.tex = texture;
   }
 
-  function useProgram() {
+  function bindTextures() {
+    for (let name in textures) {
+      const { tex, unit } = textures[name];
+      gl.activeTexture(gl.TEXTURE0 + unit);
+      gl.bindTexture(tex.target, tex.texture);
+    }
+  }
+  function useProgram(autoBindTextures = true) {
     gl.useProgram(program);
     uniformSetter.upload();
+    if (autoBindTextures) {
+      bindTextures();
+    }
   }
 
   return {
+    bindTextures,
     program,
     setTexture,
     setUniform: uniformSetter.setUniform,

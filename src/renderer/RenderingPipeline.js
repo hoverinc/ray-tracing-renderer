@@ -5,7 +5,6 @@ import { makeFramebuffer } from './Framebuffer';
 import { numberArraysEqual } from './util';
 import { makeTileRender } from './TileRender';
 import { makeTexture } from './Texture';
-import { makeTextureAllocator } from './TextureAllocator';
 import { makeReprojectShader } from './ReprojectShader';
 import noiseBase64 from './texture/noise';
 import { clamp } from './util';
@@ -33,14 +32,12 @@ export function makeRenderingPipeline({
 
   const fullscreenQuad = makeFullscreenQuad(gl);
 
-  const textureAllocator = makeTextureAllocator(gl);
+  const rayTracingShader = makeRayTracingShader(gl, { bounces, fullscreenQuad, optionalExtensions, scene });
 
-  const rayTracingShader = makeRayTracingShader(gl, { bounces, fullscreenQuad, optionalExtensions, scene, textureAllocator });
-
-  const reprojectShader = makeReprojectShader(gl, { fullscreenQuad, maxReprojectedSamples, textureAllocator });
+  const reprojectShader = makeReprojectShader(gl, { fullscreenQuad, maxReprojectedSamples });
 
   const toneMapShader = makeToneMapShader(gl, {
-    fullscreenQuad, optionalExtensions, textureAllocator, toneMappingParams
+    fullscreenQuad, optionalExtensions, toneMappingParams
   });
 
   // used to sample only a portion of the scene to the HDR Buffer to prevent the GPU from locking up from excessive computation

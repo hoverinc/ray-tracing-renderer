@@ -17,7 +17,6 @@ export function makeRayTracingShader(gl, {
     fullscreenQuad,
     optionalExtensions,
     scene,
-    textureAllocator,
   }) {
 
   bounces = clamp(bounces, 1, 6);
@@ -84,11 +83,11 @@ export function makeRayTracingShader(gl, {
   }
 
   function bindTextures() {
-    textureAllocator.bind(renderPass);
+    renderPass.bindTextures();
   }
 
   function draw() {
-    renderPass.useProgram();
+    renderPass.useProgram(false);
     fullscreenQuad.draw();
   }
 
