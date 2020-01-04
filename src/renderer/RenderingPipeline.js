@@ -102,17 +102,23 @@ export function makeRenderingPipeline({
     lastToneMappedTexture = hdrBuffer.attachments[rayTracingShader.outputs.light];
   }
 
+  function swapReprojectBuffer() {
+    let temp = reprojectBuffer;
+    reprojectBuffer = reprojectBackBuffer;
+    reprojectBackBuffer = temp;
+  }
+
+  function swapHdrBuffer() {
+    let temp = hdrBuffer;
+    hdrBuffer = hdrBackBuffer;
+    hdrBackBuffer = temp;
+  }
+
   // Shaders will read from the back buffer and draw to the front buffer
   // Buffers are swapped after every render
   function swapBuffers() {
-    let temp;
-    temp = hdrBuffer;
-    hdrBuffer = hdrBackBuffer;
-    hdrBackBuffer = temp;
-
-    temp = reprojectBuffer;
-    reprojectBuffer = reprojectBackBuffer;
-    reprojectBackBuffer = temp;
+    swapHdrBuffer();
+    swapReprojectBuffer();
   }
 
   function setPreviewBufferDimensions() {
@@ -307,6 +313,7 @@ export function makeRenderingPipeline({
       sampleCount = 0;
       rayTracingShader.setCamera(camera);
       lastCamera.copy(camera);
+      swapHdrBuffer();
       clearBuffer(hdrBuffer);
     } else {
       sampleCount++;
@@ -332,7 +339,7 @@ export function makeRenderingPipeline({
 
     toneMapToScreen(reprojectBuffer.attachments[0], fullscreenScale);
 
-    swapBuffers();
+    swapReprojectBuffer();
   }
 
   function setSize(w, h) {
