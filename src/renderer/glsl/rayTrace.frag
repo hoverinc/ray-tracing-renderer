@@ -80,8 +80,6 @@ source: (defines) => `
 
     SurfaceInteraction indirectSi;
 
-    const int end = BOUNCES + 1;
-
     // Manually unroll for loop.
     // Some hardware fails to interate over a GLSL loop, so we provide this workaround
     // for (int i = 1; i < defines.bounces + 1, i += 1)
