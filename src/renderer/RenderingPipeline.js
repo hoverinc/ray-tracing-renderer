@@ -20,7 +20,7 @@ export function makeRenderingPipeline({
     bounces, // number of global illumination bounces
   }) {
 
-  const reprojectDecay = 0.98;
+  const reprojectDecay = 0.975;
   const maxReprojectedSamples = Math.round(reprojectDecay / (1 - reprojectDecay));
 
   // how many samples to render with uniform noise before switching to stratified noise
@@ -119,6 +119,14 @@ export function makeRenderingPipeline({
   function swapBuffers() {
     swapHdrBuffer();
     swapReprojectBuffer();
+  }
+
+  function setSize(w, h) {
+    screenWidth = w;
+    screenHeight = h;
+
+    tileRender.setSize(w, h);
+    initFrameBuffers(w, h);
   }
 
   function setPreviewBufferDimensions() {
@@ -246,7 +254,7 @@ export function makeRenderingPipeline({
     // move to isLastTile?
     if (isFirstTile) {
 
-      if (sampleCount === 0) {
+      if (sampleCount === 0) { // previous rendered image was a preview image
         clearBuffer(hdrBuffer);
         reprojectShader.setPreviousCamera(lastCamera);
       }
@@ -285,7 +293,7 @@ export function makeRenderingPipeline({
     }
   }
 
-  function drawTiled(camera) {
+  function draw(camera) {
     if (!ready) {
       return;
     }
@@ -342,16 +350,8 @@ export function makeRenderingPipeline({
     swapReprojectBuffer();
   }
 
-  function setSize(w, h) {
-    screenWidth = w;
-    screenHeight = h;
-
-    tileRender.setSize(w, h);
-    initFrameBuffers(w, h);
-  }
-
   return {
-    drawTiled,
+    draw,
     drawFull,
     restartTimer: tileRender.restartTimer,
     setSize,

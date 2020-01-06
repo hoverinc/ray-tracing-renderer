@@ -142,7 +142,7 @@ export function RayTracingRenderer(params = {}) {
         pipeline.drawFull(camera);
       } else {
         // render new sample for a tiled subset of the screen
-        pipeline.drawTiled(camera);
+        pipeline.draw(camera);
       }
 
     } else {
@@ -158,7 +158,7 @@ export function RayTracingRenderer(params = {}) {
 
   module.dispose = () => {
     document.removeEventListener('visibilitychange', restartTimer);
-    pipeline = false;
+    pipeline = null;
   };
 
   return module;

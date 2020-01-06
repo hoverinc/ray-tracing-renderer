@@ -16,7 +16,7 @@ export function makeRenderPass(gl, params) {
 
   return {
     ...makeRenderPassFromProgram(gl, program),
-    outputs: outputLocations(fragment.outputs)
+    outputs: getOutputLocations(fragment.outputs)
   };
 }
 
@@ -128,7 +128,7 @@ function addOutputs(outputs) {
     return str;
   }
 
-  const locations = outputLocations(outputs);
+  const locations = getOutputLocations(outputs);
 
   for (let name in locations) {
     const location = locations[name];
@@ -156,7 +156,7 @@ function addIncludes(includes, defines) {
   return str;
 }
 
-function outputLocations(outputs) {
+function getOutputLocations(outputs) {
   let locations = {};
 
   if (Array.isArray(outputs)) {
