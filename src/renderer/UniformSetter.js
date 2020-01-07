@@ -20,10 +20,19 @@ export function makeUniformSetter(gl, program) {
     uniforms[name] = uniform;
   }
 
+  const failedUnis = new Set();
+
   function setUniform(name, v0, v1, v2, v3) {
+    // v0 - v4 are the values to be passed to the uniform
+    // v0 can either be a number or an array, and v1-v3 are optional
     const uni = uniforms[name];
 
     if (!uni) {
+      if (!failedUnis.has(name)) {
+        console.warn(`Uniform "${name}" does not exist in shader`);
+        failedUnis.add(name);
+      }
+
       return;
     }
 
@@ -53,7 +62,6 @@ export function makeUniformSetter(gl, program) {
         gl[typeMap[type].values](location, v0, v1, v2, v3);
       }
     }
-
   }
 
   return {

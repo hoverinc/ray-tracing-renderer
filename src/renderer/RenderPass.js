@@ -60,6 +60,7 @@ function makeRenderPassFromProgram(gl, program) {
       gl.bindTexture(tex.target, tex.texture);
     }
   }
+
   function useProgram(autoBindTextures = true) {
     gl.useProgram(program);
     uniformSetter.upload();
