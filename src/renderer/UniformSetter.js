@@ -49,17 +49,18 @@ export function makeUniformSetter(gl, program) {
     while (needsUpload.length > 0) {
 
       const { type, location, v0, v1, v2, v3 } = needsUpload.pop();
+      const glMethod = typeMap[type];
 
       if (v0.length) {
-        if (typeMap[type].matrix) {
+        if (glMethod.matrix) {
           const array = v0;
           const transpose = v1 || false;
-          gl[typeMap[type].matrix](location, transpose, array);
+          gl[glMethod.matrix](location, transpose, array);
         } else {
-          gl[typeMap[type].array](location, v0);
+          gl[glMethod.array](location, v0);
         }
       } else {
-        gl[typeMap[type].values](location, v0, v1, v2, v3);
+        gl[glMethod.values](location, v0, v1, v2, v3);
       }
     }
   }
