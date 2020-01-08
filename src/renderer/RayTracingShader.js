@@ -97,7 +97,7 @@ export function makeRayTracingShader(gl, {
     bindTextures,
     draw,
     nextSeed,
-    outputs: renderPass.outputs,
+    outputLocs: renderPass.outputLocs,
     setCamera,
     setJitter,
     setNoise,

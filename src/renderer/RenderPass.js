@@ -16,7 +16,7 @@ export function makeRenderPass(gl, params) {
 
   return {
     ...makeRenderPassFromProgram(gl, program),
-    outputs: getOutputLocations(fragment.outputs)
+    outputLocs: getOutputLocations(fragment.outputs)
   };
 }
 

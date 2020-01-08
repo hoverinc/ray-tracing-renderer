@@ -81,8 +81,8 @@ export function makeRenderingPipeline({
 
     const makeHdrBuffer = () => makeFramebuffer(gl, {
         attachments: {
-          [rayTracingShader.outputs.light]: floatTex(),
-          [rayTracingShader.outputs.position]: floatTex(),
+          [rayTracingShader.outputLocs.light]: floatTex(),
+          [rayTracingShader.outputLocs.position]: floatTex(),
         }
       });
 
@@ -97,7 +97,7 @@ export function makeRenderingPipeline({
     reprojectBackBuffer = makeReprojectBuffer();
 
     lastToneMappedScale = fullscreenScale;
-    lastToneMappedTexture = hdrBuffer.attachments[rayTracingShader.outputs.light];
+    lastToneMappedTexture = hdrBuffer.attachments[rayTracingShader.outputLocs.light];
   }
 
   function swapReprojectBuffer() {
@@ -158,7 +158,7 @@ export function makeRenderingPipeline({
     gl.blendFunc(gl.ONE, gl.ONE);
     gl.enable(gl.BLEND);
 
-    gl.clearBufferfv(gl.COLOR, rayTracingShader.outputs.position, clearToBlack);
+    gl.clearBufferfv(gl.COLOR, rayTracingShader.outputLocs.position, clearToBlack);
 
     gl.viewport(0, 0, width, height);
     rayTracingShader.draw();
@@ -232,11 +232,11 @@ export function makeRenderingPipeline({
     gl.viewport(0, 0, previewWidth, previewHeight);
     reprojectShader.draw({
       blendAmount: reprojectDecay,
-      light: hdrBuffer.attachments[rayTracingShader.outputs.light],
-      position: hdrBuffer.attachments[rayTracingShader.outputs.position],
+      light: hdrBuffer.attachments[rayTracingShader.outputLocs.light],
+      position: hdrBuffer.attachments[rayTracingShader.outputLocs.position],
       textureScale: previewScale,
       previousLight: lastToneMappedTexture,
-      previousPosition: hdrBackBuffer.attachments[rayTracingShader.outputs.position],
+      previousPosition: hdrBackBuffer.attachments[rayTracingShader.outputLocs.position],
       previousTextureScale: lastToneMappedScale,
     });
     reprojectBuffer.unbind();
@@ -273,18 +273,18 @@ export function makeRenderingPipeline({
         gl.viewport(0, 0, screenWidth, screenHeight);
         reprojectShader.draw({
           blendAmount,
-          light: hdrBuffer.attachments[rayTracingShader.outputs.light],
-          position: hdrBuffer.attachments[rayTracingShader.outputs.position],
+          light: hdrBuffer.attachments[rayTracingShader.outputLocs.light],
+          position: hdrBuffer.attachments[rayTracingShader.outputLocs.position],
           textureScale: fullscreenScale,
           previousLight: reprojectBackBuffer.attachments[0],
-          previousPosition: hdrBackBuffer.attachments[rayTracingShader.outputs.position],
+          previousPosition: hdrBackBuffer.attachments[rayTracingShader.outputLocs.position],
           previousTextureScale: previewScale,
         });
         reprojectBuffer.unbind();
 
         toneMapToScreen(reprojectBuffer.attachments[0], fullscreenScale);
       } else {
-        toneMapToScreen(hdrBuffer.attachments[rayTracingShader.outputs.light], fullscreenScale);
+        toneMapToScreen(hdrBuffer.attachments[rayTracingShader.outputLocs.light], fullscreenScale);
       }
 
       sampleRenderedCallback(sampleCount);
@@ -333,10 +333,10 @@ export function makeRenderingPipeline({
     gl.viewport(0, 0, screenWidth, screenHeight);
     reprojectShader.draw({
       blendAmount: 1.0,
-      light: hdrBuffer.attachments[rayTracingShader.outputs.light],
-      position: hdrBuffer.attachments[rayTracingShader.outputs.position],
+      light: hdrBuffer.attachments[rayTracingShader.outputLocs.light],
+      position: hdrBuffer.attachments[rayTracingShader.outputLocs.position],
       previousLight: reprojectBackBuffer.attachments[0],
-      previousPosition: hdrBackBuffer.attachments[rayTracingShader.outputs.position],
+      previousPosition: hdrBackBuffer.attachments[rayTracingShader.outputLocs.position],
       textureScale: fullscreenScale,
       previousTextureScale: fullscreenScale
 
