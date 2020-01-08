@@ -29,10 +29,10 @@ source: `
     vec3 currentPosition = positionTex.xyz;
     float currentMeshId = positionTex.w;
 
-    vec2 hCoord = previousTextureScale * reproject(currentPosition) - jitter;
+    vec2 hCoord = reproject(currentPosition) - jitter;
 
-    vec2 hSizef = vec2(textureSize(previousPosition, 0));
-    ivec2 hSize = ivec2(previousTextureScale * hSizef);
+    vec2 hSizef = previousTextureScale * vec2(textureSize(previousPosition, 0));
+    ivec2 hSize = ivec2(hSizef);
 
     vec2 hTexelf = hCoord * hSizef - 0.5;
     ivec2 hTexel = ivec2(hTexelf);
