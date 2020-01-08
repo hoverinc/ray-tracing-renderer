@@ -16,7 +16,7 @@ export function makeRenderPass(gl, params) {
 
   return {
     ...makeRenderPassFromProgram(gl, program),
-    outputLocs: getOutputLocations(fragment.outputs)
+    outputLocs: fragment.outputs ? getOutputLocations(fragment.outputs) : {}
   };
 }
 
@@ -82,20 +82,22 @@ function makeRenderPassFromProgram(gl, program) {
 function makeShaderStage(gl, type, shader, defines) {
   let str = '#version 300 es\nprecision mediump float;\nprecision mediump int;\n';
 
-  str += addDefines(defines);
+  if (defines) {
+    str += addDefines(defines);
+  }
 
   if (type === gl.FRAGMENT_SHADER) {
     str += addOutputs(shader.outputs);
   }
 
-  str += addIncludes(shader.includes, defines);
+  if (shader.includes) {
+    str += addIncludes(shader.includes, defines);
+  }
 
   if (typeof shader.source === 'function') {
     str += shader.source(defines);
-  } else if (typeof shader.source === 'string') {
-    str += shader.source;
   } else {
-    console.error('Provide a shader source string');
+    str += shader.source;
   }
 
   return compileShader(gl, type, str);
@@ -103,10 +105,6 @@ function makeShaderStage(gl, type, shader, defines) {
 
 function addDefines(defines) {
   let str = '';
-
-  if (typeof defines !== 'object') {
-    return str;
-  }
 
   for (const name in defines) {
     const value = defines[name];
@@ -124,11 +122,6 @@ function addDefines(defines) {
 function addOutputs(outputs) {
   let str = '';
 
-  if (!Array.isArray(outputs)) {
-    console.error('Provide render target outputs for shader');
-    return str;
-  }
-
   const locations = getOutputLocations(outputs);
 
   for (let name in locations) {
@@ -141,10 +134,6 @@ function addOutputs(outputs) {
 
 function addIncludes(includes, defines) {
   let str = '';
-
-  if (!Array.isArray(includes)) {
-    return str;
-  }
 
   for (let include of includes) {
     if (typeof include === 'function') {
@@ -160,10 +149,8 @@ function addIncludes(includes, defines) {
 function getOutputLocations(outputs) {
   let locations = {};
 
-  if (Array.isArray(outputs)) {
-    for (let i = 0; i < outputs.length; i++) {
-      locations[outputs[i]] = i;
-    }
+  for (let i = 0; i < outputs.length; i++) {
+    locations[outputs[i]] = i;
   }
 
   return locations;
