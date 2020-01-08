@@ -12,7 +12,7 @@ import * as THREE from 'three';
 import { uploadBuffers } from './uploadBuffers';
 import { clamp } from './util';
 
-export function makeRayTracingShader(gl, {
+export function makeRayTracePass(gl, {
     bounces, // number of global illumination bounces
     fullscreenQuad,
     optionalExtensions,

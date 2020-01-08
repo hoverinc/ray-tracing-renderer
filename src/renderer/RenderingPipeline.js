@@ -1,11 +1,11 @@
 import { makeFullscreenQuad } from './FullscreenQuad';
-import { makeRayTracingShader } from './RayTracingShader';
-import { makeToneMapShader } from './ToneMapShader';
+import { makeRayTracePass } from './RayTracePass';
+import { makeToneMapPass } from './ToneMapPass';
 import { makeFramebuffer } from './Framebuffer';
 import { numberArraysEqual } from './util';
 import { makeTileRender } from './TileRender';
 import { makeTexture } from './Texture';
-import { makeReprojectShader } from './ReprojectShader';
+import { makeReprojectPass } from './ReprojectPass';
 import noiseBase64 from './texture/noise';
 import { clamp } from './util';
 import { PerspectiveCamera, Vector2 } from 'three';
@@ -30,11 +30,11 @@ export function makeRenderingPipeline({
 
   const fullscreenQuad = makeFullscreenQuad(gl);
 
-  const rayTracingShader = makeRayTracingShader(gl, { bounces, fullscreenQuad, optionalExtensions, scene });
+  const rayTracePass = makeRayTracePass(gl, { bounces, fullscreenQuad, optionalExtensions, scene });
 
-  const reprojectShader = makeReprojectShader(gl, { fullscreenQuad, maxReprojectedSamples });
+  const reprojectPass = makeReprojectPass(gl, { fullscreenQuad, maxReprojectedSamples });
 
-  const toneMapShader = makeToneMapShader(gl, {
+  const toneMapPass = makeToneMapPass(gl, {
     fullscreenQuad, optionalExtensions, toneMappingParams
   });
 
@@ -47,7 +47,7 @@ export function makeRenderingPipeline({
   const noiseImage = new Image();
   noiseImage.src = noiseBase64;
   noiseImage.onload = () => {
-    rayTracingShader.setNoise(noiseImage);
+    rayTracePass.setNoise(noiseImage);
     ready = true;
   };
 
@@ -81,8 +81,8 @@ export function makeRenderingPipeline({
 
     const makeHdrBuffer = () => makeFramebuffer(gl, {
         attachments: {
-          [rayTracingShader.outputLocs.light]: floatTex(),
-          [rayTracingShader.outputLocs.position]: floatTex(),
+          [rayTracePass.outputLocs.light]: floatTex(),
+          [rayTracePass.outputLocs.position]: floatTex(),
         }
       });
 
@@ -97,7 +97,7 @@ export function makeRenderingPipeline({
     reprojectBackBuffer = makeReprojectBuffer();
 
     lastToneMappedScale = fullscreenScale;
-    lastToneMappedTexture = hdrBuffer.attachments[rayTracingShader.outputLocs.light];
+    lastToneMappedTexture = hdrBuffer.attachments[rayTracePass.outputLocs.light];
   }
 
   function swapReprojectBuffer() {
@@ -158,10 +158,10 @@ export function makeRenderingPipeline({
     gl.blendFunc(gl.ONE, gl.ONE);
     gl.enable(gl.BLEND);
 
-    gl.clearBufferfv(gl.COLOR, rayTracingShader.outputLocs.position, clearToBlack);
+    gl.clearBufferfv(gl.COLOR, rayTracePass.outputLocs.position, clearToBlack);
 
     gl.viewport(0, 0, width, height);
-    rayTracingShader.draw();
+    rayTracePass.draw();
 
     gl.disable(gl.BLEND);
     buffer.unbind();
@@ -170,13 +170,13 @@ export function makeRenderingPipeline({
   function newSampleToBuffer(buffer, width, height) {
     buffer.bind();
     gl.viewport(0, 0, width, height);
-    rayTracingShader.draw();
+    rayTracePass.draw();
     buffer.unbind();
   }
 
   function toneMapToScreen(lightTexture, textureScale) {
     gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
-    toneMapShader.draw({
+    toneMapPass.draw({
       light: lightTexture,
       textureScale
     });
@@ -193,22 +193,22 @@ export function makeRenderingPipeline({
   }
 
   function updateSeed(width, height) {
-    rayTracingShader.setSize(width, height);
+    rayTracePass.setSize(width, height);
 
     const jitterX = (Math.random() - 0.5) / width;
     const jitterY = (Math.random() - 0.5) / height;
-    rayTracingShader.setJitter(jitterX, jitterY);
-    reprojectShader.setJitter(jitterX, jitterY);
+    rayTracePass.setJitter(jitterX, jitterY);
+    reprojectPass.setJitter(jitterX, jitterY);
 
     if (sampleCount === 0) {
-      rayTracingShader.setStrataCount(1);
+      rayTracePass.setStrataCount(1);
     } else if (sampleCount === numUniformSamples) {
-      rayTracingShader.setStrataCount(strataCount);
+      rayTracePass.setStrataCount(strataCount);
     } else {
-      rayTracingShader.nextSeed();
+      rayTracePass.nextSeed();
     }
 
-    rayTracingShader.bindTextures();
+    rayTracePass.bindTextures();
   }
 
 
@@ -221,8 +221,8 @@ export function makeRenderingPipeline({
     tileRender.reset();
     setPreviewBufferDimensions();
 
-    rayTracingShader.setCamera(camera);
-    reprojectShader.setPreviousCamera(lastCamera);
+    rayTracePass.setCamera(camera);
+    reprojectPass.setPreviousCamera(lastCamera);
     lastCamera.copy(camera);
 
     updateSeed(previewWidth, previewHeight);
@@ -230,13 +230,13 @@ export function makeRenderingPipeline({
 
     reprojectBuffer.bind();
     gl.viewport(0, 0, previewWidth, previewHeight);
-    reprojectShader.draw({
+    reprojectPass.draw({
       blendAmount: reprojectDecay,
-      light: hdrBuffer.attachments[rayTracingShader.outputLocs.light],
-      position: hdrBuffer.attachments[rayTracingShader.outputLocs.position],
+      light: hdrBuffer.attachments[rayTracePass.outputLocs.light],
+      position: hdrBuffer.attachments[rayTracePass.outputLocs.position],
       textureScale: previewScale,
       previousLight: lastToneMappedTexture,
-      previousPosition: hdrBackBuffer.attachments[rayTracingShader.outputLocs.position],
+      previousPosition: hdrBackBuffer.attachments[rayTracePass.outputLocs.position],
       previousTextureScale: lastToneMappedScale,
     });
     reprojectBuffer.unbind();
@@ -254,7 +254,7 @@ export function makeRenderingPipeline({
 
       if (sampleCount === 0) { // previous rendered image was a preview image
         clearBuffer(hdrBuffer);
-        reprojectShader.setPreviousCamera(lastCamera);
+        reprojectPass.setPreviousCamera(lastCamera);
       }
 
       updateSeed(screenWidth, screenHeight);
@@ -271,20 +271,20 @@ export function makeRenderingPipeline({
       if (blendAmount > 0.0) {
         reprojectBuffer.bind();
         gl.viewport(0, 0, screenWidth, screenHeight);
-        reprojectShader.draw({
+        reprojectPass.draw({
           blendAmount,
-          light: hdrBuffer.attachments[rayTracingShader.outputLocs.light],
-          position: hdrBuffer.attachments[rayTracingShader.outputLocs.position],
+          light: hdrBuffer.attachments[rayTracePass.outputLocs.light],
+          position: hdrBuffer.attachments[rayTracePass.outputLocs.position],
           textureScale: fullscreenScale,
           previousLight: reprojectBackBuffer.attachments[0],
-          previousPosition: hdrBackBuffer.attachments[rayTracingShader.outputLocs.position],
+          previousPosition: hdrBackBuffer.attachments[rayTracePass.outputLocs.position],
           previousTextureScale: previewScale,
         });
         reprojectBuffer.unbind();
 
         toneMapToScreen(reprojectBuffer.attachments[0], fullscreenScale);
       } else {
-        toneMapToScreen(hdrBuffer.attachments[rayTracingShader.outputLocs.light], fullscreenScale);
+        toneMapToScreen(hdrBuffer.attachments[rayTracePass.outputLocs.light], fullscreenScale);
       }
 
       sampleRenderedCallback(sampleCount);
@@ -312,12 +312,12 @@ export function makeRenderingPipeline({
     }
 
     if (sampleCount === 0) {
-      reprojectShader.setPreviousCamera(lastCamera);
+      reprojectPass.setPreviousCamera(lastCamera);
     }
 
     if (!areCamerasEqual(camera, lastCamera)) {
       sampleCount = 0;
-      rayTracingShader.setCamera(camera);
+      rayTracePass.setCamera(camera);
       lastCamera.copy(camera);
       swapHdrBuffer();
       clearBuffer(hdrBuffer);
@@ -331,12 +331,12 @@ export function makeRenderingPipeline({
 
     reprojectBuffer.bind();
     gl.viewport(0, 0, screenWidth, screenHeight);
-    reprojectShader.draw({
+    reprojectPass.draw({
       blendAmount: 1.0,
-      light: hdrBuffer.attachments[rayTracingShader.outputLocs.light],
-      position: hdrBuffer.attachments[rayTracingShader.outputLocs.position],
+      light: hdrBuffer.attachments[rayTracePass.outputLocs.light],
+      position: hdrBuffer.attachments[rayTracePass.outputLocs.position],
       previousLight: reprojectBackBuffer.attachments[0],
-      previousPosition: hdrBackBuffer.attachments[rayTracingShader.outputLocs.position],
+      previousPosition: hdrBackBuffer.attachments[rayTracePass.outputLocs.position],
       textureScale: fullscreenScale,
       previousTextureScale: fullscreenScale
 

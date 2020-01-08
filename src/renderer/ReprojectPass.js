@@ -2,7 +2,7 @@ import fragment from './glsl/reproject.frag';
 import { makeRenderPass } from './RenderPass';
 import * as THREE from 'three';
 
-export function makeReprojectShader(gl, params) {
+export function makeReprojectPass(gl, params) {
   const {
     fullscreenQuad,
     maxReprojectedSamples,
