@@ -6,7 +6,7 @@ outputs: ['color'],
 source: `
   in vec2 vCoord;
 
-  uniform mediump sampler2D hdrBuffer;
+  uniform mediump sampler2D light;
 
   uniform vec2 textureScale;
 
@@ -38,7 +38,7 @@ source: `
   }
 
   void main() {
-    vec4 tex = texture(hdrBuffer, textureScale * vCoord);
+    vec4 tex = texture(light, textureScale * vCoord);
 
     // alpha channel stores the number of samples progressively rendered
     // divide the sum of light by alpha to obtain average contribution of light

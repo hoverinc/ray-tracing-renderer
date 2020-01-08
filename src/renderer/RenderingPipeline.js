@@ -10,8 +10,6 @@ import noiseBase64 from './texture/noise';
 import { clamp } from './util';
 import { PerspectiveCamera, Vector2 } from 'three';
 
-// Important TODO: Refactor this file to get rid of duplicate and confusing code
-
 export function makeRenderingPipeline({
     gl,
     optionalExtensions,
@@ -176,14 +174,14 @@ export function makeRenderingPipeline({
     buffer.unbind();
   }
 
-  function toneMapToScreen(texture, textureScale) {
+  function toneMapToScreen(lightTexture, textureScale) {
     gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
     toneMapShader.draw({
-      hdrTexture: texture,
+      light: lightTexture,
       textureScale
     });
 
-    lastToneMappedTexture = texture;
+    lastToneMappedTexture = lightTexture;
     lastToneMappedScale = textureScale;
   }
 

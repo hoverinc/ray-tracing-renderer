@@ -34,13 +34,13 @@ export function makeToneMapShader(gl, params) {
 
   function draw(params) {
     const {
-      hdrTexture,
+      light,
       textureScale
     } = params;
 
     renderPass.setUniform('textureScale', textureScale.x, textureScale.y);
 
-    renderPass.setTexture('hdrBuffer', hdrTexture);
+    renderPass.setTexture('light', light);
 
     renderPass.useProgram();
     fullscreenQuad.draw();
