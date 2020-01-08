@@ -57,7 +57,7 @@ export function makeRenderingPipeline({
   let previewWidth = 0;
   let previewHeight = 0;
 
-  let previewScale = new Vector2(1, 1);
+  const previewScale = new Vector2(1, 1);
   const fullscreenScale = new Vector2(1, 1);
 
   let hdrBuffer;
