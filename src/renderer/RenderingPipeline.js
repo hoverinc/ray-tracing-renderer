@@ -9,6 +9,8 @@ import { makeReprojectPass } from './ReprojectPass';
 import noiseBase64 from './texture/noise';
 import { clamp } from './util';
 import { PerspectiveCamera, Vector2 } from 'three';
+import { decomposeScene } from './decomposeScene';
+import { mergeMeshesToGeometry } from './mergeMeshesToGeometry';
 
 export function makeRenderingPipeline({
     gl,
@@ -27,9 +29,14 @@ export function makeRenderingPipeline({
   // higher number results in faster convergence over time, but with lower quality initial samples
   const strataCount = 6;
 
+  const decomposedScene = decomposeScene(scene);
+  const meshes = decomposedScene.meshes;
+  const mergedMesh = mergeMeshesToGeometry(meshes);
+
+
   const fullscreenQuad = makeFullscreenQuad(gl);
 
-  const rayTracePass = makeRayTracePass(gl, { bounces, fullscreenQuad, optionalExtensions, scene });
+  const rayTracePass = makeRayTracePass(gl, { bounces, decomposedScene, fullscreenQuad, mergedMesh, optionalExtensions, scene });
 
   const reprojectPass = makeReprojectPass(gl, { fullscreenQuad, maxReprojectedSamples });
 

@@ -8,15 +8,15 @@ import { makeRenderPass } from './RenderPass';
 import { makeStratifiedSamplerCombined } from './StratifiedSamplerCombined';
 import { makeTexture } from './Texture';
 import { getTexturesFromMaterials, mergeTexturesFromMaterials } from './texturesFromMaterials';
-import * as THREE from 'three';
 import { uploadBuffers } from './uploadBuffers';
 import { clamp } from './util';
 
 export function makeRayTracePass(gl, {
     bounces, // number of global illumination bounces
+    decomposedScene,
     fullscreenQuad,
+    mergedMesh,
     optionalExtensions,
-    scene,
   }) {
 
   bounces = clamp(bounces, 1, 6);
@@ -36,7 +36,7 @@ export function makeRayTracePass(gl, {
   let samples;
 
   const renderPass = makeRenderPassFromScene({
-    bounces, fullscreenQuad, gl, optionalExtensions, samplingDimensions, scene
+    bounces, decomposedScene, fullscreenQuad, gl, mergedMesh, optionalExtensions, samplingDimensions,
   });
 
   function setSize(width, height) {
@@ -107,21 +107,18 @@ export function makeRayTracePass(gl, {
 }
 function makeRenderPassFromScene({
     bounces,
+    decomposedScene,
     fullscreenQuad,
     gl,
+    mergedMesh,
     optionalExtensions,
     samplingDimensions,
-    scene,
   }) {
   const { OES_texture_float_linear } = optionalExtensions;
 
-  const { meshes, directionalLights, ambientLights, environmentLights } = decomposeScene(scene);
-  if (meshes.length === 0) {
-    throw 'RayTracingRenderer: Scene contains no renderable meshes.';
-  }
+  const { background, directionalLights, ambientLights, environmentLights } = decomposedScene;
 
-  // merge meshes in scene to a single, static geometry
-  const { geometry, materials, materialIndices } = mergeMeshesToGeometry(meshes);
+  const { geometry, materials, materialIndices } = mergedMesh;
 
   // extract textures shared by meshes in scene
   const maps = getTexturesFromMaterials(materials, ['map', 'normalMap']);
@@ -217,8 +214,8 @@ function makeRenderPassFromScene({
   renderPass.setTexture('envmap', envImageTextureObject);
 
   let backgroundImageTextureObject;
-  if (scene.background) {
-    const backgroundImage = generateBackgroundMapFromSceneBackground(scene.background);
+  if (background) {
+    const backgroundImage = generateBackgroundMapFromSceneBackground(background);
     backgroundImageTextureObject = makeTexture(gl, {
       data: backgroundImage.data,
       minFilter: OES_texture_float_linear ? gl.LINEAR : gl.NEAREST,
@@ -243,46 +240,6 @@ function makeRenderPassFromScene({
   }));
 
   return renderPass;
-}
-
-function decomposeScene(scene) {
-  const meshes = [];
-  const directionalLights = [];
-  const ambientLights = [];
-  const environmentLights = [];
-  scene.traverse(child => {
-    if (child.isMesh) {
-      if (!child.geometry || !child.geometry.getAttribute('position')) {
-        console.warn(child, 'must have a geometry property with a position attribute');
-      }
-      else if (!(child.material.isMeshStandardMaterial)) {
-        console.warn(child, 'must use MeshStandardMaterial in order to be rendered.');
-      } else {
-        meshes.push(child);
-      }
-    }
-    if (child.isDirectionalLight) {
-      directionalLights.push(child);
-    }
-    if (child.isAmbientLight) {
-      ambientLights.push(child);
-    }
-    if (child.isEnvironmentLight) {
-      if (environmentLights.length > 1) {
-        console.warn(environmentLights, 'only one environment light can be used per scene');
-      }
-      // Valid lights have HDR texture map in RGBEEncoding
-      if (isHDRTexture(child)) {
-        environmentLights.push(child);
-      } else {
-        console.warn(child, 'environment light does not use color value or map with THREE.RGBEEncoding');
-      }
-    }
-  });
-
-  return {
-    meshes, directionalLights, ambientLights, environmentLights
-  };
 }
 
 function textureDimensionsFromArray(count) {
@@ -354,10 +311,4 @@ function padArray(typedArray, length) {
   const newArray = new typedArray.constructor(length);
   newArray.set(typedArray);
   return newArray;
-}
-
-function isHDRTexture(texture) {
-  return texture.map
-    && texture.map.image
-    && (texture.map.encoding === THREE.RGBEEncoding || texture.map.encoding === THREE.LinearEncoding);
 }
