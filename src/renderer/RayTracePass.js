@@ -3,7 +3,6 @@ import { ThinMaterial, ThickMaterial, ShadowCatcherMaterial } from '../constants
 import { generateEnvMapFromSceneComponents, generateBackgroundMapFromSceneBackground } from './envMapCreation';
 import { envmapDistribution } from './envmapDistribution';
 import fragment from './glsl/rayTrace.frag';
-import { mergeMeshesToGeometry } from './mergeMeshesToGeometry';
 import { makeRenderPass } from './RenderPass';
 import { makeStratifiedSamplerCombined } from './StratifiedSamplerCombined';
 import { makeTexture } from './Texture';
@@ -129,9 +128,6 @@ function makeRenderPassFromScene({
   const flattenedBvh = flattenBvh(bvh);
   const numTris = geometry.index.count / 3;
 
-  const useGlass = materials.some(m => m.transparent);
-  const useShadowCatcher = materials.some(m => m.shadowCatcher);
-
   const renderPass = makeRenderPass(gl, {
     defines: {
       OES_texture_float_linear,
@@ -146,8 +142,8 @@ function makeRenderPassFromScene({
       NUM_DIFFUSE_NORMAL_MAPS: Math.max(maps.map.textures.length, maps.normalMap.textures.length),
       NUM_PBR_MAPS: pbrMap.textures.length,
       BOUNCES: bounces,
-      USE_GLASS: useGlass,
-      USE_SHADOW_CATCHER: useShadowCatcher,
+      USE_GLASS: materials.some(m => m.transparent),
+      USE_SHADOW_CATCHER: materials.some(m => m.shadowCatcher),
       SAMPLING_DIMENSIONS: samplingDimensions.reduce((a, b) => a + b)
     },
     fragment,

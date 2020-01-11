@@ -13,17 +13,14 @@ const toneMapFunctions = {
 export function makeToneMapPass(gl, params) {
   const {
     fullscreenQuad,
-    // optionalExtensions,
     toneMappingParams
   } = params;
 
-  // const { OES_texture_float_linear } = optionalExtensions;
   const { toneMapping, whitePoint, exposure } = toneMappingParams;
 
   const renderPass = makeRenderPass(gl, {
     gl,
     defines: {
-      // OES_texture_float_linear,
       TONE_MAPPING: toneMapFunctions[toneMapping] || 'linear',
       WHITE_POINT: whitePoint.toExponential(), // toExponential allows integers to be represented as GLSL floats
       EXPOSURE: exposure.toExponential()

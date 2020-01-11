@@ -1,4 +1,5 @@
 import { makeFullscreenQuad } from './FullscreenQuad';
+import { makeGBufferPass } from './GBufferPass';
 import { makeRayTracePass } from './RayTracePass';
 import { makeToneMapPass } from './ToneMapPass';
 import { makeFramebuffer } from './Framebuffer';
@@ -30,9 +31,8 @@ export function makeRenderingPipeline({
   const strataCount = 6;
 
   const decomposedScene = decomposeScene(scene);
-  const meshes = decomposedScene.meshes;
-  const mergedMesh = mergeMeshesToGeometry(meshes);
 
+  const mergedMesh = mergeMeshesToGeometry(decomposedScene.meshes);
 
   const fullscreenQuad = makeFullscreenQuad(gl);
 
@@ -40,9 +40,9 @@ export function makeRenderingPipeline({
 
   const reprojectPass = makeReprojectPass(gl, { fullscreenQuad, maxReprojectedSamples });
 
-  const toneMapPass = makeToneMapPass(gl, {
-    fullscreenQuad, optionalExtensions, toneMappingParams
-  });
+  const toneMapPass = makeToneMapPass(gl, { fullscreenQuad, toneMappingParams });
+
+  const gBufferPass = makeGBufferPass(gl, { mergedMesh });
 
   // used to sample only a portion of the scene to the HDR Buffer to prevent the GPU from locking up from excessive computation
   const tileRender = makeTileRender(gl);
@@ -354,8 +354,14 @@ export function makeRenderingPipeline({
     swapReprojectBuffer();
   }
 
+  function drawTest(camera) {
+    gl.viewport(0, 0, screenWidth, screenHeight);
+    gBufferPass.setCamera(camera);
+    gBufferPass.draw();
+  }
+
   return {
-    draw,
+    draw: drawTest,
     drawFull,
     restartTimer: tileRender.restartTimer,
     setSize,
