@@ -18,8 +18,7 @@ export function makeRenderingPipeline({
     bounces, // number of global illumination bounces
   }) {
 
-  const reprojectDecay = 0.975;
-  const maxReprojectedSamples = Math.round(reprojectDecay / (1 - reprojectDecay));
+  const maxReprojectedSamples = 25;
 
   // how many samples to render with uniform noise before switching to stratified noise
   const numUniformSamples = 6;
@@ -231,7 +230,7 @@ export function makeRenderingPipeline({
     reprojectBuffer.bind();
     gl.viewport(0, 0, previewWidth, previewHeight);
     reprojectPass.draw({
-      blendAmount: reprojectDecay,
+      blendAmount: 1.0,
       light: hdrBuffer.attachments[rayTracePass.outputLocs.light],
       position: hdrBuffer.attachments[rayTracePass.outputLocs.position],
       textureScale: previewScale,
