@@ -3,8 +3,7 @@
 // Walter Et al. (2007) - Microfacet Models for Refraction through Rough Surfaces
 // https://www.cs.cornell.edu/~srm/publications/EGSR07-btdf.html
 
-export default function(defines) {
-  return `
+export default `
 #ifdef USE_GLASS
 
 // Computes Cook-Torrance specular reflection
@@ -206,4 +205,3 @@ vec3 sampleGlassMicrofacet(SurfaceInteraction si, int bounce, inout Ray ray, ino
 #endif
 
 `;
-}

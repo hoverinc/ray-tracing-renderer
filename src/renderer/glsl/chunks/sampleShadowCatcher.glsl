@@ -1,5 +1,4 @@
-export default function (defines) {
-  return `
+export default `
 
 #ifdef USE_SHADOW_CATCHER
 
@@ -130,5 +129,5 @@ void sampleShadowCatcher(SurfaceInteraction si, int bounce, inout Path path) {
 }
 
 #endif
+
 `;
-}

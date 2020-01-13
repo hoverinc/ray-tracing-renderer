@@ -1,5 +1,4 @@
-export default function(defines) {
-  return `
+export default `
 
 // Noise texture used to generate a different random number for each pixel.
 // We use blue noise in particular, but any type of noise will work.
@@ -37,4 +36,3 @@ vec2 randomSampleVec2() {
   return vec2(randomSample(), randomSample());
 }
 `;
-};

@@ -1,13 +1,12 @@
-export default function() {
-  return `#version 300 es
+export default {
+source: `
+  layout(location = 0) in vec2 a_position;
 
-layout(location = 0) in vec2 position;
-out vec2 vCoord;
+  out vec2 vCoord;
 
-void main() {
-  vCoord = position;
-  gl_Position = vec4(2. * position - 1., 0, 1);
-}
-
-`;
+  void main() {
+    vCoord = a_position;
+    gl_Position = vec4(2. * a_position - 1., 0, 1);
+  }
+`
 }

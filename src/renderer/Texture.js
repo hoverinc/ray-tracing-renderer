@@ -55,7 +55,11 @@ export function makeTexture(gl, params) {
   gl.texParameteri(target, gl.TEXTURE_MAG_FILTER, magFilter);
 
   if (!channels) {
-    channels = data.length / (width * height) || 4; // infer number of channels from data size
+    if (data && data.length) {
+      channels = data.length / (width * height); // infer number of channels from data size
+    } else {
+      channels = 4;
+    }
   }
 
   channels = clamp(channels, 1, 4);

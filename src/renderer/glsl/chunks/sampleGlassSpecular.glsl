@@ -1,5 +1,4 @@
-export default function (defines) {
-  return `
+export default `
 
 #ifdef USE_GLASS
 
@@ -36,4 +35,3 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
 #endif
 
 `;
-}

@@ -1,5 +1,4 @@
-export default function(defines) {
-  return `
+export default `
 
 uniform highp isampler2D indices;
 uniform sampler2D positions;
@@ -16,7 +15,7 @@ uniform Materials {
   #endif
 
   #if defined(NUM_DIFFUSE_MAPS) || defined(NUM_NORMAL_MAPS)
-    vec4 diffuseNormalMapSize[${Math.max(defines.NUM_DIFFUSE_MAPS, defines.NUM_NORMAL_MAPS)}];
+    vec4 diffuseNormalMapSize[NUM_DIFFUSE_NORMAL_MAPS];
   #endif
 
   #if defined(NUM_PBR_MAPS)
@@ -364,5 +363,5 @@ bool intersectSceneShadow(inout Ray ray) {
 
   return false;
 }
+
 `;
-}
