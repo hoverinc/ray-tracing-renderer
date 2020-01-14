@@ -51,6 +51,40 @@
     return obj;
   }
 
+  function ownKeys(object, enumerableOnly) {
+    var keys = Object.keys(object);
+
+    if (Object.getOwnPropertySymbols) {
+      var symbols = Object.getOwnPropertySymbols(object);
+      if (enumerableOnly) symbols = symbols.filter(function (sym) {
+        return Object.getOwnPropertyDescriptor(object, sym).enumerable;
+      });
+      keys.push.apply(keys, symbols);
+    }
+
+    return keys;
+  }
+
+  function _objectSpread2(target) {
+    for (var i = 1; i < arguments.length; i++) {
+      var source = arguments[i] != null ? arguments[i] : {};
+
+      if (i % 2) {
+        ownKeys(source, true).forEach(function (key) {
+          _defineProperty(target, key, source[key]);
+        });
+      } else if (Object.getOwnPropertyDescriptors) {
+        Object.defineProperties(target, Object.getOwnPropertyDescriptors(source));
+      } else {
+        ownKeys(source).forEach(function (key) {
+          Object.defineProperty(target, key, Object.getOwnPropertyDescriptor(source, key));
+        });
+      }
+    }
+
+    return target;
+  }
+
   function _inherits(subClass, superClass) {
     if (typeof superClass !== "function" && superClass !== null) {
       throw new TypeError("Super expression must either be null or a function");
@@ -128,10 +162,6 @@
     return _get(target, property, receiver || target);
   }
 
-  function _slicedToArray(arr, i) {
-    return _arrayWithHoles(arr) || _iterableToArrayLimit(arr, i) || _nonIterableRest();
-  }
-
   function _toConsumableArray(arr) {
     return _arrayWithoutHoles(arr) || _iterableToArray(arr) || _nonIterableSpread();
   }
@@ -144,46 +174,12 @@
     }
   }
 
-  function _arrayWithHoles(arr) {
-    if (Array.isArray(arr)) return arr;
-  }
-
   function _iterableToArray(iter) {
     if (Symbol.iterator in Object(iter) || Object.prototype.toString.call(iter) === "[object Arguments]") return Array.from(iter);
   }
 
-  function _iterableToArrayLimit(arr, i) {
-    var _arr = [];
-    var _n = true;
-    var _d = false;
-    var _e = undefined;
-
-    try {
-      for (var _i = arr[Symbol.iterator](), _s; !(_n = (_s = _i.next()).done); _n = true) {
-        _arr.push(_s.value);
-
-        if (i && _arr.length === i) break;
-      }
-    } catch (err) {
-      _d = true;
-      _e = err;
-    } finally {
-      try {
-        if (!_n && _i["return"] != null) _i["return"]();
-      } finally {
-        if (_d) throw _e;
-      }
-    }
-
-    return _arr;
-  }
-
   function _nonIterableSpread() {
     throw new TypeError("Invalid attempt to spread non-iterable instance");
-  }
-
-  function _nonIterableRest() {
-    throw new TypeError("Invalid attempt to destructure non-iterable instance");
   }
 
   var LensCamera =
@@ -345,7 +341,7 @@
 
     return supported;
   }
-  function createShader(gl, type, source) {
+  function compileShader(gl, type, source) {
     var shader = gl.createShader(type);
     gl.shaderSource(shader, source);
     gl.compileShader(shader);
@@ -382,17 +378,22 @@
     throw gl.getProgramInfoLog(program);
   }
   function getUniforms(gl, program) {
-    var uniforms = {};
+    var uniforms = [];
     var count = gl.getProgramParameter(program, gl.ACTIVE_UNIFORMS);
 
     for (var i = 0; i < count; i++) {
       var _gl$getActiveUniform = gl.getActiveUniform(program, i),
-          name = _gl$getActiveUniform.name;
+          name = _gl$getActiveUniform.name,
+          type = _gl$getActiveUniform.type;
 
       var location = gl.getUniformLocation(program, name);
 
       if (location) {
-        uniforms[name] = location;
+        uniforms.push({
+          name: name,
+          type: type,
+          location: location
+        });
       }
     }
 
@@ -505,8 +506,291 @@
     }
   }
 
-  function vertString () {
-    return "#version 300 es\n\nlayout(location = 0) in vec2 position;\nout vec2 vCoord;\n\nvoid main() {\n  vCoord = position;\n  gl_Position = vec4(2. * position - 1., 0, 1);\n}\n\n";
+  var vertex = {
+    source: "\n  layout(location = 0) in vec2 a_position;\n\n  out vec2 vCoord;\n\n  void main() {\n    vCoord = a_position;\n    gl_Position = vec4(2. * a_position - 1., 0, 1);\n  }\n"
+  };
+
+  var typeMap;
+  function makeUniformSetter(gl, program) {
+    var uniformInfo = getUniforms(gl, program);
+    var uniforms = {};
+    var needsUpload = [];
+    var _iteratorNormalCompletion = true;
+    var _didIteratorError = false;
+    var _iteratorError = undefined;
+
+    try {
+      for (var _iterator = uniformInfo[Symbol.iterator](), _step; !(_iteratorNormalCompletion = (_step = _iterator.next()).done); _iteratorNormalCompletion = true) {
+        var _step$value = _step.value,
+            name = _step$value.name,
+            type = _step$value.type,
+            location = _step$value.location;
+        var uniform = {
+          type: type,
+          location: location,
+          v0: 0,
+          v1: 0,
+          v2: 0,
+          v3: 0
+        };
+        uniforms[name] = uniform;
+      }
+    } catch (err) {
+      _didIteratorError = true;
+      _iteratorError = err;
+    } finally {
+      try {
+        if (!_iteratorNormalCompletion && _iterator["return"] != null) {
+          _iterator["return"]();
+        }
+      } finally {
+        if (_didIteratorError) {
+          throw _iteratorError;
+        }
+      }
+    }
+
+    var failedUnis = new Set();
+
+    function setUniform(name, v0, v1, v2, v3) {
+      // v0 - v4 are the values to be passed to the uniform
+      // v0 can either be a number or an array, and v1-v3 are optional
+      var uni = uniforms[name];
+
+      if (!uni) {
+        if (!failedUnis.has(name)) {
+          console.warn("Uniform \"".concat(name, "\" does not exist in shader"));
+          failedUnis.add(name);
+        }
+
+        return;
+      }
+
+      uni.v0 = v0;
+      uni.v1 = v1;
+      uni.v2 = v2;
+      uni.v3 = v3;
+      needsUpload.push(uni);
+    }
+
+    typeMap = typeMap || initTypeMap(gl);
+
+    function upload() {
+      while (needsUpload.length > 0) {
+        var _needsUpload$pop = needsUpload.pop(),
+            type = _needsUpload$pop.type,
+            location = _needsUpload$pop.location,
+            v0 = _needsUpload$pop.v0,
+            v1 = _needsUpload$pop.v1,
+            v2 = _needsUpload$pop.v2,
+            v3 = _needsUpload$pop.v3;
+
+        var glMethod = typeMap[type];
+
+        if (v0.length) {
+          if (glMethod.matrix) {
+            var array = v0;
+            var transpose = v1 || false;
+            gl[glMethod.matrix](location, transpose, array);
+          } else {
+            gl[glMethod.array](location, v0);
+          }
+        } else {
+          gl[glMethod.values](location, v0, v1, v2, v3);
+        }
+      }
+    }
+
+    return {
+      setUniform: setUniform,
+      upload: upload
+    };
+  }
+
+  function initTypeMap(gl) {
+    var _ref;
+
+    return _ref = {}, _defineProperty(_ref, gl.FLOAT, glName(1, 'f')), _defineProperty(_ref, gl.FLOAT_VEC2, glName(2, 'f')), _defineProperty(_ref, gl.FLOAT_VEC3, glName(3, 'f')), _defineProperty(_ref, gl.FLOAT_VEC4, glName(4, 'f')), _defineProperty(_ref, gl.INT, glName(1, 'i')), _defineProperty(_ref, gl.INT_VEC2, glName(2, 'i')), _defineProperty(_ref, gl.INT_VEC3, glName(3, 'i')), _defineProperty(_ref, gl.INT_VEC4, glName(4, 'i')), _defineProperty(_ref, gl.SAMPLER_2D, glName(1, 'i')), _defineProperty(_ref, gl.SAMPLER_2D_ARRAY, glName(1, 'i')), _defineProperty(_ref, gl.FLOAT_MAT2, glNameMatrix(2, 2)), _defineProperty(_ref, gl.FLOAT_MAT3, glNameMatrix(3, 3)), _defineProperty(_ref, gl.FLOAT_MAT4, glNameMatrix(4, 4)), _ref;
+  }
+
+  function glName(numComponents, type) {
+    return {
+      values: "uniform".concat(numComponents).concat(type),
+      array: "uniform".concat(numComponents).concat(type, "v")
+    };
+  }
+
+  function glNameMatrix(rows, columns) {
+    return {
+      matrix: rows === columns ? "uniformMatrix".concat(rows, "fv") : "uniformMatrix".concat(rows, "x").concat(columns, "fv")
+    };
+  }
+
+  function makeRenderPass(gl, params) {
+    var defines = params.defines,
+        fragment = params.fragment,
+        vertex = params.vertex;
+    var vertexCompiled = vertex instanceof WebGLShader ? vertex : makeVertexShader(gl, params);
+    var fragmentCompiled = fragment instanceof WebGLShader ? fragment : makeFragmentShader(gl, params);
+    var program = createProgram(gl, vertexCompiled, fragmentCompiled);
+    return _objectSpread2({}, makeRenderPassFromProgram(gl, program), {
+      outputLocs: fragment.outputs ? getOutputLocations(fragment.outputs) : {}
+    });
+  }
+  function makeVertexShader(gl, _ref) {
+    var defines = _ref.defines,
+        vertex = _ref.vertex;
+    return makeShaderStage(gl, gl.VERTEX_SHADER, vertex, defines);
+  }
+  function makeFragmentShader(gl, _ref2) {
+    var defines = _ref2.defines,
+        fragment = _ref2.fragment;
+    return makeShaderStage(gl, gl.FRAGMENT_SHADER, fragment, defines);
+  }
+
+  function makeRenderPassFromProgram(gl, program) {
+    var uniformSetter = makeUniformSetter(gl, program);
+    var textures = {};
+    var nextTexUnit = 1;
+
+    function setTexture(name, texture) {
+      var cachedTex = textures[name];
+
+      if (!cachedTex) {
+        var unit = nextTexUnit++;
+        uniformSetter.setUniform(name, unit);
+        cachedTex = {
+          unit: unit
+        };
+        textures[name] = cachedTex;
+      }
+
+      cachedTex.tex = texture;
+    }
+
+    function bindTextures() {
+      for (var name in textures) {
+        var _textures$name = textures[name],
+            tex = _textures$name.tex,
+            unit = _textures$name.unit;
+        gl.activeTexture(gl.TEXTURE0 + unit);
+        gl.bindTexture(tex.target, tex.texture);
+      }
+    }
+
+    function useProgram() {
+      var autoBindTextures = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : true;
+      gl.useProgram(program);
+      uniformSetter.upload();
+
+      if (autoBindTextures) {
+        bindTextures();
+      }
+    }
+
+    return {
+      bindTextures: bindTextures,
+      program: program,
+      setTexture: setTexture,
+      setUniform: uniformSetter.setUniform,
+      textures: textures,
+      useProgram: useProgram
+    };
+  }
+
+  function makeShaderStage(gl, type, shader, defines) {
+    var str = '#version 300 es\nprecision mediump float;\nprecision mediump int;\n';
+
+    if (defines) {
+      str += addDefines(defines);
+    }
+
+    if (type === gl.FRAGMENT_SHADER) {
+      str += addOutputs(shader.outputs);
+    }
+
+    if (shader.includes) {
+      str += addIncludes(shader.includes, defines);
+    }
+
+    if (typeof shader.source === 'function') {
+      str += shader.source(defines);
+    } else {
+      str += shader.source;
+    }
+
+    return compileShader(gl, type, str);
+  }
+
+  function addDefines(defines) {
+    var str = '';
+
+    for (var name in defines) {
+      var value = defines[name]; // don't define falsy values such as false, 0, and ''.
+      // this adds support for #ifdef on falsy values
+
+      if (value) {
+        str += "#define ".concat(name, " ").concat(value, "\n");
+      }
+    }
+
+    return str;
+  }
+
+  function addOutputs(outputs) {
+    var str = '';
+    var locations = getOutputLocations(outputs);
+
+    for (var name in locations) {
+      var location = locations[name];
+      str += "layout(location = ".concat(location, ") out vec4 out_").concat(name, ";\n");
+    }
+
+    return str;
+  }
+
+  function addIncludes(includes, defines) {
+    var str = '';
+    var _iteratorNormalCompletion = true;
+    var _didIteratorError = false;
+    var _iteratorError = undefined;
+
+    try {
+      for (var _iterator = includes[Symbol.iterator](), _step; !(_iteratorNormalCompletion = (_step = _iterator.next()).done); _iteratorNormalCompletion = true) {
+        var include = _step.value;
+
+        if (typeof include === 'function') {
+          str += include(defines);
+        } else {
+          str += include;
+        }
+      }
+    } catch (err) {
+      _didIteratorError = true;
+      _iteratorError = err;
+    } finally {
+      try {
+        if (!_iteratorNormalCompletion && _iterator["return"] != null) {
+          _iterator["return"]();
+        }
+      } finally {
+        if (_didIteratorError) {
+          throw _iteratorError;
+        }
+      }
+    }
+
+    return str;
+  }
+
+  function getOutputLocations(outputs) {
+    var locations = {};
+
+    for (var i = 0; i < outputs.length; i++) {
+      locations[outputs[i]] = i;
+    }
+
+    return locations;
   }
 
   function makeFullscreenQuad(gl) {
@@ -517,7 +801,9 @@
     var posLoc = 0;
     gl.enableVertexAttribArray(posLoc);
     gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0);
-    var vertexShader = createShader(gl, gl.VERTEX_SHADER, vertString());
+    var vertexShader = makeVertexShader(gl, {
+      vertex: vertex
+    });
 
     function draw() {
       gl.drawArrays(gl.TRIANGLES, 0, 6);
@@ -1166,47 +1452,6 @@
     };
   }
 
-  // Manually performs linear filtering if the extension OES_texture_float_linear is not supported
-  function textureLinear (defines) {
-    return "\n\n  vec4 textureLinear(sampler2D map, vec2 uv) {\n    #ifdef OES_texture_float_linear\n      return texture(map, uv);\n    #else\n      vec2 size = vec2(textureSize(map, 0));\n      vec2 texelSize = 1.0 / size;\n\n      uv = uv * size - 0.5;\n      vec2 f = fract(uv);\n      uv = floor(uv) + 0.5;\n\n      vec4 s1 = texture(map, (uv + vec2(0, 0)) * texelSize);\n      vec4 s2 = texture(map, (uv + vec2(1, 0)) * texelSize);\n      vec4 s3 = texture(map, (uv + vec2(0, 1)) * texelSize);\n      vec4 s4 = texture(map, (uv + vec2(1, 1)) * texelSize);\n\n      return mix(mix(s1, s2, f.x), mix(s3, s4, f.x), f.y);\n    #endif\n  }\n";
-  }
-
-  function intersect (defines) {
-    return "\n\nuniform highp isampler2D indices;\nuniform sampler2D positions;\nuniform sampler2D normals;\nuniform sampler2D uvs;\nuniform sampler2D bvh;\n\nuniform Materials {\n  vec4 colorAndMaterialType[NUM_MATERIALS];\n  vec4 roughnessMetalnessNormalScale[NUM_MATERIALS];\n\n  #if defined(NUM_DIFFUSE_MAPS) || defined(NUM_NORMAL_MAPS) || defined(NUM_PBR_MAPS)\n    ivec4 diffuseNormalRoughnessMetalnessMapIndex[NUM_MATERIALS];\n  #endif\n\n  #if defined(NUM_DIFFUSE_MAPS) || defined(NUM_NORMAL_MAPS)\n    vec4 diffuseNormalMapSize[".concat(Math.max(defines.NUM_DIFFUSE_MAPS, defines.NUM_NORMAL_MAPS), "];\n  #endif\n\n  #if defined(NUM_PBR_MAPS)\n    vec2 pbrMapSize[NUM_PBR_MAPS];\n  #endif\n} materials;\n\n#ifdef NUM_DIFFUSE_MAPS\n  uniform mediump sampler2DArray diffuseMap;\n#endif\n\n#ifdef NUM_NORMAL_MAPS\n  uniform mediump sampler2DArray normalMap;\n#endif\n\n#ifdef NUM_PBR_MAPS\n  uniform mediump sampler2DArray pbrMap;\n#endif\n\nstruct Triangle {\n  vec3 p0;\n  vec3 p1;\n  vec3 p2;\n};\n\nvoid surfaceInteractionFromIntersection(inout SurfaceInteraction si, Triangle tri, vec3 barycentric, ivec3 index, vec3 faceNormal, int materialIndex) {\n  si.hit = true;\n  si.faceNormal = faceNormal;\n  si.position = barycentric.x * tri.p0 + barycentric.y * tri.p1 + barycentric.z * tri.p2;\n  ivec2 i0 = unpackTexel(index.x, VERTEX_COLUMNS);\n  ivec2 i1 = unpackTexel(index.y, VERTEX_COLUMNS);\n  ivec2 i2 = unpackTexel(index.z, VERTEX_COLUMNS);\n\n  vec3 n0 = texelFetch(normals, i0, 0).xyz;\n  vec3 n1 = texelFetch(normals, i1, 0).xyz;\n  vec3 n2 = texelFetch(normals, i2, 0).xyz;\n  si.normal = normalize(barycentric.x * n0 + barycentric.y * n1 + barycentric.z * n2);\n\n  si.color = materials.colorAndMaterialType[materialIndex].xyz;\n  si.roughness = materials.roughnessMetalnessNormalScale[materialIndex].x;\n  si.metalness = materials.roughnessMetalnessNormalScale[materialIndex].y;\n\n  si.materialType = int(materials.colorAndMaterialType[materialIndex].w);\n\n  // TODO: meshId should be the actual mesh id instead of the material id, which can be shared amoung meshes.\n  // This will involve storing the mesh id AND the material id in the BVH texture\n  si.meshId = materialIndex + 1; // +1 so that the mesh id is never 0\n\n  #if defined(NUM_DIFFUSE_MAPS) || defined(NUM_NORMAL_MAPS) || defined(NUM_PBR_MAPS)\n    vec2 uv0 = texelFetch(uvs, i0, 0).xy;\n    vec2 uv1 = texelFetch(uvs, i1, 0).xy;\n    vec2 uv2 = texelFetch(uvs, i2, 0).xy;\n    vec2 uv = fract(barycentric.x * uv0 + barycentric.y * uv1 + barycentric.z * uv2);\n  #endif\n\n  #ifdef NUM_DIFFUSE_MAPS\n    int diffuseMapIndex = materials.diffuseNormalRoughnessMetalnessMapIndex[materialIndex].x;\n    if (diffuseMapIndex >= 0) {\n      si.color *= texture(diffuseMap, vec3(uv * materials.diffuseNormalMapSize[diffuseMapIndex].xy, diffuseMapIndex)).rgb;\n    }\n  #endif\n\n  #ifdef NUM_NORMAL_MAPS\n    int normalMapIndex = materials.diffuseNormalRoughnessMetalnessMapIndex[materialIndex].y;\n    if (normalMapIndex >= 0) {\n      vec2 duv02 = uv0 - uv2;\n      vec2 duv12 = uv1 - uv2;\n      vec3 dp02 = tri.p0 - tri.p2;\n      vec3 dp12 = tri.p1 - tri.p2;\n\n      // Method One\n      // http://www.pbr-book.org/3ed-2018/Shapes/Triangle_Meshes.html#fragment-Computetrianglepartialderivatives-0\n      // Compute tangent vectors relative to the face normal. These vectors won't necessarily be orthogonal to the smoothed normal\n      // This means the TBN matrix won't be orthogonal which is technically incorrect.\n      // This is Three.js's method (https://github.com/mrdoob/three.js/blob/dev/src/renderers/shaders/ShaderChunk/normalmap_pars_fragment.glsl.js)\n      // --------------\n      // float scale = sign(duv02.x * duv12.y - duv02.y * duv12.x);\n      // vec3 dpdu = normalize((duv12.y * dp02 - duv02.y * dp12) * scale);\n      // vec3 dpdv = normalize((-duv12.x * dp02 + duv02.x * dp12) * scale);\n\n      // Method Two\n      // Compute tangent vectors as in Method One but apply Gram-Schmidt process to make vectors orthogonal to smooth normal\n      // This might inadvertently flip coordinate space orientation\n      // --------------\n      // float scale = sign(duv02.x * duv12.y - duv02.y * duv12.x);\n      // vec3 dpdu = normalize((duv12.y * dp02 - duv02.y * dp12) * scale);\n      // dpdu = (dpdu - dot(dpdu, si.normal) * si.normal); // Gram-Schmidt process\n      // vec3 dpdv = cross(si.normal, dpdu) * scale;\n\n      // Method Three\n      // http://www.thetenthplanet.de/archives/1180\n      // Compute co-tangent and co-bitangent vectors\n      // These vectors are orthongal and maintain a consistent coordinate space\n      // --------------\n      vec3 dp12perp = cross(dp12, si.normal);\n      vec3 dp02perp = cross(si.normal, dp02);\n      vec3 dpdu = dp12perp * duv02.x + dp02perp * duv12.x;\n      vec3 dpdv = dp12perp * duv02.y + dp02perp * duv12.y;\n      float invmax = inversesqrt(max(dot(dpdu, dpdu), dot(dpdv, dpdv)));\n      dpdu *= invmax;\n      dpdv *= invmax;\n\n      vec3 n = 2.0 * texture(normalMap, vec3(uv * materials.diffuseNormalMapSize[normalMapIndex].zw, normalMapIndex)).rgb - 1.0;\n      n.xy *= materials.roughnessMetalnessNormalScale[materialIndex].zw;\n\n      mat3 tbn = mat3(dpdu, dpdv, si.normal);\n\n      si.normal = normalize(tbn * n);\n    }\n  #endif\n\n  #ifdef NUM_PBR_MAPS\n    int roughnessMapIndex = materials.diffuseNormalRoughnessMetalnessMapIndex[materialIndex].z;\n    int metalnessMapIndex = materials.diffuseNormalRoughnessMetalnessMapIndex[materialIndex].w;\n    if (roughnessMapIndex >= 0) {\n      si.roughness *= texture(pbrMap, vec3(uv * materials.pbrMapSize[roughnessMapIndex].xy, roughnessMapIndex)).g;\n    }\n    if (metalnessMapIndex >= 0) {\n      si.metalness *= texture(pbrMap, vec3(uv * materials.pbrMapSize[metalnessMapIndex].xy, metalnessMapIndex)).b;\n    }\n  #endif\n}\n\nstruct TriangleIntersect {\n  float t;\n  vec3 barycentric;\n};\n\n// Triangle-ray intersection\n// Faster than the classic M\xF6ller\u2013Trumbore intersection algorithm\n// http://www.pbr-book.org/3ed-2018/Shapes/Triangle_Meshes.html#TriangleIntersection\nTriangleIntersect intersectTriangle(Ray r, Triangle tri, int maxDim, vec3 shear) {\n  TriangleIntersect ti;\n  vec3 d = r.d;\n\n  // translate vertices based on ray origin\n  vec3 p0t = tri.p0 - r.o;\n  vec3 p1t = tri.p1 - r.o;\n  vec3 p2t = tri.p2 - r.o;\n\n  // permute components of triangle vertices\n  if (maxDim == 0) {\n    p0t = p0t.yzx;\n    p1t = p1t.yzx;\n    p2t = p2t.yzx;\n  } else if (maxDim == 1) {\n    p0t = p0t.zxy;\n    p1t = p1t.zxy;\n    p2t = p2t.zxy;\n  }\n\n  // apply shear transformation to translated vertex positions\n  p0t.xy += shear.xy * p0t.z;\n  p1t.xy += shear.xy * p1t.z;\n  p2t.xy += shear.xy * p2t.z;\n\n  // compute edge function coefficients\n  vec3 e = vec3(\n    p1t.x * p2t.y - p1t.y * p2t.x,\n    p2t.x * p0t.y - p2t.y * p0t.x,\n    p0t.x * p1t.y - p0t.y * p1t.x\n  );\n\n  // check if intersection is inside triangle\n  if (any(lessThan(e, vec3(0))) && any(greaterThan(e, vec3(0)))) {\n    return ti;\n  }\n\n  float det = e.x + e.y + e.z;\n\n  // not needed?\n  // if (det == 0.) {\n  //   return ti;\n  // }\n\n  p0t.z *= shear.z;\n  p1t.z *= shear.z;\n  p2t.z *= shear.z;\n  float tScaled = (e.x * p0t.z + e.y * p1t.z + e.z * p2t.z);\n\n  // not needed?\n  // if (sign(det) != sign(tScaled)) {\n  //   return ti;\n  // }\n\n  // check if closer intersection already exists\n  if (abs(tScaled) > abs(r.tMax * det)) {\n    return ti;\n  }\n\n  float invDet = 1. / det;\n  ti.t = tScaled * invDet;\n  ti.barycentric = e * invDet;\n\n  return ti;\n}\n\nstruct Box {\n  vec3 min;\n  vec3 max;\n};\n\n// Branchless ray/box intersection\n// https://tavianator.com/fast-branchless-raybounding-box-intersections/\nfloat intersectBox(Ray r, Box b) {\n  vec3 tBot = (b.min - r.o) * r.invD;\n  vec3 tTop = (b.max - r.o) * r.invD;\n  vec3 tNear = min(tBot, tTop);\n  vec3 tFar = max(tBot, tTop);\n  float t0 = max(tNear.x, max(tNear.y, tNear.z));\n  float t1 = min(tFar.x, min(tFar.y, tFar.z));\n\n  return (t0 > t1 || t0 > r.tMax) ? -1.0 : (t0 > 0.0 ? t0 : t1);\n}\n\nint maxDimension(vec3 v) {\n  return v.x > v.y ? (v.x > v.z ? 0 : 2) : (v.y > v.z ? 1 : 2);\n}\n\n// Traverse BVH, find closest triangle intersection, and return surface information\nSurfaceInteraction intersectScene(inout Ray ray) {\n  SurfaceInteraction si;\n\n  int maxDim = maxDimension(abs(ray.d));\n\n  // Permute space so that the z dimension is the one where the absolute value of the ray's direction is largest.\n  // Then create a shear transformation that aligns ray direction with the +z axis\n  vec3 shear;\n  if (maxDim == 0) {\n    shear = vec3(-ray.d.y, -ray.d.z, 1.0) * ray.invD.x;\n  } else if (maxDim == 1) {\n    shear = vec3(-ray.d.z, -ray.d.x, 1.0) * ray.invD.y;\n  } else {\n    shear = vec3(-ray.d.x, -ray.d.y, 1.0) * ray.invD.z;\n  }\n\n  int nodesToVisit[STACK_SIZE];\n  int stack = 0;\n\n  nodesToVisit[0] = 0;\n\n  while(stack >= 0) {\n    int i = nodesToVisit[stack--];\n\n    vec4 r1 = fetchData(bvh, i, BVH_COLUMNS);\n    vec4 r2 = fetchData(bvh, i + 1, BVH_COLUMNS);\n\n    int splitAxisOrNumPrimitives = floatBitsToInt(r1.w);\n\n    if (splitAxisOrNumPrimitives >= 0) {\n      // Intersection is a bounding box. Test for box intersection and keep traversing BVH\n      int splitAxis = splitAxisOrNumPrimitives;\n\n      Box bbox = Box(r1.xyz, r2.xyz);\n\n      if (intersectBox(ray, bbox) > 0.0) {\n        // traverse near node to ray first, and far node to ray last\n        if (ray.d[splitAxis] > 0.0) {\n          nodesToVisit[++stack] = floatBitsToInt(r2.w);\n          nodesToVisit[++stack] = i + 2;\n        } else {\n          nodesToVisit[++stack] = i + 2;\n          nodesToVisit[++stack] = floatBitsToInt(r2.w);\n        }\n      }\n    } else {\n      ivec3 index = floatBitsToInt(r1.xyz);\n      Triangle tri = Triangle(\n        fetchData(positions, index.x, VERTEX_COLUMNS).xyz,\n        fetchData(positions, index.y, VERTEX_COLUMNS).xyz,\n        fetchData(positions, index.z, VERTEX_COLUMNS).xyz\n      );\n      TriangleIntersect hit = intersectTriangle(ray, tri, maxDim, shear);\n\n      if (hit.t > 0.0) {\n        ray.tMax = hit.t;\n        int materialIndex = floatBitsToInt(r2.w);\n        vec3 faceNormal = r2.xyz;\n        surfaceInteractionFromIntersection(si, tri, hit.barycentric, index, faceNormal, materialIndex);\n      }\n    }\n  }\n\n  // Values must be clamped outside of intersection loop. Clamping inside the loop produces incorrect numbers on some devices.\n  si.roughness = clamp(si.roughness, 0.03, 1.0);\n  si.metalness = clamp(si.metalness, 0.0, 1.0);\n\n  return si;\n}\n\nbool intersectSceneShadow(inout Ray ray) {\n  int maxDim = maxDimension(abs(ray.d));\n\n  // Permute space so that the z dimension is the one where the absolute value of the ray's direction is largest.\n  // Then create a shear transformation that aligns ray direction with the +z axis\n  vec3 shear;\n  if (maxDim == 0) {\n    shear = vec3(-ray.d.y, -ray.d.z, 1.0) * ray.invD.x;\n  } else if (maxDim == 1) {\n    shear = vec3(-ray.d.z, -ray.d.x, 1.0) * ray.invD.y;\n  } else {\n    shear = vec3(-ray.d.x, -ray.d.y, 1.0) * ray.invD.z;\n  }\n\n  int nodesToVisit[STACK_SIZE];\n  int stack = 0;\n\n  nodesToVisit[0] = 0;\n\n  while(stack >= 0) {\n    int i = nodesToVisit[stack--];\n\n    vec4 r1 = fetchData(bvh, i, BVH_COLUMNS);\n    vec4 r2 = fetchData(bvh, i + 1, BVH_COLUMNS);\n\n    int splitAxisOrNumPrimitives = floatBitsToInt(r1.w);\n\n    if (splitAxisOrNumPrimitives >= 0) {\n      int splitAxis = splitAxisOrNumPrimitives;\n\n      Box bbox = Box(r1.xyz, r2.xyz);\n\n      if (intersectBox(ray, bbox) > 0.0) {\n        if (ray.d[splitAxis] > 0.0) {\n          nodesToVisit[++stack] = floatBitsToInt(r2.w);\n          nodesToVisit[++stack] = i + 2;\n        } else {\n          nodesToVisit[++stack] = i + 2;\n          nodesToVisit[++stack] = floatBitsToInt(r2.w);\n        }\n      }\n    } else {\n      ivec3 index = floatBitsToInt(r1.xyz);\n      Triangle tri = Triangle(\n        fetchData(positions, index.x, VERTEX_COLUMNS).xyz,\n        fetchData(positions, index.y, VERTEX_COLUMNS).xyz,\n        fetchData(positions, index.z, VERTEX_COLUMNS).xyz\n      );\n\n      if (intersectTriangle(ray, tri, maxDim, shear).t > 0.0) {\n        return true;\n      }\n    }\n  }\n\n  return false;\n}\n");
-  }
-
-  function random (defines) {
-    return "\n\n// Noise texture used to generate a different random number for each pixel.\n// We use blue noise in particular, but any type of noise will work.\nuniform sampler2D noise;\n\nuniform float stratifiedSamples[SAMPLING_DIMENSIONS];\nuniform float strataSize;\n\n// Every time we call randomSample() in the shader, and for every call to render,\n// we want that specific bit of the shader to fetch a sample from the same position in stratifiedSamples\n// This allows us to use stratified sampling for each random variable in our path tracing\nint sampleIndex = 0;\n\nconst highp float maxUint = 1.0 / 4294967295.0;\n\nfloat pixelSeed;\n\nvoid initRandom() {\n  vec2 noiseSize = vec2(textureSize(noise, 0));\n\n  // tile the small noise texture across the entire screen\n  pixelSeed = texture(noise, vCoord / (pixelSize * noiseSize)).r;\n}\n\nfloat randomSample() {\n  float stratifiedSample = stratifiedSamples[sampleIndex++];\n\n  float random = fract((stratifiedSample + pixelSeed) * strataSize); // blue noise + stratified samples\n\n  // transform random number between [0, 1] to (0, 1)\n  return EPS + (1.0 - 2.0 * EPS) * random;\n}\n\nvec2 randomSampleVec2() {\n  return vec2(randomSample(), randomSample());\n}\n";
-  }
-
-  // Sample the environment map using a cumulative distribution function as described in
-  // http://www.pbr-book.org/3ed-2018/Light_Transport_I_Surface_Reflection/Sampling_Light_Sources.html#InfiniteAreaLights
-  function envmap (defines) {
-    return "\n\nuniform sampler2D envmap;\nuniform sampler2D envmapDistribution;\nuniform sampler2D backgroundMap;\n\nvec2 cartesianToEquirect(vec3 pointOnSphere) {\n  float phi = mod(atan(-pointOnSphere.z, -pointOnSphere.x), TWOPI);\n  float theta = acos(pointOnSphere.y);\n  return vec2(phi * 0.5 * INVPI, theta * INVPI);\n}\n\nfloat getEnvmapV(float u, out int vOffset, out float pdf) {\n  ivec2 size = textureSize(envmap, 0);\n\n  int left = 0;\n  int right = size.y + 1; // cdf length is the length of the envmap + 1\n  while (left < right) {\n    int mid = (left + right) >> 1;\n    float s = texelFetch(envmapDistribution, ivec2(0, mid), 0).x;\n    if (s <= u) {\n      left = mid + 1;\n    } else {\n      right = mid;\n    }\n  }\n  vOffset = left - 1;\n\n  // x channel is cumulative distribution of envmap luminance\n  // y channel is partial probability density of envmap luminance\n  vec2 s0 = texelFetch(envmapDistribution, ivec2(0, vOffset), 0).xy;\n  vec2 s1 = texelFetch(envmapDistribution, ivec2(0, vOffset + 1), 0).xy;\n\n  pdf = s0.y;\n\n  return (float(vOffset) +  (u - s0.x) / (s1.x - s0.x)) / float(size.y);\n}\n\nfloat getEnvmapU(float u, int vOffset, out float pdf) {\n  ivec2 size = textureSize(envmap, 0);\n\n  int left = 0;\n  int right = size.x + 1; // cdf length is the length of the envmap + 1\n  while (left < right) {\n    int mid = (left + right) >> 1;\n    float s = texelFetch(envmapDistribution, ivec2(1 + mid, vOffset), 0).x;\n    if (s <= u) {\n      left = mid + 1;\n    } else {\n      right = mid;\n    }\n  }\n  int uOffset = left - 1;\n\n  // x channel is cumulative distribution of envmap luminance\n  // y channel is partial probability density of envmap luminance\n  vec2 s0 = texelFetch(envmapDistribution, ivec2(1 + uOffset, vOffset), 0).xy;\n  vec2 s1 = texelFetch(envmapDistribution, ivec2(1 + uOffset + 1, vOffset), 0).xy;\n\n  pdf = s0.y;\n\n  return (float(uOffset) + (u - s0.x) / (s1.x - s0.x)) / float(size.x);\n}\n\n// Perform two binary searches to find light direction.\nvec3 sampleEnvmap(vec2 random, out vec2 uv, out float pdf) {\n  vec2 partialPdf;\n  int vOffset;\n\n  uv.y = getEnvmapV(random.x, vOffset, partialPdf.y);\n  uv.x = getEnvmapU(random.y, vOffset, partialPdf.x);\n\n  float phi = uv.x * TWOPI;\n  float theta = uv.y * PI;\n  float cosTheta = cos(theta);\n  float sinTheta = sin(theta);\n  float cosPhi = cos(phi);\n  float sinPhi = sin(phi);\n\n  vec3 dir = vec3(-sinTheta * cosPhi, cosTheta, -sinTheta * sinPhi);\n\n  pdf = partialPdf.x * partialPdf.y * INVPI2 / (2.0 * sinTheta);\n\n  return dir;\n}\n\nfloat envmapPdf(vec2 uv) {\n  vec2 size = vec2(textureSize(envmap, 0));\n\n  float sinTheta = sin(uv.y * PI);\n\n  uv *= size;\n\n  float partialX = texelFetch(envmapDistribution, ivec2(1.0 + uv.x, uv.y), 0).y;\n  float partialY = texelFetch(envmapDistribution, ivec2(0, uv.y), 0).y;\n\n  return partialX * partialY * INVPI2 / (2.0 * sinTheta);\n}\n\nvec3 sampleEnvmapFromDirection(vec3 d) {\n  vec2 uv = cartesianToEquirect(d);\n  return textureLinear(envmap, uv).rgb;\n}\n\nvec3 sampleBackgroundFromDirection(vec3 d) {\n  vec2 uv = cartesianToEquirect(d);\n  return textureLinear(backgroundMap, uv).rgb;\n}\n\n";
-  }
-
-  function bsdf (defines) {
-    return "\n\n// Computes the exact value of the Fresnel factor\n// https://seblagarde.wordpress.com/2013/04/29/memo-on-fresnel-equations/\nfloat fresnel(float cosTheta, float eta, float invEta) {\n  eta = cosTheta > 0.0 ? eta : invEta;\n  cosTheta = abs(cosTheta);\n\n  float gSquared = eta * eta + cosTheta * cosTheta - 1.0;\n\n  if (gSquared < 0.0) {\n    return 1.0;\n  }\n\n  float g = sqrt(gSquared);\n\n  float a = (g - cosTheta) / (g + cosTheta);\n  float b = (cosTheta * (g + cosTheta) - 1.0) / (cosTheta * (g - cosTheta) + 1.0);\n\n  return 0.5 * a * a * (1.0 + b * b);\n}\n\nfloat fresnelSchlickWeight(float cosTheta) {\n  float w = 1.0 - cosTheta;\n  return (w * w) * (w * w) * w;\n}\n\n// Computes Schlick's approximation of the Fresnel factor\n// Assumes ray is moving from a less dense to a more dense medium\nfloat fresnelSchlick(float cosTheta, float r0) {\n  return mix(fresnelSchlickWeight(cosTheta), 1.0, r0);\n}\n\n// Computes Schlick's approximation of Fresnel factor\n// Accounts for total internal reflection if ray is moving from a more dense to a less dense medium\nfloat fresnelSchlickTIR(float cosTheta, float r0, float ni) {\n\n  // moving from a more dense to a less dense medium\n  if (cosTheta < 0.0) {\n    float inv_eta = ni;\n    float SinT2 = inv_eta * inv_eta * (1.0f - cosTheta * cosTheta);\n    if (SinT2 > 1.0) {\n        return 1.0; // total internal reflection\n    }\n    cosTheta = sqrt(1.0f - SinT2);\n  }\n\n  return mix(fresnelSchlickWeight(cosTheta), 1.0, r0);\n}\n\nfloat trowbridgeReitzD(float cosTheta, float alpha2) {\n  float e = cosTheta * cosTheta * (alpha2 - 1.0) + 1.0;\n  return alpha2 / (PI * e * e);\n}\n\nfloat trowbridgeReitzLambda(float cosTheta, float alpha2) {\n  float cos2Theta = cosTheta * cosTheta;\n  float tan2Theta = (1.0 - cos2Theta) / cos2Theta;\n  return 0.5 * (-1.0 + sqrt(1.0 + alpha2 * tan2Theta));\n}\n\n// An implementation of Disney's principled BRDF\n// https://disney-animation.s3.amazonaws.com/library/s2012_pbs_disney_brdf_notes_v2.pdf\nvec3 materialBrdf(SurfaceInteraction si, vec3 viewDir, vec3 lightDir, float cosThetaL, float diffuseWeight, out float pdf) {\n  vec3 halfVector = normalize(viewDir + lightDir);\n\n  cosThetaL = abs(cosThetaL);\n  float cosThetaV = abs(dot(si.normal, viewDir));\n  float cosThetaH = abs(dot(si.normal, halfVector));\n  float cosThetaD = abs(dot(lightDir, halfVector));\n\n  float alpha2 = (si.roughness * si.roughness) * (si.roughness * si.roughness);\n\n  float F = fresnelSchlick(cosThetaD, mix(R0, 0.6, si.metalness));\n  float D = trowbridgeReitzD(cosThetaH, alpha2);\n\n  float roughnessRemapped = 0.5 + 0.5 * si.roughness;\n  float alpha2Remapped = (roughnessRemapped * roughnessRemapped) * (roughnessRemapped * roughnessRemapped);\n\n  float G = 1.0 / (1.0 + trowbridgeReitzLambda(cosThetaV, alpha2Remapped) + trowbridgeReitzLambda(cosThetaL, alpha2Remapped));\n\n  float specular = F * D * G / (4.0 * cosThetaV * cosThetaL);\n  float specularPdf = D * cosThetaH / (4.0 * cosThetaD);\n\n  float f = -0.5 + 2.0 * cosThetaD * cosThetaD * si.roughness;\n  float diffuse = diffuseWeight * INVPI * (1.0 + f * fresnelSchlickWeight(cosThetaL)) * (1.0 + f * fresnelSchlickWeight(cosThetaV));\n  float diffusePdf = cosThetaL * INVPI;\n\n  pdf = mix(0.5 * (specularPdf + diffusePdf), specularPdf, si.metalness);\n\n  return mix(si.color * diffuse + specular, si.color * specular, si.metalness);\n}\n\n";
-  }
-
-  function sample (defines) {
-    return "\n\n// https://graphics.pixar.com/library/OrthonormalB/paper.pdf\nmat3 orthonormalBasis(vec3 n) {\n  float zsign = n.z >= 0.0 ? 1.0 : -1.0;\n  float a = -1.0 / (zsign + n.z);\n  float b = n.x * n.y * a;\n  vec3 s = vec3(1.0 + zsign * n.x * n.x * a, zsign * b, -zsign * n.x);\n  vec3 t = vec3(b, zsign + n.y * n.y * a, -n.y);\n  return mat3(s, t, n);\n}\n\n// http://www.pbr-book.org/3ed-2018/Monte_Carlo_Integration/2D_Sampling_with_Multidimensional_Transformations.html#SamplingaUnitDisk\nvec2 sampleCircle(vec2 p) {\n  p = 2.0 * p - 1.0;\n\n  bool greater = abs(p.x) > abs(p.y);\n\n  float r = greater ? p.x : p.y;\n  float theta = greater ? 0.25 * PI * p.y / p.x : PI * (0.5 - 0.25 * p.x / p.y);\n\n  return r * vec2(cos(theta), sin(theta));\n}\n\n// http://www.pbr-book.org/3ed-2018/Monte_Carlo_Integration/2D_Sampling_with_Multidimensional_Transformations.html#Cosine-WeightedHemisphereSampling\nvec3 cosineSampleHemisphere(vec2 p) {\n  vec2 h = sampleCircle(p);\n  float z = sqrt(max(0.0, 1.0 - h.x * h.x - h.y * h.y));\n  return vec3(h, z);\n}\n\n\n// http://www.pbr-book.org/3ed-2018/Light_Transport_I_Surface_Reflection/Sampling_Reflection_Functions.html#MicrofacetBxDFs\n// Instead of Beckmann distrubtion, we use the GTR2 (GGX) distrubtion as covered in Disney's Principled BRDF paper\nvec3 lightDirSpecular(vec3 faceNormal, vec3 viewDir, mat3 basis, float roughness, vec2 random) {\n  float phi = TWOPI * random.y;\n  float alpha = roughness * roughness;\n  float cosTheta = sqrt((1.0 - random.x) / (1.0 + (alpha * alpha - 1.0) * random.x));\n  float sinTheta = sqrt(1.0 - cosTheta * cosTheta);\n\n  vec3 halfVector = basis * sign(dot(faceNormal, viewDir)) * vec3(sinTheta * cos(phi), sinTheta * sin(phi), cosTheta);\n\n  vec3 lightDir = reflect(-viewDir, halfVector);\n\n  return lightDir;\n}\n\nvec3 lightDirDiffuse(vec3 faceNormal, vec3 viewDir, mat3 basis, vec2 random) {\n  return basis * sign(dot(faceNormal, viewDir)) * cosineSampleHemisphere(random);\n}\n\nfloat powerHeuristic(float f, float g) {\n  return (f * f) / (f * f + g * g);\n}\n\n";
-  }
-
-  // Estimate the direct lighting integral using multiple importance sampling
-  // http://www.pbr-book.org/3ed-2018/Light_Transport_I_Surface_Reflection/Direct_Lighting.html#EstimatingtheDirectLightingIntegral
-  function sampleMaterial (defines) {
-    return "\n\nvec3 importanceSampleLight(SurfaceInteraction si, vec3 viewDir, bool lastBounce, vec2 random) {\n  vec3 li;\n\n  float lightPdf;\n  vec2 uv;\n  vec3 lightDir = sampleEnvmap(random, uv, lightPdf);\n\n  float cosThetaL = dot(si.normal, lightDir);\n\n  float orientation = dot(si.faceNormal, viewDir) * cosThetaL;\n  if (orientation < 0.0) {\n    return li;\n  }\n\n  float diffuseWeight = 1.0;\n  Ray ray;\n  initRay(ray, si.position + EPS * lightDir, lightDir);\n  if (intersectSceneShadow(ray)) {\n    if (lastBounce) {\n      diffuseWeight = 0.0;\n    } else {\n      return li;\n    }\n  }\n\n  vec3 irr = textureLinear(envmap, uv).xyz;\n\n  float scatteringPdf;\n  vec3 brdf = materialBrdf(si, viewDir, lightDir, cosThetaL, diffuseWeight, scatteringPdf);\n\n  float weight = powerHeuristic(lightPdf, scatteringPdf);\n\n  li = brdf * irr * abs(cosThetaL) * weight / lightPdf;\n\n  return li;\n}\n\nvec3 importanceSampleMaterial(SurfaceInteraction si, vec3 viewDir, bool lastBounce, vec3 lightDir) {\n  vec3 li;\n\n  float cosThetaL = dot(si.normal, lightDir);\n\n  float orientation = dot(si.faceNormal, viewDir) * cosThetaL;\n  if (orientation < 0.0) {\n    return li;\n  }\n\n  float diffuseWeight = 1.0;\n  Ray ray;\n  initRay(ray, si.position + EPS * lightDir, lightDir);\n  if (intersectSceneShadow(ray)) {\n    if (lastBounce) {\n      diffuseWeight = 0.0;\n    } else {\n      return li;\n    }\n  }\n\n  vec2 uv = cartesianToEquirect(lightDir);\n\n  float lightPdf = envmapPdf(uv);\n\n  vec3 irr = textureLinear(envmap, uv).rgb;\n\n  float scatteringPdf;\n  vec3 brdf = materialBrdf(si, viewDir, lightDir, cosThetaL, diffuseWeight, scatteringPdf);\n\n  float weight = powerHeuristic(scatteringPdf, lightPdf);\n\n  li += brdf * irr * abs(cosThetaL) * weight / scatteringPdf;\n\n  return li;\n}\n\nvoid sampleMaterial(SurfaceInteraction si, int bounce, inout Path path) {\n  mat3 basis = orthonormalBasis(si.normal);\n  vec3 viewDir = -path.ray.d;\n\n  vec2 diffuseOrSpecular = randomSampleVec2();\n\n  vec3 lightDir = diffuseOrSpecular.x < mix(0.5, 0.0, si.metalness) ?\n    lightDirDiffuse(si.faceNormal, viewDir, basis, randomSampleVec2()) :\n    lightDirSpecular(si.faceNormal, viewDir, basis, si.roughness, randomSampleVec2());\n\n  bool lastBounce = bounce == BOUNCES;\n\n  // Add path contribution\n  path.li += path.beta * (\n      importanceSampleLight(si, viewDir, lastBounce, randomSampleVec2()) +\n      importanceSampleMaterial(si, viewDir, lastBounce, lightDir)\n    );\n\n  // Get new path direction\n\n  lightDir = diffuseOrSpecular.y < mix(0.5, 0.0, si.metalness) ?\n    lightDirDiffuse(si.faceNormal, viewDir, basis, randomSampleVec2()) :\n    lightDirSpecular(si.faceNormal, viewDir, basis, si.roughness, randomSampleVec2());\n\n  float cosThetaL = dot(si.normal, lightDir);\n\n  float scatteringPdf;\n  vec3 brdf = materialBrdf(si, viewDir, lightDir, cosThetaL, 1.0, scatteringPdf);\n\n  path.beta *= abs(cosThetaL) * brdf / scatteringPdf;\n\n  initRay(path.ray, si.position + EPS * lightDir, lightDir);\n\n  // If new ray direction is pointing into the surface,\n  // the light path is physically impossible and we terminate the path.\n  float orientation = dot(si.faceNormal, viewDir) * cosThetaL;\n  path.abort = orientation < 0.0;\n\n  path.specularBounce = false;\n}\n\n";
-  }
-
-  function sampleShadowCatcher (defines) {
-    return "\n\n#ifdef USE_SHADOW_CATCHER\n\nfloat importanceSampleLightShadowCatcher(SurfaceInteraction si, vec3 viewDir, vec2 random, inout float alpha) {\n  float li;\n\n  float lightPdf;\n  vec2 uv;\n  vec3 lightDir = sampleEnvmap(random, uv, lightPdf);\n\n  float cosThetaL = dot(si.normal, lightDir);\n\n  float orientation = dot(si.faceNormal, viewDir) * cosThetaL;\n  if (orientation < 0.0) {\n    return li;\n  }\n\n  float occluded = 1.0;\n\n  Ray ray;\n  initRay(ray, si.position + EPS * lightDir, lightDir);\n  if (intersectSceneShadow(ray)) {\n    occluded = 0.0;\n  }\n\n  float irr = dot(luminance, textureLinear(envmap, uv).rgb);\n\n  // lambertian BRDF\n  float brdf = INVPI;\n  float scatteringPdf = abs(cosThetaL) * INVPI;\n\n  float weight = powerHeuristic(lightPdf, scatteringPdf);\n\n  float lightEq = irr * brdf * abs(cosThetaL) * weight / lightPdf;\n\n  alpha += lightEq;\n  li += occluded * lightEq;\n\n  return li;\n}\n\nfloat importanceSampleMaterialShadowCatcher(SurfaceInteraction si, vec3 viewDir, vec3 lightDir, inout float alpha) {\n  float li;\n\n  float cosThetaL = dot(si.normal, lightDir);\n\n  float orientation = dot(si.faceNormal, viewDir) * cosThetaL;\n  if (orientation < 0.0) {\n    return li;\n  }\n\n  float occluded = 1.0;\n\n  Ray ray;\n  initRay(ray, si.position + EPS * lightDir, lightDir);\n  if (intersectSceneShadow(ray)) {\n    occluded = 0.0;\n  }\n\n  vec2 uv = cartesianToEquirect(lightDir);\n\n  float lightPdf = envmapPdf(uv);\n\n  float irr = dot(luminance, textureLinear(envmap, uv).rgb);\n\n  // lambertian BRDF\n  float brdf = INVPI;\n  float scatteringPdf = abs(cosThetaL) * INVPI;\n\n  float weight = powerHeuristic(scatteringPdf, lightPdf);\n\n  float lightEq = irr * brdf * abs(cosThetaL) * weight / scatteringPdf;\n\n  alpha += lightEq;\n  li += occluded * lightEq;\n\n  return li;\n}\n\nvoid sampleShadowCatcher(SurfaceInteraction si, int bounce, inout Path path) {\n  mat3 basis = orthonormalBasis(si.normal);\n  vec3 viewDir = -path.ray.d;\n  vec3 color = bounce > 1 && !path.specularBounce ? sampleEnvmapFromDirection(-viewDir) : sampleBackgroundFromDirection(-viewDir);\n\n  vec3 lightDir = lightDirDiffuse(si.faceNormal, viewDir, basis, randomSampleVec2());\n\n  float alphaBounce = 0.0;\n\n  vec3 li = path.beta * color * (\n      importanceSampleLightShadowCatcher(si, viewDir, randomSampleVec2(), alphaBounce) +\n      importanceSampleMaterialShadowCatcher(si, viewDir, lightDir, alphaBounce)\n    );\n\n  // alphaBounce contains the lighting of the shadow catcher *without* shadows\n  alphaBounce = alphaBounce == 0.0 ? 1.0 : alphaBounce;\n\n  // in post processing step, we divide by alpha to obtain the percentage of light relative to shadow for the shadow catcher\n  path.alpha *= alphaBounce;\n\n  // we only want the alpha division to affect the shadow catcher\n  // factor in alpha to the previous light, so that dividing by alpha with the previous light cancels out this contribution\n  path.li *= alphaBounce;\n\n  // add path contribution\n  path.li += li;\n\n  // Get new path direction\n\n  lightDir = lightDirDiffuse(si.faceNormal, viewDir, basis, randomSampleVec2());\n\n  float cosThetaL = dot(si.normal, lightDir);\n\n  // lambertian brdf with terms cancelled\n  path.beta *= color;\n\n  initRay(path.ray, si.position + EPS * lightDir, lightDir);\n\n  // If new ray direction is pointing into the surface,\n  // the light path is physically impossible and we terminate the path.\n  float orientation = dot(si.faceNormal, viewDir) * cosThetaL;\n  path.abort = orientation < 0.0;\n\n  path.specularBounce = false;\n\n  // advance dimension index by unused stratified samples\n  const int usedSamples = 6;\n  sampleIndex += SAMPLES_PER_MATERIAL - usedSamples;\n}\n\n#endif\n";
-  }
-
-  function sampleGlass (defines) {
-    return "\n\n#ifdef USE_GLASS\n\nvoid sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {\n  vec3 viewDir = -path.ray.d;\n  float cosTheta = dot(si.normal, viewDir);\n\n  float F = si.materialType == THIN_GLASS ?\n    fresnelSchlick(abs(cosTheta), R0) : // thin glass\n    fresnelSchlickTIR(cosTheta, R0, IOR); // thick glass\n\n  vec3 lightDir;\n\n  float reflectionOrRefraction = randomSample();\n\n  if (reflectionOrRefraction < F) {\n    lightDir = reflect(-viewDir, si.normal);\n  } else {\n    lightDir = si.materialType == THIN_GLASS ?\n      refract(-viewDir, sign(cosTheta) * si.normal, INV_IOR_THIN) : // thin glass\n      refract(-viewDir, sign(cosTheta) * si.normal, cosTheta < 0.0 ? IOR : INV_IOR); // thick glass\n    path.beta *= si.color;\n  }\n\n  initRay(path.ray, si.position + EPS * lightDir, lightDir);\n\n  // advance sample index by unused stratified samples\n  const int usedSamples = 1;\n  sampleIndex += SAMPLES_PER_MATERIAL - usedSamples;\n\n  path.li += bounce == BOUNCES ? path.beta * sampleBackgroundFromDirection(lightDir) : vec3(0.0);\n}\n\n#endif\n\n";
-  }
-
   function unrollLoop(indexName, start, limit, step, code) {
     var unrolled = "int ".concat(indexName, ";\n");
 
@@ -1217,29 +1462,39 @@
 
     return unrolled;
   }
-  function addDefines(params) {
-    var defines = '';
 
-    for (var _i = 0, _Object$entries = Object.entries(params); _i < _Object$entries.length; _i++) {
-      var _Object$entries$_i = _slicedToArray(_Object$entries[_i], 2),
-          name = _Object$entries$_i[0],
-          value = _Object$entries$_i[1];
+  var core = "\n  #define PI 3.14159265359\n  #define TWOPI 6.28318530718\n  #define INVPI 0.31830988618\n  #define INVPI2 0.10132118364\n  #define EPS 0.0005\n  #define INF 1.0e999\n  #define RAY_MAX_DISTANCE 9999.0\n\n  #define STANDARD 0\n  #define THIN_GLASS 1\n  #define THICK_GLASS 2\n  #define SHADOW_CATCHER 3\n\n  #define SAMPLES_PER_MATERIAL 8\n\n  const float IOR = 1.5;\n  const float INV_IOR = 1.0 / IOR;\n\n  const float IOR_THIN = 1.015;\n  const float INV_IOR_THIN = 1.0 / IOR_THIN;\n\n  const float R0 = (1.0 - IOR) * (1.0 - IOR)  / ((1.0 + IOR) * (1.0 + IOR));\n\n  // https://www.w3.org/WAI/GL/wiki/Relative_luminance\n  const vec3 luminance = vec3(0.2126, 0.7152, 0.0722);\n\n  struct Ray {\n    vec3 o;\n    vec3 d;\n    vec3 invD;\n    float tMax;\n  };\n\n  struct SurfaceInteraction {\n    bool hit;\n    vec3 position;\n    vec3 normal; // smoothed normal from the three triangle vertices\n    vec3 faceNormal; // normal of the triangle\n    vec3 color;\n    float roughness;\n    float metalness;\n    int materialType;\n    int meshId;\n  };\n\n  struct Camera {\n    mat4 transform;\n    float aspect;\n    float fov;\n    float focus;\n    float aperture;\n  };\n\n  void initRay(inout Ray ray, vec3 origin, vec3 direction) {\n    ray.o = origin;\n    ray.d = direction;\n    ray.invD = 1.0 / ray.d;\n    ray.tMax = RAY_MAX_DISTANCE;\n  }\n\n  // given the index from a 1D array, retrieve corresponding position from packed 2D texture\n  ivec2 unpackTexel(int i, int columnsLog2) {\n    ivec2 u;\n    u.y = i >> columnsLog2; // equivalent to (i / 2^columnsLog2)\n    u.x = i - (u.y << columnsLog2); // equivalent to (i % 2^columnsLog2)\n    return u;\n  }\n\n  vec4 fetchData(sampler2D s, int i, int columnsLog2) {\n    return texelFetch(s, unpackTexel(i, columnsLog2), 0);\n  }\n\n  ivec4 fetchData(isampler2D s, int i, int columnsLog2) {\n    return texelFetch(s, unpackTexel(i, columnsLog2), 0);\n  }\n\n  struct Path {\n    Ray ray;\n    vec3 li;\n    vec3 albedo;\n    float alpha;\n    vec3 beta;\n    bool specularBounce;\n    bool abort;\n  };\n\n  uniform Camera camera;\n  uniform vec2 pixelSize; // 1 / screenResolution\n  uniform vec2 jitter;\n\n  in vec2 vCoord;\n";
 
-      // don't define falsy values such as false, 0, and ''.
-      // this adds support for #ifdef on falsy values
-      if (value) {
-        defines += "#define ".concat(name, " ").concat(value, "\n");
-      }
+  // Manually performs linear filtering if the extension OES_texture_float_linear is not supported
+  var textureLinear = "\nvec4 textureLinear(sampler2D map, vec2 uv) {\n  #ifdef OES_texture_float_linear\n    return texture(map, uv);\n  #else\n    vec2 size = vec2(textureSize(map, 0));\n    vec2 texelSize = 1.0 / size;\n\n    uv = uv * size - 0.5;\n    vec2 f = fract(uv);\n    uv = floor(uv) + 0.5;\n\n    vec4 s1 = texture(map, (uv + vec2(0, 0)) * texelSize);\n    vec4 s2 = texture(map, (uv + vec2(1, 0)) * texelSize);\n    vec4 s3 = texture(map, (uv + vec2(0, 1)) * texelSize);\n    vec4 s4 = texture(map, (uv + vec2(1, 1)) * texelSize);\n\n    return mix(mix(s1, s2, f.x), mix(s3, s4, f.x), f.y);\n  #endif\n}\n";
+
+  var intersect = "\n\nuniform highp isampler2D indices;\nuniform sampler2D positions;\nuniform sampler2D normals;\nuniform sampler2D uvs;\nuniform sampler2D bvh;\n\nuniform Materials {\n  vec4 colorAndMaterialType[NUM_MATERIALS];\n  vec4 roughnessMetalnessNormalScale[NUM_MATERIALS];\n\n  #if defined(NUM_DIFFUSE_MAPS) || defined(NUM_NORMAL_MAPS) || defined(NUM_PBR_MAPS)\n    ivec4 diffuseNormalRoughnessMetalnessMapIndex[NUM_MATERIALS];\n  #endif\n\n  #if defined(NUM_DIFFUSE_MAPS) || defined(NUM_NORMAL_MAPS)\n    vec4 diffuseNormalMapSize[NUM_DIFFUSE_NORMAL_MAPS];\n  #endif\n\n  #if defined(NUM_PBR_MAPS)\n    vec2 pbrMapSize[NUM_PBR_MAPS];\n  #endif\n} materials;\n\n#ifdef NUM_DIFFUSE_MAPS\n  uniform mediump sampler2DArray diffuseMap;\n#endif\n\n#ifdef NUM_NORMAL_MAPS\n  uniform mediump sampler2DArray normalMap;\n#endif\n\n#ifdef NUM_PBR_MAPS\n  uniform mediump sampler2DArray pbrMap;\n#endif\n\nstruct Triangle {\n  vec3 p0;\n  vec3 p1;\n  vec3 p2;\n};\n\nvoid surfaceInteractionFromIntersection(inout SurfaceInteraction si, Triangle tri, vec3 barycentric, ivec3 index, vec3 faceNormal, int materialIndex) {\n  si.hit = true;\n  si.faceNormal = faceNormal;\n  si.position = barycentric.x * tri.p0 + barycentric.y * tri.p1 + barycentric.z * tri.p2;\n  ivec2 i0 = unpackTexel(index.x, VERTEX_COLUMNS);\n  ivec2 i1 = unpackTexel(index.y, VERTEX_COLUMNS);\n  ivec2 i2 = unpackTexel(index.z, VERTEX_COLUMNS);\n\n  vec3 n0 = texelFetch(normals, i0, 0).xyz;\n  vec3 n1 = texelFetch(normals, i1, 0).xyz;\n  vec3 n2 = texelFetch(normals, i2, 0).xyz;\n  si.normal = normalize(barycentric.x * n0 + barycentric.y * n1 + barycentric.z * n2);\n\n  si.color = materials.colorAndMaterialType[materialIndex].xyz;\n  si.roughness = materials.roughnessMetalnessNormalScale[materialIndex].x;\n  si.metalness = materials.roughnessMetalnessNormalScale[materialIndex].y;\n\n  si.materialType = int(materials.colorAndMaterialType[materialIndex].w);\n\n  // TODO: meshId should be the actual mesh id instead of the material id, which can be shared amoung meshes.\n  // This will involve storing the mesh id AND the material id in the BVH texture\n  si.meshId = materialIndex + 1; // +1 so that the mesh id is never 0\n\n  #if defined(NUM_DIFFUSE_MAPS) || defined(NUM_NORMAL_MAPS) || defined(NUM_PBR_MAPS)\n    vec2 uv0 = texelFetch(uvs, i0, 0).xy;\n    vec2 uv1 = texelFetch(uvs, i1, 0).xy;\n    vec2 uv2 = texelFetch(uvs, i2, 0).xy;\n    vec2 uv = fract(barycentric.x * uv0 + barycentric.y * uv1 + barycentric.z * uv2);\n  #endif\n\n  #ifdef NUM_DIFFUSE_MAPS\n    int diffuseMapIndex = materials.diffuseNormalRoughnessMetalnessMapIndex[materialIndex].x;\n    if (diffuseMapIndex >= 0) {\n      si.color *= texture(diffuseMap, vec3(uv * materials.diffuseNormalMapSize[diffuseMapIndex].xy, diffuseMapIndex)).rgb;\n    }\n  #endif\n\n  #ifdef NUM_NORMAL_MAPS\n    int normalMapIndex = materials.diffuseNormalRoughnessMetalnessMapIndex[materialIndex].y;\n    if (normalMapIndex >= 0) {\n      vec2 duv02 = uv0 - uv2;\n      vec2 duv12 = uv1 - uv2;\n      vec3 dp02 = tri.p0 - tri.p2;\n      vec3 dp12 = tri.p1 - tri.p2;\n\n      // Method One\n      // http://www.pbr-book.org/3ed-2018/Shapes/Triangle_Meshes.html#fragment-Computetrianglepartialderivatives-0\n      // Compute tangent vectors relative to the face normal. These vectors won't necessarily be orthogonal to the smoothed normal\n      // This means the TBN matrix won't be orthogonal which is technically incorrect.\n      // This is Three.js's method (https://github.com/mrdoob/three.js/blob/dev/src/renderers/shaders/ShaderChunk/normalmap_pars_fragment.glsl.js)\n      // --------------\n      // float scale = sign(duv02.x * duv12.y - duv02.y * duv12.x);\n      // vec3 dpdu = normalize((duv12.y * dp02 - duv02.y * dp12) * scale);\n      // vec3 dpdv = normalize((-duv12.x * dp02 + duv02.x * dp12) * scale);\n\n      // Method Two\n      // Compute tangent vectors as in Method One but apply Gram-Schmidt process to make vectors orthogonal to smooth normal\n      // This might inadvertently flip coordinate space orientation\n      // --------------\n      // float scale = sign(duv02.x * duv12.y - duv02.y * duv12.x);\n      // vec3 dpdu = normalize((duv12.y * dp02 - duv02.y * dp12) * scale);\n      // dpdu = (dpdu - dot(dpdu, si.normal) * si.normal); // Gram-Schmidt process\n      // vec3 dpdv = cross(si.normal, dpdu) * scale;\n\n      // Method Three\n      // http://www.thetenthplanet.de/archives/1180\n      // Compute co-tangent and co-bitangent vectors\n      // These vectors are orthongal and maintain a consistent coordinate space\n      // --------------\n      vec3 dp12perp = cross(dp12, si.normal);\n      vec3 dp02perp = cross(si.normal, dp02);\n      vec3 dpdu = dp12perp * duv02.x + dp02perp * duv12.x;\n      vec3 dpdv = dp12perp * duv02.y + dp02perp * duv12.y;\n      float invmax = inversesqrt(max(dot(dpdu, dpdu), dot(dpdv, dpdv)));\n      dpdu *= invmax;\n      dpdv *= invmax;\n\n      vec3 n = 2.0 * texture(normalMap, vec3(uv * materials.diffuseNormalMapSize[normalMapIndex].zw, normalMapIndex)).rgb - 1.0;\n      n.xy *= materials.roughnessMetalnessNormalScale[materialIndex].zw;\n\n      mat3 tbn = mat3(dpdu, dpdv, si.normal);\n\n      si.normal = normalize(tbn * n);\n    }\n  #endif\n\n  #ifdef NUM_PBR_MAPS\n    int roughnessMapIndex = materials.diffuseNormalRoughnessMetalnessMapIndex[materialIndex].z;\n    int metalnessMapIndex = materials.diffuseNormalRoughnessMetalnessMapIndex[materialIndex].w;\n    if (roughnessMapIndex >= 0) {\n      si.roughness *= texture(pbrMap, vec3(uv * materials.pbrMapSize[roughnessMapIndex].xy, roughnessMapIndex)).g;\n    }\n    if (metalnessMapIndex >= 0) {\n      si.metalness *= texture(pbrMap, vec3(uv * materials.pbrMapSize[metalnessMapIndex].xy, metalnessMapIndex)).b;\n    }\n  #endif\n}\n\nstruct TriangleIntersect {\n  float t;\n  vec3 barycentric;\n};\n\n// Triangle-ray intersection\n// Faster than the classic M\xF6ller\u2013Trumbore intersection algorithm\n// http://www.pbr-book.org/3ed-2018/Shapes/Triangle_Meshes.html#TriangleIntersection\nTriangleIntersect intersectTriangle(Ray r, Triangle tri, int maxDim, vec3 shear) {\n  TriangleIntersect ti;\n  vec3 d = r.d;\n\n  // translate vertices based on ray origin\n  vec3 p0t = tri.p0 - r.o;\n  vec3 p1t = tri.p1 - r.o;\n  vec3 p2t = tri.p2 - r.o;\n\n  // permute components of triangle vertices\n  if (maxDim == 0) {\n    p0t = p0t.yzx;\n    p1t = p1t.yzx;\n    p2t = p2t.yzx;\n  } else if (maxDim == 1) {\n    p0t = p0t.zxy;\n    p1t = p1t.zxy;\n    p2t = p2t.zxy;\n  }\n\n  // apply shear transformation to translated vertex positions\n  p0t.xy += shear.xy * p0t.z;\n  p1t.xy += shear.xy * p1t.z;\n  p2t.xy += shear.xy * p2t.z;\n\n  // compute edge function coefficients\n  vec3 e = vec3(\n    p1t.x * p2t.y - p1t.y * p2t.x,\n    p2t.x * p0t.y - p2t.y * p0t.x,\n    p0t.x * p1t.y - p0t.y * p1t.x\n  );\n\n  // check if intersection is inside triangle\n  if (any(lessThan(e, vec3(0))) && any(greaterThan(e, vec3(0)))) {\n    return ti;\n  }\n\n  float det = e.x + e.y + e.z;\n\n  // not needed?\n  // if (det == 0.) {\n  //   return ti;\n  // }\n\n  p0t.z *= shear.z;\n  p1t.z *= shear.z;\n  p2t.z *= shear.z;\n  float tScaled = (e.x * p0t.z + e.y * p1t.z + e.z * p2t.z);\n\n  // not needed?\n  // if (sign(det) != sign(tScaled)) {\n  //   return ti;\n  // }\n\n  // check if closer intersection already exists\n  if (abs(tScaled) > abs(r.tMax * det)) {\n    return ti;\n  }\n\n  float invDet = 1. / det;\n  ti.t = tScaled * invDet;\n  ti.barycentric = e * invDet;\n\n  return ti;\n}\n\nstruct Box {\n  vec3 min;\n  vec3 max;\n};\n\n// Branchless ray/box intersection\n// https://tavianator.com/fast-branchless-raybounding-box-intersections/\nfloat intersectBox(Ray r, Box b) {\n  vec3 tBot = (b.min - r.o) * r.invD;\n  vec3 tTop = (b.max - r.o) * r.invD;\n  vec3 tNear = min(tBot, tTop);\n  vec3 tFar = max(tBot, tTop);\n  float t0 = max(tNear.x, max(tNear.y, tNear.z));\n  float t1 = min(tFar.x, min(tFar.y, tFar.z));\n\n  return (t0 > t1 || t0 > r.tMax) ? -1.0 : (t0 > 0.0 ? t0 : t1);\n}\n\nint maxDimension(vec3 v) {\n  return v.x > v.y ? (v.x > v.z ? 0 : 2) : (v.y > v.z ? 1 : 2);\n}\n\n// Traverse BVH, find closest triangle intersection, and return surface information\nSurfaceInteraction intersectScene(inout Ray ray) {\n  SurfaceInteraction si;\n\n  int maxDim = maxDimension(abs(ray.d));\n\n  // Permute space so that the z dimension is the one where the absolute value of the ray's direction is largest.\n  // Then create a shear transformation that aligns ray direction with the +z axis\n  vec3 shear;\n  if (maxDim == 0) {\n    shear = vec3(-ray.d.y, -ray.d.z, 1.0) * ray.invD.x;\n  } else if (maxDim == 1) {\n    shear = vec3(-ray.d.z, -ray.d.x, 1.0) * ray.invD.y;\n  } else {\n    shear = vec3(-ray.d.x, -ray.d.y, 1.0) * ray.invD.z;\n  }\n\n  int nodesToVisit[STACK_SIZE];\n  int stack = 0;\n\n  nodesToVisit[0] = 0;\n\n  while(stack >= 0) {\n    int i = nodesToVisit[stack--];\n\n    vec4 r1 = fetchData(bvh, i, BVH_COLUMNS);\n    vec4 r2 = fetchData(bvh, i + 1, BVH_COLUMNS);\n\n    int splitAxisOrNumPrimitives = floatBitsToInt(r1.w);\n\n    if (splitAxisOrNumPrimitives >= 0) {\n      // Intersection is a bounding box. Test for box intersection and keep traversing BVH\n      int splitAxis = splitAxisOrNumPrimitives;\n\n      Box bbox = Box(r1.xyz, r2.xyz);\n\n      if (intersectBox(ray, bbox) > 0.0) {\n        // traverse near node to ray first, and far node to ray last\n        if (ray.d[splitAxis] > 0.0) {\n          nodesToVisit[++stack] = floatBitsToInt(r2.w);\n          nodesToVisit[++stack] = i + 2;\n        } else {\n          nodesToVisit[++stack] = i + 2;\n          nodesToVisit[++stack] = floatBitsToInt(r2.w);\n        }\n      }\n    } else {\n      ivec3 index = floatBitsToInt(r1.xyz);\n      Triangle tri = Triangle(\n        fetchData(positions, index.x, VERTEX_COLUMNS).xyz,\n        fetchData(positions, index.y, VERTEX_COLUMNS).xyz,\n        fetchData(positions, index.z, VERTEX_COLUMNS).xyz\n      );\n      TriangleIntersect hit = intersectTriangle(ray, tri, maxDim, shear);\n\n      if (hit.t > 0.0) {\n        ray.tMax = hit.t;\n        int materialIndex = floatBitsToInt(r2.w);\n        vec3 faceNormal = r2.xyz;\n        surfaceInteractionFromIntersection(si, tri, hit.barycentric, index, faceNormal, materialIndex);\n      }\n    }\n  }\n\n  // Values must be clamped outside of intersection loop. Clamping inside the loop produces incorrect numbers on some devices.\n  si.roughness = clamp(si.roughness, 0.03, 1.0);\n  si.metalness = clamp(si.metalness, 0.0, 1.0);\n\n  return si;\n}\n\nbool intersectSceneShadow(inout Ray ray) {\n  int maxDim = maxDimension(abs(ray.d));\n\n  // Permute space so that the z dimension is the one where the absolute value of the ray's direction is largest.\n  // Then create a shear transformation that aligns ray direction with the +z axis\n  vec3 shear;\n  if (maxDim == 0) {\n    shear = vec3(-ray.d.y, -ray.d.z, 1.0) * ray.invD.x;\n  } else if (maxDim == 1) {\n    shear = vec3(-ray.d.z, -ray.d.x, 1.0) * ray.invD.y;\n  } else {\n    shear = vec3(-ray.d.x, -ray.d.y, 1.0) * ray.invD.z;\n  }\n\n  int nodesToVisit[STACK_SIZE];\n  int stack = 0;\n\n  nodesToVisit[0] = 0;\n\n  while(stack >= 0) {\n    int i = nodesToVisit[stack--];\n\n    vec4 r1 = fetchData(bvh, i, BVH_COLUMNS);\n    vec4 r2 = fetchData(bvh, i + 1, BVH_COLUMNS);\n\n    int splitAxisOrNumPrimitives = floatBitsToInt(r1.w);\n\n    if (splitAxisOrNumPrimitives >= 0) {\n      int splitAxis = splitAxisOrNumPrimitives;\n\n      Box bbox = Box(r1.xyz, r2.xyz);\n\n      if (intersectBox(ray, bbox) > 0.0) {\n        if (ray.d[splitAxis] > 0.0) {\n          nodesToVisit[++stack] = floatBitsToInt(r2.w);\n          nodesToVisit[++stack] = i + 2;\n        } else {\n          nodesToVisit[++stack] = i + 2;\n          nodesToVisit[++stack] = floatBitsToInt(r2.w);\n        }\n      }\n    } else {\n      ivec3 index = floatBitsToInt(r1.xyz);\n      Triangle tri = Triangle(\n        fetchData(positions, index.x, VERTEX_COLUMNS).xyz,\n        fetchData(positions, index.y, VERTEX_COLUMNS).xyz,\n        fetchData(positions, index.z, VERTEX_COLUMNS).xyz\n      );\n\n      if (intersectTriangle(ray, tri, maxDim, shear).t > 0.0) {\n        return true;\n      }\n    }\n  }\n\n  return false;\n}\n\n";
+
+  var random = "\n\n// Noise texture used to generate a different random number for each pixel.\n// We use blue noise in particular, but any type of noise will work.\nuniform sampler2D noise;\n\nuniform float stratifiedSamples[SAMPLING_DIMENSIONS];\nuniform float strataSize;\n\n// Every time we call randomSample() in the shader, and for every call to render,\n// we want that specific bit of the shader to fetch a sample from the same position in stratifiedSamples\n// This allows us to use stratified sampling for each random variable in our path tracing\nint sampleIndex = 0;\n\nconst highp float maxUint = 1.0 / 4294967295.0;\n\nfloat pixelSeed;\n\nvoid initRandom() {\n  vec2 noiseSize = vec2(textureSize(noise, 0));\n\n  // tile the small noise texture across the entire screen\n  pixelSeed = texture(noise, vCoord / (pixelSize * noiseSize)).r;\n}\n\nfloat randomSample() {\n  float stratifiedSample = stratifiedSamples[sampleIndex++];\n\n  float random = fract((stratifiedSample + pixelSeed) * strataSize); // blue noise + stratified samples\n\n  // transform random number between [0, 1] to (0, 1)\n  return EPS + (1.0 - 2.0 * EPS) * random;\n}\n\nvec2 randomSampleVec2() {\n  return vec2(randomSample(), randomSample());\n}\n";
+
+  // Sample the environment map using a cumulative distribution function as described in
+  // http://www.pbr-book.org/3ed-2018/Light_Transport_I_Surface_Reflection/Sampling_Light_Sources.html#InfiniteAreaLights
+  var envmap = "\n\nuniform sampler2D envmap;\nuniform sampler2D envmapDistribution;\nuniform sampler2D backgroundMap;\n\nvec2 cartesianToEquirect(vec3 pointOnSphere) {\n  float phi = mod(atan(-pointOnSphere.z, -pointOnSphere.x), TWOPI);\n  float theta = acos(pointOnSphere.y);\n  return vec2(phi * 0.5 * INVPI, theta * INVPI);\n}\n\nfloat getEnvmapV(float u, out int vOffset, out float pdf) {\n  ivec2 size = textureSize(envmap, 0);\n\n  int left = 0;\n  int right = size.y + 1; // cdf length is the length of the envmap + 1\n  while (left < right) {\n    int mid = (left + right) >> 1;\n    float s = texelFetch(envmapDistribution, ivec2(0, mid), 0).x;\n    if (s <= u) {\n      left = mid + 1;\n    } else {\n      right = mid;\n    }\n  }\n  vOffset = left - 1;\n\n  // x channel is cumulative distribution of envmap luminance\n  // y channel is partial probability density of envmap luminance\n  vec2 s0 = texelFetch(envmapDistribution, ivec2(0, vOffset), 0).xy;\n  vec2 s1 = texelFetch(envmapDistribution, ivec2(0, vOffset + 1), 0).xy;\n\n  pdf = s0.y;\n\n  return (float(vOffset) +  (u - s0.x) / (s1.x - s0.x)) / float(size.y);\n}\n\nfloat getEnvmapU(float u, int vOffset, out float pdf) {\n  ivec2 size = textureSize(envmap, 0);\n\n  int left = 0;\n  int right = size.x + 1; // cdf length is the length of the envmap + 1\n  while (left < right) {\n    int mid = (left + right) >> 1;\n    float s = texelFetch(envmapDistribution, ivec2(1 + mid, vOffset), 0).x;\n    if (s <= u) {\n      left = mid + 1;\n    } else {\n      right = mid;\n    }\n  }\n  int uOffset = left - 1;\n\n  // x channel is cumulative distribution of envmap luminance\n  // y channel is partial probability density of envmap luminance\n  vec2 s0 = texelFetch(envmapDistribution, ivec2(1 + uOffset, vOffset), 0).xy;\n  vec2 s1 = texelFetch(envmapDistribution, ivec2(1 + uOffset + 1, vOffset), 0).xy;\n\n  pdf = s0.y;\n\n  return (float(uOffset) + (u - s0.x) / (s1.x - s0.x)) / float(size.x);\n}\n\n// Perform two binary searches to find light direction.\nvec3 sampleEnvmap(vec2 random, out vec2 uv, out float pdf) {\n  vec2 partialPdf;\n  int vOffset;\n\n  uv.y = getEnvmapV(random.x, vOffset, partialPdf.y);\n  uv.x = getEnvmapU(random.y, vOffset, partialPdf.x);\n\n  float phi = uv.x * TWOPI;\n  float theta = uv.y * PI;\n  float cosTheta = cos(theta);\n  float sinTheta = sin(theta);\n  float cosPhi = cos(phi);\n  float sinPhi = sin(phi);\n\n  vec3 dir = vec3(-sinTheta * cosPhi, cosTheta, -sinTheta * sinPhi);\n\n  pdf = partialPdf.x * partialPdf.y * INVPI2 / (2.0 * sinTheta);\n\n  return dir;\n}\n\nfloat envmapPdf(vec2 uv) {\n  vec2 size = vec2(textureSize(envmap, 0));\n\n  float sinTheta = sin(uv.y * PI);\n\n  uv *= size;\n\n  float partialX = texelFetch(envmapDistribution, ivec2(1.0 + uv.x, uv.y), 0).y;\n  float partialY = texelFetch(envmapDistribution, ivec2(0, uv.y), 0).y;\n\n  return partialX * partialY * INVPI2 / (2.0 * sinTheta);\n}\n\nvec3 sampleEnvmapFromDirection(vec3 d) {\n  vec2 uv = cartesianToEquirect(d);\n  return textureLinear(envmap, uv).rgb;\n}\n\nvec3 sampleBackgroundFromDirection(vec3 d) {\n  vec2 uv = cartesianToEquirect(d);\n  return textureLinear(backgroundMap, uv).rgb;\n}\n\n";
+
+  var bsdf = "\n\n// Computes the exact value of the Fresnel factor\n// https://seblagarde.wordpress.com/2013/04/29/memo-on-fresnel-equations/\nfloat fresnel(float cosTheta, float eta, float invEta) {\n  eta = cosTheta > 0.0 ? eta : invEta;\n  cosTheta = abs(cosTheta);\n\n  float gSquared = eta * eta + cosTheta * cosTheta - 1.0;\n\n  if (gSquared < 0.0) {\n    return 1.0;\n  }\n\n  float g = sqrt(gSquared);\n\n  float a = (g - cosTheta) / (g + cosTheta);\n  float b = (cosTheta * (g + cosTheta) - 1.0) / (cosTheta * (g - cosTheta) + 1.0);\n\n  return 0.5 * a * a * (1.0 + b * b);\n}\n\nfloat fresnelSchlickWeight(float cosTheta) {\n  float w = 1.0 - cosTheta;\n  return (w * w) * (w * w) * w;\n}\n\n// Computes Schlick's approximation of the Fresnel factor\n// Assumes ray is moving from a less dense to a more dense medium\nfloat fresnelSchlick(float cosTheta, float r0) {\n  return mix(fresnelSchlickWeight(cosTheta), 1.0, r0);\n}\n\n// Computes Schlick's approximation of Fresnel factor\n// Accounts for total internal reflection if ray is moving from a more dense to a less dense medium\nfloat fresnelSchlickTIR(float cosTheta, float r0, float ni) {\n\n  // moving from a more dense to a less dense medium\n  if (cosTheta < 0.0) {\n    float inv_eta = ni;\n    float SinT2 = inv_eta * inv_eta * (1.0f - cosTheta * cosTheta);\n    if (SinT2 > 1.0) {\n        return 1.0; // total internal reflection\n    }\n    cosTheta = sqrt(1.0f - SinT2);\n  }\n\n  return mix(fresnelSchlickWeight(cosTheta), 1.0, r0);\n}\n\nfloat trowbridgeReitzD(float cosTheta, float alpha2) {\n  float e = cosTheta * cosTheta * (alpha2 - 1.0) + 1.0;\n  return alpha2 / (PI * e * e);\n}\n\nfloat trowbridgeReitzLambda(float cosTheta, float alpha2) {\n  float cos2Theta = cosTheta * cosTheta;\n  float tan2Theta = (1.0 - cos2Theta) / cos2Theta;\n  return 0.5 * (-1.0 + sqrt(1.0 + alpha2 * tan2Theta));\n}\n\n// An implementation of Disney's principled BRDF\n// https://disney-animation.s3.amazonaws.com/library/s2012_pbs_disney_brdf_notes_v2.pdf\nvec3 materialBrdf(SurfaceInteraction si, vec3 viewDir, vec3 lightDir, float cosThetaL, float diffuseWeight, out float pdf) {\n  vec3 halfVector = normalize(viewDir + lightDir);\n\n  cosThetaL = abs(cosThetaL);\n  float cosThetaV = abs(dot(si.normal, viewDir));\n  float cosThetaH = abs(dot(si.normal, halfVector));\n  float cosThetaD = abs(dot(lightDir, halfVector));\n\n  float alpha2 = (si.roughness * si.roughness) * (si.roughness * si.roughness);\n\n  float F = fresnelSchlick(cosThetaD, mix(R0, 0.6, si.metalness));\n  float D = trowbridgeReitzD(cosThetaH, alpha2);\n\n  float roughnessRemapped = 0.5 + 0.5 * si.roughness;\n  float alpha2Remapped = (roughnessRemapped * roughnessRemapped) * (roughnessRemapped * roughnessRemapped);\n\n  float G = 1.0 / (1.0 + trowbridgeReitzLambda(cosThetaV, alpha2Remapped) + trowbridgeReitzLambda(cosThetaL, alpha2Remapped));\n\n  float specular = F * D * G / (4.0 * cosThetaV * cosThetaL);\n  float specularPdf = D * cosThetaH / (4.0 * cosThetaD);\n\n  float f = -0.5 + 2.0 * cosThetaD * cosThetaD * si.roughness;\n  float diffuse = diffuseWeight * INVPI * (1.0 + f * fresnelSchlickWeight(cosThetaL)) * (1.0 + f * fresnelSchlickWeight(cosThetaV));\n  float diffusePdf = cosThetaL * INVPI;\n\n  pdf = mix(0.5 * (specularPdf + diffusePdf), specularPdf, si.metalness);\n\n  return mix(si.color * diffuse + specular, si.color * specular, si.metalness);\n}\n\n";
+
+  var sample = "\n\n// https://graphics.pixar.com/library/OrthonormalB/paper.pdf\nmat3 orthonormalBasis(vec3 n) {\n  float zsign = n.z >= 0.0 ? 1.0 : -1.0;\n  float a = -1.0 / (zsign + n.z);\n  float b = n.x * n.y * a;\n  vec3 s = vec3(1.0 + zsign * n.x * n.x * a, zsign * b, -zsign * n.x);\n  vec3 t = vec3(b, zsign + n.y * n.y * a, -n.y);\n  return mat3(s, t, n);\n}\n\n// http://www.pbr-book.org/3ed-2018/Monte_Carlo_Integration/2D_Sampling_with_Multidimensional_Transformations.html#SamplingaUnitDisk\nvec2 sampleCircle(vec2 p) {\n  p = 2.0 * p - 1.0;\n\n  bool greater = abs(p.x) > abs(p.y);\n\n  float r = greater ? p.x : p.y;\n  float theta = greater ? 0.25 * PI * p.y / p.x : PI * (0.5 - 0.25 * p.x / p.y);\n\n  return r * vec2(cos(theta), sin(theta));\n}\n\n// http://www.pbr-book.org/3ed-2018/Monte_Carlo_Integration/2D_Sampling_with_Multidimensional_Transformations.html#Cosine-WeightedHemisphereSampling\nvec3 cosineSampleHemisphere(vec2 p) {\n  vec2 h = sampleCircle(p);\n  float z = sqrt(max(0.0, 1.0 - h.x * h.x - h.y * h.y));\n  return vec3(h, z);\n}\n\n\n// http://www.pbr-book.org/3ed-2018/Light_Transport_I_Surface_Reflection/Sampling_Reflection_Functions.html#MicrofacetBxDFs\n// Instead of Beckmann distrubtion, we use the GTR2 (GGX) distrubtion as covered in Disney's Principled BRDF paper\nvec3 lightDirSpecular(vec3 faceNormal, vec3 viewDir, mat3 basis, float roughness, vec2 random) {\n  float phi = TWOPI * random.y;\n  float alpha = roughness * roughness;\n  float cosTheta = sqrt((1.0 - random.x) / (1.0 + (alpha * alpha - 1.0) * random.x));\n  float sinTheta = sqrt(1.0 - cosTheta * cosTheta);\n\n  vec3 halfVector = basis * sign(dot(faceNormal, viewDir)) * vec3(sinTheta * cos(phi), sinTheta * sin(phi), cosTheta);\n\n  vec3 lightDir = reflect(-viewDir, halfVector);\n\n  return lightDir;\n}\n\nvec3 lightDirDiffuse(vec3 faceNormal, vec3 viewDir, mat3 basis, vec2 random) {\n  return basis * sign(dot(faceNormal, viewDir)) * cosineSampleHemisphere(random);\n}\n\nfloat powerHeuristic(float f, float g) {\n  return (f * f) / (f * f + g * g);\n}\n\n";
+
+  // Estimate the direct lighting integral using multiple importance sampling
+  // http://www.pbr-book.org/3ed-2018/Light_Transport_I_Surface_Reflection/Direct_Lighting.html#EstimatingtheDirectLightingIntegral
+  var sampleMaterial = "\n\nvec3 importanceSampleLight(SurfaceInteraction si, vec3 viewDir, bool lastBounce, vec2 random) {\n  vec3 li;\n\n  float lightPdf;\n  vec2 uv;\n  vec3 lightDir = sampleEnvmap(random, uv, lightPdf);\n\n  float cosThetaL = dot(si.normal, lightDir);\n\n  float orientation = dot(si.faceNormal, viewDir) * cosThetaL;\n  if (orientation < 0.0) {\n    return li;\n  }\n\n  float diffuseWeight = 1.0;\n  Ray ray;\n  initRay(ray, si.position + EPS * lightDir, lightDir);\n  if (intersectSceneShadow(ray)) {\n    if (lastBounce) {\n      diffuseWeight = 0.0;\n    } else {\n      return li;\n    }\n  }\n\n  vec3 irr = textureLinear(envmap, uv).xyz;\n\n  float scatteringPdf;\n  vec3 brdf = materialBrdf(si, viewDir, lightDir, cosThetaL, diffuseWeight, scatteringPdf);\n\n  float weight = powerHeuristic(lightPdf, scatteringPdf);\n\n  li = brdf * irr * abs(cosThetaL) * weight / lightPdf;\n\n  return li;\n}\n\nvec3 importanceSampleMaterial(SurfaceInteraction si, vec3 viewDir, bool lastBounce, vec3 lightDir) {\n  vec3 li;\n\n  float cosThetaL = dot(si.normal, lightDir);\n\n  float orientation = dot(si.faceNormal, viewDir) * cosThetaL;\n  if (orientation < 0.0) {\n    return li;\n  }\n\n  float diffuseWeight = 1.0;\n  Ray ray;\n  initRay(ray, si.position + EPS * lightDir, lightDir);\n  if (intersectSceneShadow(ray)) {\n    if (lastBounce) {\n      diffuseWeight = 0.0;\n    } else {\n      return li;\n    }\n  }\n\n  vec2 uv = cartesianToEquirect(lightDir);\n\n  float lightPdf = envmapPdf(uv);\n\n  vec3 irr = textureLinear(envmap, uv).rgb;\n\n  float scatteringPdf;\n  vec3 brdf = materialBrdf(si, viewDir, lightDir, cosThetaL, diffuseWeight, scatteringPdf);\n\n  float weight = powerHeuristic(scatteringPdf, lightPdf);\n\n  li += brdf * irr * abs(cosThetaL) * weight / scatteringPdf;\n\n  return li;\n}\n\nvoid sampleMaterial(SurfaceInteraction si, int bounce, inout Path path) {\n  mat3 basis = orthonormalBasis(si.normal);\n  vec3 viewDir = -path.ray.d;\n\n  vec2 diffuseOrSpecular = randomSampleVec2();\n\n  vec3 lightDir = diffuseOrSpecular.x < mix(0.5, 0.0, si.metalness) ?\n    lightDirDiffuse(si.faceNormal, viewDir, basis, randomSampleVec2()) :\n    lightDirSpecular(si.faceNormal, viewDir, basis, si.roughness, randomSampleVec2());\n\n  bool lastBounce = bounce == BOUNCES;\n\n  // Add path contribution\n  path.li += path.beta * (\n      importanceSampleLight(si, viewDir, lastBounce, randomSampleVec2()) +\n      importanceSampleMaterial(si, viewDir, lastBounce, lightDir)\n    );\n\n  // Get new path direction\n\n  lightDir = diffuseOrSpecular.y < mix(0.5, 0.0, si.metalness) ?\n    lightDirDiffuse(si.faceNormal, viewDir, basis, randomSampleVec2()) :\n    lightDirSpecular(si.faceNormal, viewDir, basis, si.roughness, randomSampleVec2());\n\n  float cosThetaL = dot(si.normal, lightDir);\n\n  float scatteringPdf;\n  vec3 brdf = materialBrdf(si, viewDir, lightDir, cosThetaL, 1.0, scatteringPdf);\n\n  path.beta *= abs(cosThetaL) * brdf / scatteringPdf;\n\n  initRay(path.ray, si.position + EPS * lightDir, lightDir);\n\n  // If new ray direction is pointing into the surface,\n  // the light path is physically impossible and we terminate the path.\n  float orientation = dot(si.faceNormal, viewDir) * cosThetaL;\n  path.abort = orientation < 0.0;\n\n  path.specularBounce = false;\n}\n\n";
+
+  var sampleShadowCatcher = "\n\n#ifdef USE_SHADOW_CATCHER\n\nfloat importanceSampleLightShadowCatcher(SurfaceInteraction si, vec3 viewDir, vec2 random, inout float alpha) {\n  float li;\n\n  float lightPdf;\n  vec2 uv;\n  vec3 lightDir = sampleEnvmap(random, uv, lightPdf);\n\n  float cosThetaL = dot(si.normal, lightDir);\n\n  float orientation = dot(si.faceNormal, viewDir) * cosThetaL;\n  if (orientation < 0.0) {\n    return li;\n  }\n\n  float occluded = 1.0;\n\n  Ray ray;\n  initRay(ray, si.position + EPS * lightDir, lightDir);\n  if (intersectSceneShadow(ray)) {\n    occluded = 0.0;\n  }\n\n  float irr = dot(luminance, textureLinear(envmap, uv).rgb);\n\n  // lambertian BRDF\n  float brdf = INVPI;\n  float scatteringPdf = abs(cosThetaL) * INVPI;\n\n  float weight = powerHeuristic(lightPdf, scatteringPdf);\n\n  float lightEq = irr * brdf * abs(cosThetaL) * weight / lightPdf;\n\n  alpha += lightEq;\n  li += occluded * lightEq;\n\n  return li;\n}\n\nfloat importanceSampleMaterialShadowCatcher(SurfaceInteraction si, vec3 viewDir, vec3 lightDir, inout float alpha) {\n  float li;\n\n  float cosThetaL = dot(si.normal, lightDir);\n\n  float orientation = dot(si.faceNormal, viewDir) * cosThetaL;\n  if (orientation < 0.0) {\n    return li;\n  }\n\n  float occluded = 1.0;\n\n  Ray ray;\n  initRay(ray, si.position + EPS * lightDir, lightDir);\n  if (intersectSceneShadow(ray)) {\n    occluded = 0.0;\n  }\n\n  vec2 uv = cartesianToEquirect(lightDir);\n\n  float lightPdf = envmapPdf(uv);\n\n  float irr = dot(luminance, textureLinear(envmap, uv).rgb);\n\n  // lambertian BRDF\n  float brdf = INVPI;\n  float scatteringPdf = abs(cosThetaL) * INVPI;\n\n  float weight = powerHeuristic(scatteringPdf, lightPdf);\n\n  float lightEq = irr * brdf * abs(cosThetaL) * weight / scatteringPdf;\n\n  alpha += lightEq;\n  li += occluded * lightEq;\n\n  return li;\n}\n\nvoid sampleShadowCatcher(SurfaceInteraction si, int bounce, inout Path path) {\n  mat3 basis = orthonormalBasis(si.normal);\n  vec3 viewDir = -path.ray.d;\n  vec3 color = bounce > 1 && !path.specularBounce ? sampleEnvmapFromDirection(-viewDir) : sampleBackgroundFromDirection(-viewDir);\n\n  vec3 lightDir = lightDirDiffuse(si.faceNormal, viewDir, basis, randomSampleVec2());\n\n  float alphaBounce = 0.0;\n\n  vec3 li = path.beta * color * (\n      importanceSampleLightShadowCatcher(si, viewDir, randomSampleVec2(), alphaBounce) +\n      importanceSampleMaterialShadowCatcher(si, viewDir, lightDir, alphaBounce)\n    );\n\n  // alphaBounce contains the lighting of the shadow catcher *without* shadows\n  alphaBounce = alphaBounce == 0.0 ? 1.0 : alphaBounce;\n\n  // in post processing step, we divide by alpha to obtain the percentage of light relative to shadow for the shadow catcher\n  path.alpha *= alphaBounce;\n\n  // we only want the alpha division to affect the shadow catcher\n  // factor in alpha to the previous light, so that dividing by alpha with the previous light cancels out this contribution\n  path.li *= alphaBounce;\n\n  // add path contribution\n  path.li += li;\n\n  // Get new path direction\n\n  lightDir = lightDirDiffuse(si.faceNormal, viewDir, basis, randomSampleVec2());\n\n  float cosThetaL = dot(si.normal, lightDir);\n\n  // lambertian brdf with terms cancelled\n  path.beta *= color;\n\n  initRay(path.ray, si.position + EPS * lightDir, lightDir);\n\n  // If new ray direction is pointing into the surface,\n  // the light path is physically impossible and we terminate the path.\n  float orientation = dot(si.faceNormal, viewDir) * cosThetaL;\n  path.abort = orientation < 0.0;\n\n  path.specularBounce = false;\n\n  // advance dimension index by unused stratified samples\n  const int usedSamples = 6;\n  sampleIndex += SAMPLES_PER_MATERIAL - usedSamples;\n}\n\n#endif\n\n";
+
+  var sampleGlass = "\n\n#ifdef USE_GLASS\n\nvoid sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {\n  vec3 viewDir = -path.ray.d;\n  float cosTheta = dot(si.normal, viewDir);\n\n  float F = si.materialType == THIN_GLASS ?\n    fresnelSchlick(abs(cosTheta), R0) : // thin glass\n    fresnelSchlickTIR(cosTheta, R0, IOR); // thick glass\n\n  vec3 lightDir;\n\n  float reflectionOrRefraction = randomSample();\n\n  if (reflectionOrRefraction < F) {\n    lightDir = reflect(-viewDir, si.normal);\n  } else {\n    lightDir = si.materialType == THIN_GLASS ?\n      refract(-viewDir, sign(cosTheta) * si.normal, INV_IOR_THIN) : // thin glass\n      refract(-viewDir, sign(cosTheta) * si.normal, cosTheta < 0.0 ? IOR : INV_IOR); // thick glass\n    path.beta *= si.color;\n  }\n\n  initRay(path.ray, si.position + EPS * lightDir, lightDir);\n\n  // advance sample index by unused stratified samples\n  const int usedSamples = 1;\n  sampleIndex += SAMPLES_PER_MATERIAL - usedSamples;\n\n  path.li += bounce == BOUNCES ? path.beta * sampleBackgroundFromDirection(lightDir) : vec3(0.0);\n}\n\n#endif\n\n";
+
+  var fragment = {
+    includes: [core, textureLinear, intersect, random, envmap, bsdf, sample, sampleMaterial, sampleGlass, sampleShadowCatcher],
+    outputs: ['light', 'position'],
+    source: function source(defines) {
+      return "\n  void bounce(inout Path path, int i, inout SurfaceInteraction si) {\n    if (path.abort) {\n      return;\n    }\n\n    si = intersectScene(path.ray);\n\n    if (!si.hit) {\n      if (path.specularBounce) {\n        path.li += path.beta * sampleBackgroundFromDirection(path.ray.d);\n      }\n\n      path.abort = true;\n    } else {\n      #ifdef USE_GLASS\n        if (si.materialType == THIN_GLASS || si.materialType == THICK_GLASS) {\n          sampleGlassSpecular(si, i, path);\n        }\n      #endif\n      #ifdef USE_SHADOW_CATCHER\n        if (si.materialType == SHADOW_CATCHER) {\n          sampleShadowCatcher(si, i, path);\n        }\n      #endif\n      if (si.materialType == STANDARD) {\n        sampleMaterial(si, i, path);\n      }\n\n      // Russian Roulette sampling\n      if (i >= 2) {\n        float q = 1.0 - dot(path.beta, luminance);\n        if (randomSample() < q) {\n          path.abort = true;\n        }\n        path.beta /= 1.0 - q;\n      }\n    }\n  }\n\n  // Path tracing integrator as described in\n  // http://www.pbr-book.org/3ed-2018/Light_Transport_I_Surface_Reflection/Path_Tracing.html#\n  vec4 integrator(inout Ray ray, inout SurfaceInteraction si) {\n    Path path;\n    path.ray = ray;\n    path.li = vec3(0);\n    path.alpha = 1.0;\n    path.beta = vec3(1.0);\n    path.specularBounce = true;\n    path.abort = false;\n\n    bounce(path, 1, si);\n\n    SurfaceInteraction indirectSi;\n\n    // Manually unroll for loop.\n    // Some hardware fails to interate over a GLSL loop, so we provide this workaround\n    // for (int i = 1; i < defines.bounces + 1, i += 1)\n    // equivelant to\n    ".concat(unrollLoop('i', 2, defines.BOUNCES + 1, 1, "\n      bounce(path, i, indirectSi);\n    "), "\n\n    return vec4(path.li, path.alpha);\n  }\n\n  void main() {\n    initRandom();\n\n    vec2 vCoordAntiAlias = vCoord + jitter;\n\n    vec3 direction = normalize(vec3(vCoordAntiAlias - 0.5, -1.0) * vec3(camera.aspect, 1.0, camera.fov));\n\n    // Thin lens model with depth-of-field\n    // http://www.pbr-book.org/3ed-2018/Camera_Models/Projective_Camera_Models.html#TheThinLensModelandDepthofField\n    // vec2 lensPoint = camera.aperture * sampleCircle(randomSampleVec2());\n    // vec3 focusPoint = -direction * camera.focus / direction.z; // intersect ray direction with focus plane\n\n    // vec3 origin = vec3(lensPoint, 0.0);\n    // direction = normalize(focusPoint - origin);\n\n    // origin = vec3(camera.transform * vec4(origin, 1.0));\n    // direction = mat3(camera.transform) * direction;\n\n    vec3 origin = camera.transform[3].xyz;\n    direction = mat3(camera.transform) * direction;\n\n    Ray cam;\n    initRay(cam, origin, direction);\n\n    SurfaceInteraction si;\n\n    vec4 liAndAlpha = integrator(cam, si);\n\n    if (dot(si.position, si.position) == 0.0) {\n      si.position = origin + direction * RAY_MAX_DISTANCE;\n    }\n\n    if (!(liAndAlpha.x < INF && liAndAlpha.x > -EPS)) {\n      liAndAlpha = vec4(0, 0, 0, 1);\n    }\n\n    out_light = liAndAlpha;\n    out_position = vec4(si.position, si.meshId);\n\n    // Stratified Sampling Sample Count Test\n    // ---------------\n    // Uncomment the following code\n    // Then observe the colors of the image\n    // If:\n    // * The resulting image is pure black\n    //   Extra samples are being passed to the shader that aren't being used.\n    // * The resulting image contains red\n    //   Not enough samples are being passed to the shader\n    // * The resulting image contains only white with some black\n    //   All samples are used by the shader. Correct result!\n\n    // fragColor = vec4(0, 0, 0, 1);\n    // if (sampleIndex == SAMPLING_DIMENSIONS) {\n    //   fragColor = vec4(1, 1, 1, 1);\n    // } else if (sampleIndex > SAMPLING_DIMENSIONS) {\n    //   fragColor = vec4(1, 0, 0, 1);\n    // }\n}\n");
     }
-
-    return defines;
-  }
-
-  function fragString (_ref) {
-    var rayTracingRenderTargets = _ref.rayTracingRenderTargets,
-        defines = _ref.defines;
-    return "#version 300 es\n\nprecision mediump float;\nprecision mediump int;\n\n".concat(addDefines(defines), "\n\n").concat(rayTracingRenderTargets.set(), "\n\n#define PI 3.14159265359\n#define TWOPI 6.28318530718\n#define INVPI 0.31830988618\n#define INVPI2 0.10132118364\n#define EPS 0.0005\n#define INF 1.0e999\n#define RAY_MAX_DISTANCE 9999.0\n\n#define STANDARD 0\n#define THIN_GLASS 1\n#define THICK_GLASS 2\n#define SHADOW_CATCHER 3\n\n#define SAMPLES_PER_MATERIAL 8\n\nconst float IOR = 1.5;\nconst float INV_IOR = 1.0 / IOR;\n\nconst float IOR_THIN = 1.015;\nconst float INV_IOR_THIN = 1.0 / IOR_THIN;\n\nconst float R0 = (1.0 - IOR) * (1.0 - IOR)  / ((1.0 + IOR) * (1.0 + IOR));\n\n// https://www.w3.org/WAI/GL/wiki/Relative_luminance\nconst vec3 luminance = vec3(0.2126, 0.7152, 0.0722);\n\nstruct Ray {\n  vec3 o;\n  vec3 d;\n  vec3 invD;\n  float tMax;\n};\n\nstruct SurfaceInteraction {\n  bool hit;\n  vec3 position;\n  vec3 normal; // smoothed normal from the three triangle vertices\n  vec3 faceNormal; // normal of the triangle\n  vec3 color;\n  float roughness;\n  float metalness;\n  int materialType;\n  int meshId;\n};\n\nstruct Camera {\n  mat4 transform;\n  float aspect;\n  float fov;\n  float focus;\n  float aperture;\n};\n\nuniform Camera camera;\nuniform vec2 pixelSize; // 1 / screenResolution\nuniform vec2 jitter;\n\nin vec2 vCoord;\n\nvoid initRay(inout Ray ray, vec3 origin, vec3 direction) {\n  ray.o = origin;\n  ray.d = direction;\n  ray.invD = 1.0 / ray.d;\n  ray.tMax = RAY_MAX_DISTANCE;\n}\n\n// given the index from a 1D array, retrieve corresponding position from packed 2D texture\nivec2 unpackTexel(int i, int columnsLog2) {\n  ivec2 u;\n  u.y = i >> columnsLog2; // equivalent to (i / 2^columnsLog2)\n  u.x = i - (u.y << columnsLog2); // equivalent to (i % 2^columnsLog2)\n  return u;\n}\n\nvec4 fetchData(sampler2D s, int i, int columnsLog2) {\n  return texelFetch(s, unpackTexel(i, columnsLog2), 0);\n}\n\nivec4 fetchData(isampler2D s, int i, int columnsLog2) {\n  return texelFetch(s, unpackTexel(i, columnsLog2), 0);\n}\n\nstruct Path {\n  Ray ray;\n  vec3 li;\n  vec3 albedo;\n  float alpha;\n  vec3 beta;\n  bool specularBounce;\n  bool abort;\n};\n\n").concat(textureLinear(), "\n").concat(intersect(defines), "\n").concat(random(), "\n").concat(envmap(), "\n").concat(bsdf(), "\n").concat(sample(), "\n").concat(sampleMaterial(), "\n").concat(sampleGlass(), "\n").concat(sampleShadowCatcher(), "\n\nvoid bounce(inout Path path, int i, inout SurfaceInteraction si) {\n  if (path.abort) {\n    return;\n  }\n\n  si = intersectScene(path.ray);\n\n  if (!si.hit) {\n    if (path.specularBounce) {\n      path.li += path.beta * sampleBackgroundFromDirection(path.ray.d);\n    }\n\n    path.abort = true;\n  } else {\n    #ifdef USE_GLASS\n      if (si.materialType == THIN_GLASS || si.materialType == THICK_GLASS) {\n        sampleGlassSpecular(si, i, path);\n      }\n    #endif\n    #ifdef USE_SHADOW_CATCHER\n      if (si.materialType == SHADOW_CATCHER) {\n        sampleShadowCatcher(si, i, path);\n      }\n    #endif\n    if (si.materialType == STANDARD) {\n      sampleMaterial(si, i, path);\n    }\n\n    // Russian Roulette sampling\n    if (i >= 2) {\n      float q = 1.0 - dot(path.beta, luminance);\n      if (randomSample() < q) {\n        path.abort = true;\n      }\n      path.beta /= 1.0 - q;\n    }\n  }\n}\n\n// Path tracing integrator as described in\n// http://www.pbr-book.org/3ed-2018/Light_Transport_I_Surface_Reflection/Path_Tracing.html#\nvec4 integrator(inout Ray ray, inout SurfaceInteraction si) {\n  Path path;\n  path.ray = ray;\n  path.li = vec3(0);\n  path.alpha = 1.0;\n  path.beta = vec3(1.0);\n  path.specularBounce = true;\n  path.abort = false;\n\n  bounce(path, 1, si);\n\n  SurfaceInteraction indirectSi;\n\n  // Manually unroll for loop.\n  // Some hardware fails to interate over a GLSL loop, so we provide this workaround\n  // for (int i = 1; i < defines.bounces + 1, i += 1)\n  // equivelant to\n  ").concat(unrollLoop('i', 2, defines.BOUNCES + 1, 1, "\n    bounce(path, i, indirectSi);\n  "), "\n\n  return vec4(path.li, path.alpha);\n}\n\nvoid main() {\n  initRandom();\n\n  vec2 vCoordAntiAlias = vCoord + jitter;\n\n  vec3 direction = normalize(vec3(vCoordAntiAlias - 0.5, -1.0) * vec3(camera.aspect, 1.0, camera.fov));\n\n  // Thin lens model with depth-of-field\n  // http://www.pbr-book.org/3ed-2018/Camera_Models/Projective_Camera_Models.html#TheThinLensModelandDepthofField\n  // vec2 lensPoint = camera.aperture * sampleCircle(randomSampleVec2());\n  // vec3 focusPoint = -direction * camera.focus / direction.z; // intersect ray direction with focus plane\n\n  // vec3 origin = vec3(lensPoint, 0.0);\n  // direction = normalize(focusPoint - origin);\n\n  // origin = vec3(camera.transform * vec4(origin, 1.0));\n  // direction = mat3(camera.transform) * direction;\n\n  vec3 origin = camera.transform[3].xyz;\n  direction = mat3(camera.transform) * direction;\n\n  Ray cam;\n  initRay(cam, origin, direction);\n\n  SurfaceInteraction si;\n\n  vec4 liAndAlpha = integrator(cam, si);\n\n  if (dot(si.position, si.position) == 0.0) {\n    si.position = origin + direction * RAY_MAX_DISTANCE;\n  }\n\n  if (!(liAndAlpha.x < INF && liAndAlpha.x > -EPS)) {\n    liAndAlpha = vec4(0, 0, 0, 1);\n  }\n\n  out_light = liAndAlpha;\n  out_position = vec4(si.position, si.meshId);\n\n  // Stratified Sampling Sample Count Test\n  // ---------------\n  // Uncomment the following code\n  // Then observe the colors of the image\n  // If:\n  // * The resulting image is pure black\n  //   Extra samples are being passed to the shader that aren't being used.\n  // * The resulting image contains red\n  //   Not enough samples are being passed to the shader\n  // * The resulting image contains only white with some black\n  //   All samples are used by the shader. Correct result!\n\n  // fragColor = vec4(0, 0, 0, 1);\n  // if (sampleIndex == SAMPLING_DIMENSIONS) {\n  //   fragColor = vec4(1, 1, 1, 1);\n  // } else if (sampleIndex > SAMPLING_DIMENSIONS) {\n  //   fragColor = vec4(1, 0, 0, 1);\n  // }\n}\n");
-  }
+  };
 
   function mergeMeshesToGeometry(meshes) {
     var vertexCount = 0;
@@ -1617,7 +1872,11 @@
     gl.texParameteri(target, gl.TEXTURE_MAG_FILTER, magFilter);
 
     if (!channels) {
-      channels = data.length / (width * height) || 4; // infer number of channels from data size
+      if (data && data.length) {
+        channels = data.length / (width * height); // infer number of channels from data size
+      } else {
+        channels = 4;
+      }
     }
 
     channels = clamp(channels, 1, 4);
@@ -1883,54 +2142,11 @@
     return interleaved;
   }
 
-  // targets is array of { name: string, storage: 'byte' | 'float'}
-  function makeRenderTargets(_ref) {
-    var storage = _ref.storage,
-        names = _ref.names;
-    var location = {};
-
-    for (var i = 0; i < names.length; i++) {
-      location[names[i]] = i;
-    }
-
-    return {
-      isRenderTargets: true,
-      storage: storage,
-      names: names,
-      location: location,
-      get: function get(textureName) {
-        var inputs = '';
-        inputs += "uniform mediump sampler2DArray ".concat(textureName, ";\n");
-
-        for (var _i = 0; _i < names.length; _i++) {
-          inputs += "#define ".concat(textureName, "_").concat(names[_i], " ").concat(_i, "\n");
-        }
-
-        return inputs;
-      },
-      set: function set() {
-        var outputs = '';
-
-        for (var _i2 = 0; _i2 < names.length; _i2++) {
-          outputs += "layout(location = ".concat(_i2, ") out vec4 out_").concat(names[_i2], ";\n");
-        }
-
-        return outputs;
-      }
-    };
-  }
-
-  var rayTracingRenderTargets = makeRenderTargets({
-    storage: 'float',
-    names: ['light', 'position']
-  });
-  function makeRayTracingShader(_ref) {
+  function makeRayTracePass(gl, _ref) {
     var bounces = _ref.bounces,
         fullscreenQuad = _ref.fullscreenQuad,
-        gl = _ref.gl,
         optionalExtensions = _ref.optionalExtensions,
-        scene = _ref.scene,
-        textureAllocator = _ref.textureAllocator;
+        scene = _ref.scene;
     bounces = clamp(bounces, 1, 6);
     var samplingDimensions = [];
 
@@ -1946,27 +2162,22 @@
     }
 
     var samples;
-
-    var _makeProgramFromScene = makeProgramFromScene({
+    var renderPass = makeRenderPassFromScene({
       bounces: bounces,
       fullscreenQuad: fullscreenQuad,
       gl: gl,
       optionalExtensions: optionalExtensions,
       samplingDimensions: samplingDimensions,
-      scene: scene,
-      textureAllocator: textureAllocator
-    }),
-        program = _makeProgramFromScene.program,
-        uniforms = _makeProgramFromScene.uniforms;
+      scene: scene
+    });
 
     function setSize(width, height) {
-      gl.useProgram(program);
-      gl.uniform2f(uniforms.pixelSize, 1 / width, 1 / height);
+      renderPass.setUniform('pixelSize', 1 / width, 1 / height);
     } // noiseImage is a 32-bit PNG image
 
 
     function setNoise(noiseImage) {
-      textureAllocator.bind(uniforms.noise, makeTexture(gl, {
+      renderPass.setTexture('noise', makeTexture(gl, {
         data: noiseImage,
         minFilter: gl.NEAREST,
         magFilter: gl.NEAREST,
@@ -1975,27 +2186,20 @@
     }
 
     function setCamera(camera) {
-      gl.useProgram(program);
-      gl.uniformMatrix4fv(uniforms['camera.transform'], false, camera.matrixWorld.elements);
-      gl.uniform1f(uniforms['camera.aspect'], camera.aspect);
-      gl.uniform1f(uniforms['camera.fov'], 0.5 / Math.tan(0.5 * Math.PI * camera.fov / 180));
-      gl.uniform1f(uniforms['camera.focus'], camera.focus || 0);
-      gl.uniform1f(uniforms['camera.aperture'], camera.aperture || 0);
+      renderPass.setUniform('camera.transform', camera.matrixWorld.elements);
+      renderPass.setUniform('camera.aspect', camera.aspect);
+      renderPass.setUniform('camera.fov', 0.5 / Math.tan(0.5 * Math.PI * camera.fov / 180));
     }
 
     function setJitter(x, y) {
-      gl.useProgram(program);
-      gl.uniform2f(uniforms.jitter, x, y);
+      renderPass.setUniform('jitter', x, y);
     }
 
     function nextSeed() {
-      gl.useProgram(program);
-      gl.uniform1fv(uniforms['stratifiedSamples[0]'], samples.next());
+      renderPass.setUniform('stratifiedSamples[0]', samples.next());
     }
 
     function setStrataCount(strataCount) {
-      gl.useProgram(program);
-
       if (strataCount > 1 && strataCount !== samples.strataCount) {
         // reinitailizing random has a performance cost. we can skip it if
         // * strataCount is 1, since a strataCount of 1 works with any sized StratifiedRandomCombined
@@ -2005,19 +2209,25 @@
         samples.restart();
       }
 
-      gl.uniform1f(uniforms.strataSize, 1.0 / strataCount);
+      renderPass.setUniform('strataSize', 1.0 / strataCount);
       nextSeed();
     }
 
+    function bindTextures() {
+      renderPass.bindTextures();
+    }
+
     function draw() {
-      gl.useProgram(program);
+      renderPass.useProgram(false);
       fullscreenQuad.draw();
     }
 
     samples = makeStratifiedSamplerCombined(1, samplingDimensions);
     return {
+      bindTextures: bindTextures,
       draw: draw,
       nextSeed: nextSeed,
+      outputLocs: renderPass.outputLocs,
       setCamera: setCamera,
       setJitter: setJitter,
       setNoise: setNoise,
@@ -2026,14 +2236,13 @@
     };
   }
 
-  function makeProgramFromScene(_ref2) {
+  function makeRenderPassFromScene(_ref2) {
     var bounces = _ref2.bounces,
         fullscreenQuad = _ref2.fullscreenQuad,
         gl = _ref2.gl,
         optionalExtensions = _ref2.optionalExtensions,
         samplingDimensions = _ref2.samplingDimensions,
-        scene = _ref2.scene,
-        textureAllocator = _ref2.textureAllocator;
+        scene = _ref2.scene;
     var OES_texture_float_linear = optionalExtensions.OES_texture_float_linear;
 
     var _decomposeScene = decomposeScene(scene),
@@ -2065,8 +2274,7 @@
     var useShadowCatcher = materials.some(function (m) {
       return m.shadowCatcher;
     });
-    var fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragString({
-      rayTracingRenderTargets: rayTracingRenderTargets,
+    var renderPass = makeRenderPass(gl, {
       defines: {
         OES_texture_float_linear: OES_texture_float_linear,
         BVH_COLUMNS: textureDimensionsFromArray(flattenedBvh.count).columnsLog,
@@ -2077,6 +2285,7 @@
         NUM_MATERIALS: materials.length,
         NUM_DIFFUSE_MAPS: maps.map.textures.length,
         NUM_NORMAL_MAPS: maps.normalMap.textures.length,
+        NUM_DIFFUSE_NORMAL_MAPS: Math.max(maps.map.textures.length, maps.normalMap.textures.length),
         NUM_PBR_MAPS: pbrMap.textures.length,
         BOUNCES: bounces,
         USE_GLASS: useGlass,
@@ -2084,11 +2293,10 @@
         SAMPLING_DIMENSIONS: samplingDimensions.reduce(function (a, b) {
           return a + b;
         })
-      }
-    }));
-    var program = createProgram(gl, fullscreenQuad.vertexShader, fragmentShader);
-    gl.useProgram(program);
-    var uniforms = getUniforms(gl, program);
+      },
+      fragment: fragment,
+      vertex: fullscreenQuad.vertexShader
+    });
     var bufferData = {};
     bufferData.color = materials.map(function (m) {
       return m.color;
@@ -2117,7 +2325,7 @@
           relativeSizes = _makeTextureArray.relativeSizes,
           texture = _makeTextureArray.texture;
 
-      textureAllocator.bind(uniforms.diffuseMap, texture);
+      renderPass.setTexture('diffuseMap', texture);
       bufferData.diffuseMapSize = relativeSizes;
       bufferData.diffuseMapIndex = maps.map.indices;
     }
@@ -2127,7 +2335,7 @@
           _relativeSizes = _makeTextureArray2.relativeSizes,
           _texture = _makeTextureArray2.texture;
 
-      textureAllocator.bind(uniforms.normalMap, _texture);
+      renderPass.setTexture('normalMap', _texture);
       bufferData.normalMapSize = _relativeSizes;
       bufferData.normalMapIndex = maps.normalMap.indices;
     }
@@ -2137,17 +2345,17 @@
           _relativeSizes2 = _makeTextureArray3.relativeSizes,
           _texture2 = _makeTextureArray3.texture;
 
-      textureAllocator.bind(uniforms.pbrMap, _texture2);
+      renderPass.setTexture('pbrMap', _texture2);
       bufferData.pbrMapSize = _relativeSizes2;
       bufferData.roughnessMapIndex = pbrMap.indices.roughnessMap;
       bufferData.metalnessMapIndex = pbrMap.indices.metalnessMap;
     }
 
-    uploadBuffers(gl, program, bufferData);
-    textureAllocator.bind(uniforms.positions, makeDataTexture(gl, geometry.getAttribute('position').array, 3));
-    textureAllocator.bind(uniforms.normals, makeDataTexture(gl, geometry.getAttribute('normal').array, 3));
-    textureAllocator.bind(uniforms.uvs, makeDataTexture(gl, geometry.getAttribute('uv').array, 2));
-    textureAllocator.bind(uniforms.bvh, makeDataTexture(gl, flattenedBvh.buffer, 4));
+    uploadBuffers(gl, renderPass.program, bufferData);
+    renderPass.setTexture('positions', makeDataTexture(gl, geometry.getAttribute('position').array, 3));
+    renderPass.setTexture('normals', makeDataTexture(gl, geometry.getAttribute('normal').array, 3));
+    renderPass.setTexture('uvs', makeDataTexture(gl, geometry.getAttribute('uv').array, 2));
+    renderPass.setTexture('bvh', makeDataTexture(gl, flattenedBvh.buffer, 4));
     var envImage = generateEnvMapFromSceneComponents(directionalLights, ambientLights, environmentLights);
     var envImageTextureObject = makeTexture(gl, {
       data: envImage.data,
@@ -2156,7 +2364,7 @@
       width: envImage.width,
       height: envImage.height
     });
-    textureAllocator.bind(uniforms.envmap, envImageTextureObject);
+    renderPass.setTexture('envmap', envImageTextureObject);
     var backgroundImageTextureObject;
 
     if (scene.background) {
@@ -2172,19 +2380,16 @@
       backgroundImageTextureObject = envImageTextureObject;
     }
 
-    textureAllocator.bind(uniforms.backgroundMap, backgroundImageTextureObject);
+    renderPass.setTexture('backgroundMap', backgroundImageTextureObject);
     var distribution = envmapDistribution(envImage);
-    textureAllocator.bind(uniforms.envmapDistribution, makeTexture(gl, {
+    renderPass.setTexture('envmapDistribution', makeTexture(gl, {
       data: distribution.data,
       minFilter: gl.NEAREST,
       magFilter: gl.NEAREST,
       width: distribution.width,
       height: distribution.height
     }));
-    return {
-      program: program,
-      uniforms: uniforms
-    };
+    return renderPass;
   }
 
   function decomposeScene(scene) {
@@ -2356,41 +2561,40 @@
     return texture.map && texture.map.image && (texture.map.encoding === THREE$1.RGBEEncoding || texture.map.encoding === THREE$1.LinearEncoding);
   }
 
-  function fragString$1 (_ref) {
-    var rayTracingRenderTargets = _ref.rayTracingRenderTargets,
-        defines = _ref.defines;
-    return "#version 300 es\n\nprecision mediump float;\nprecision mediump int;\n\nin vec2 vCoord;\n\nout vec4 fragColor;\n\n".concat(rayTracingRenderTargets.get('hdrBuffer'), "\n\n").concat(textureLinear(), "\n\n// Tonemapping functions from THREE.js\n\nvec3 linear(vec3 color) {\n  return color;\n}\n// https://www.cs.utah.edu/~reinhard/cdrom/\nvec3 reinhard(vec3 color) {\n  return clamp(color / (vec3(1.0) + color), vec3(0.0), vec3(1.0));\n}\n// http://filmicworlds.com/blog/filmic-tonemapping-operators/\n#define uncharted2Helper(x) max(((x * (0.15 * x + 0.10 * 0.50) + 0.20 * 0.02) / (x * (0.15 * x + 0.50) + 0.20 * 0.30)) - 0.02 / 0.30, vec3(0.0))\nconst vec3 uncharted2WhitePoint = 1.0 / uncharted2Helper(vec3(").concat(defines.whitePoint, "));\nvec3 uncharted2( vec3 color ) {\n  // John Hable's filmic operator from Uncharted 2 video game\n  return clamp(uncharted2Helper(color) * uncharted2WhitePoint, vec3(0.0), vec3(1.0));\n}\n// http://filmicworlds.com/blog/filmic-tonemapping-operators/\nvec3 cineon( vec3 color ) {\n  // optimized filmic operator by Jim Hejl and Richard Burgess-Dawson\n  color = max(vec3( 0.0 ), color - 0.004);\n  return pow((color * (6.2 * color + 0.5)) / (color * (6.2 * color + 1.7) + 0.06), vec3(2.2));\n}\n// https://knarkowicz.wordpress.com/2016/01/06/aces-filmic-tone-mapping-curve/\nvec3 acesFilmic( vec3 color ) {\n  return clamp((color * (2.51 * color + 0.03)) / (color * (2.43 * color + 0.59) + 0.14), vec3(0.0), vec3(1.0));\n}\n\nvoid main() {\n  vec4 tex = texture(hdrBuffer, vec3(vCoord, hdrBuffer_light));\n\n  // alpha channel stores the number of samples progressively rendered\n  // divide the sum of light by alpha to obtain average contribution of light\n\n  // in addition, alpha contains a scale factor for the shadow catcher material\n  // dividing by alpha normalizes the brightness of the shadow catcher to match the background envmap.\n  vec3 light = tex.rgb / tex.a;\n\n  light *= ").concat(defines.exposure, "; // exposure\n\n  light = ").concat(defines.toneMapping, "(light); // tone mapping\n\n  light = pow(light, vec3(1.0 / 2.2)); // gamma correction\n\n  fragColor = vec4(light, 1.0);\n}\n\n");
-  }
+  var fragment$1 = {
+    includes: [textureLinear],
+    outputs: ['color'],
+    source: "\n  in vec2 vCoord;\n\n  uniform mediump sampler2D light;\n\n  uniform vec2 textureScale;\n\n  // Tonemapping functions from THREE.js\n\n  vec3 linear(vec3 color) {\n    return color;\n  }\n  // https://www.cs.utah.edu/~reinhard/cdrom/\n  vec3 reinhard(vec3 color) {\n    return clamp(color / (vec3(1.0) + color), vec3(0.0), vec3(1.0));\n  }\n  // http://filmicworlds.com/blog/filmic-tonemapping-operators/\n  #define uncharted2Helper(x) max(((x * (0.15 * x + 0.10 * 0.50) + 0.20 * 0.02) / (x * (0.15 * x + 0.50) + 0.20 * 0.30)) - 0.02 / 0.30, vec3(0.0))\n  const vec3 uncharted2WhitePoint = 1.0 / uncharted2Helper(vec3(WHITE_POINT));\n  vec3 uncharted2( vec3 color ) {\n    // John Hable's filmic operator from Uncharted 2 video game\n    return clamp(uncharted2Helper(color) * uncharted2WhitePoint, vec3(0.0), vec3(1.0));\n  }\n  // http://filmicworlds.com/blog/filmic-tonemapping-operators/\n  vec3 cineon( vec3 color ) {\n    // optimized filmic operator by Jim Hejl and Richard Burgess-Dawson\n    color = max(vec3( 0.0 ), color - 0.004);\n    return pow((color * (6.2 * color + 0.5)) / (color * (6.2 * color + 1.7) + 0.06), vec3(2.2));\n  }\n  // https://knarkowicz.wordpress.com/2016/01/06/aces-filmic-tone-mapping-curve/\n  vec3 acesFilmic( vec3 color ) {\n    return clamp((color * (2.51 * color + 0.03)) / (color * (2.43 * color + 0.59) + 0.14), vec3(0.0), vec3(1.0));\n  }\n\n  void main() {\n    vec4 tex = texture(light, textureScale * vCoord);\n\n    // alpha channel stores the number of samples progressively rendered\n    // divide the sum of light by alpha to obtain average contribution of light\n\n    // in addition, alpha contains a scale factor for the shadow catcher material\n    // dividing by alpha normalizes the brightness of the shadow catcher to match the background envmap.\n    vec3 light = tex.rgb / tex.a;\n\n    light *= EXPOSURE;\n\n    light = TONE_MAPPING(light);\n\n    light = pow(light, vec3(1.0 / 2.2)); // gamma correction\n\n    out_color = vec4(light, 1.0);\n  }\n"
+  };
 
   var _toneMapFunctions;
   var toneMapFunctions = (_toneMapFunctions = {}, _defineProperty(_toneMapFunctions, THREE$1.LinearToneMapping, 'linear'), _defineProperty(_toneMapFunctions, THREE$1.ReinhardToneMapping, 'reinhard'), _defineProperty(_toneMapFunctions, THREE$1.Uncharted2ToneMapping, 'uncharted2'), _defineProperty(_toneMapFunctions, THREE$1.CineonToneMapping, 'cineon'), _defineProperty(_toneMapFunctions, THREE$1.ACESFilmicToneMapping, 'acesFilmic'), _toneMapFunctions);
-  function makeToneMapShader(params) {
+  function makeToneMapPass(gl, params) {
     var fullscreenQuad = params.fullscreenQuad,
-        gl = params.gl,
-        optionalExtensions = params.optionalExtensions,
-        textureAllocator = params.textureAllocator,
-        toneMappingParams = params.toneMappingParams;
-    var OES_texture_float_linear = optionalExtensions.OES_texture_float_linear;
+        toneMappingParams = params.toneMappingParams; // const { OES_texture_float_linear } = optionalExtensions;
+
     var toneMapping = toneMappingParams.toneMapping,
         whitePoint = toneMappingParams.whitePoint,
         exposure = toneMappingParams.exposure;
-    var fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragString$1({
-      rayTracingRenderTargets: rayTracingRenderTargets,
+    var renderPass = makeRenderPass(gl, {
+      gl: gl,
       defines: {
-        OES_texture_float_linear: OES_texture_float_linear,
-        toneMapping: toneMapFunctions[toneMapping] || 'linear',
-        whitePoint: whitePoint.toExponential(),
+        // OES_texture_float_linear,
+        TONE_MAPPING: toneMapFunctions[toneMapping] || 'linear',
+        WHITE_POINT: whitePoint.toExponential(),
         // toExponential allows integers to be represented as GLSL floats
-        exposure: exposure.toExponential()
-      }
-    }));
-    var program = createProgram(gl, fullscreenQuad.vertexShader, fragmentShader);
-    var uniforms = getUniforms(gl, program);
-    var hdrBufferLocation = textureAllocator.reserveSlot();
+        EXPOSURE: exposure.toExponential()
+      },
+      vertex: fullscreenQuad.vertexShader,
+      fragment: fragment$1
+    });
 
-    function draw(texture) {
-      gl.useProgram(program);
-      hdrBufferLocation.bind(uniforms.hdrBuffer, texture);
+    function draw(params) {
+      var light = params.light,
+          textureScale = params.textureScale;
+      renderPass.setUniform('textureScale', textureScale.x, textureScale.y);
+      renderPass.setTexture('light', light);
+      renderPass.useProgram();
       fullscreenQuad.draw();
     }
 
@@ -2399,15 +2603,9 @@
     };
   }
 
-  function makeFramebuffer(params) {
-    var gl = params.gl,
-        _params$linearFilteri = params.linearFiltering,
-        linearFiltering = _params$linearFilteri === void 0 ? false : _params$linearFilteri,
-        renderTarget = params.renderTarget;
+  function makeFramebuffer(gl, _ref) {
+    var attachments = _ref.attachments;
     var framebuffer = gl.createFramebuffer();
-    var texture;
-    var width = 0;
-    var height = 0;
 
     function bind() {
       gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
@@ -2417,86 +2615,32 @@
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     }
 
-    function setSize(w, h) {
-      this.bind();
-      width = Math.floor(w);
-      height = Math.floor(h);
+    function init() {
+      bind();
+      var drawBuffers = [];
 
-      if (renderTarget.isRenderTargets) {
-        // RenderTargets object
-        texture = initArrayTexture(gl, width, height, linearFiltering, renderTarget);
-      } else {
-        // single render target in the form { storage }
-        texture = initTexture(gl, width, height, linearFiltering, renderTarget);
+      for (var location in attachments) {
+        location = Number(location);
+
+        if (location === undefined) {
+          console.error('invalid location');
+        }
+
+        var tex = attachments[location];
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0 + location, tex.target, tex.texture, 0);
+        drawBuffers.push(gl.COLOR_ATTACHMENT0 + location);
       }
 
-      this.unbind();
+      gl.drawBuffers(drawBuffers);
+      unbind();
     }
 
-    function copyToScreen() {
-      gl.bindFramebuffer(gl.READ_FRAMEBUFFER, framebuffer);
-      gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null);
-      gl.blitFramebuffer(0, 0, width, height, 0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight, gl.COLOR_BUFFER_BIT, gl.NEAREST);
-    }
-
+    init();
     return {
+      attachments: attachments,
       bind: bind,
-      copyToScreen: copyToScreen,
-
-      get height() {
-        return height;
-      },
-
-      setSize: setSize,
-
-      get texture() {
-        return texture;
-      },
-
-      unbind: unbind,
-
-      get width() {
-        return width;
-      }
-
+      unbind: unbind
     };
-  }
-
-  function initTexture(gl, width, height, linearFiltering, _ref) {
-    var storage = _ref.storage;
-    var texture = makeTexture(gl, {
-      width: width,
-      height: height,
-      storage: storage,
-      minFilter: linearFiltering ? gl.LINEAR : gl.NEAREST,
-      magFilter: linearFiltering ? gl.LINEAR : gl.NEAREST,
-      channels: 4
-    });
-    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, texture.target, texture.texture, 0);
-    return texture;
-  }
-
-  function initArrayTexture(gl, width, height, linearFiltering, _ref2) {
-    var storage = _ref2.storage,
-        names = _ref2.names;
-    var drawBuffers = [];
-    var texture = makeTexture(gl, {
-      width: width,
-      height: height,
-      length: names.length,
-      storage: storage,
-      minFilter: linearFiltering ? gl.LINEAR : gl.NEAREST,
-      magFilter: linearFiltering ? gl.LINEAR : gl.NEAREST,
-      channels: 4
-    });
-
-    for (var i = 0; i < names.length; i++) {
-      gl.framebufferTextureLayer(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0 + i, texture.texture, 0, i);
-      drawBuffers.push(gl.COLOR_ATTACHMENT0 + i);
-    }
-
-    gl.drawBuffers(drawBuffers);
-    return texture;
   }
 
   // Sampling the scene with the RayTracingRenderer can be very slow (<1 fps).
@@ -2609,92 +2753,53 @@
     }
   }
 
-  function makeTextureAllocator(gl) {
-    // texture unit 0 reserved for setting parameters on new textures
-    var nextUnit = 1;
+  var fragment$2 = {
+    outputs: ['light'],
+    source: "\n  in vec2 vCoord;\n\n  uniform mediump sampler2D light;\n  uniform mediump sampler2D position;\n  uniform vec2 textureScale;\n\n  uniform mediump sampler2D previousLight;\n  uniform mediump sampler2D previousPosition;\n  uniform vec2 previousTextureScale;\n\n  uniform mat4 historyCamera;\n  uniform float blendAmount;\n  uniform vec2 jitter;\n\n  vec2 reproject(vec3 position) {\n    vec4 historyCoord = historyCamera * vec4(position, 1.0);\n    return 0.5 * historyCoord.xy / historyCoord.w + 0.5;\n  }\n\n  void main() {\n    vec2 scaledCoord = textureScale * vCoord;\n\n    vec4 positionTex = texture(position, scaledCoord);\n    vec4 lightTex = texture(light, scaledCoord);\n\n    vec3 currentPosition = positionTex.xyz;\n    float currentMeshId = positionTex.w;\n\n    vec2 hCoord = reproject(currentPosition) - jitter;\n\n    vec2 hSizef = previousTextureScale * vec2(textureSize(previousPosition, 0));\n    ivec2 hSize = ivec2(hSizef);\n\n    vec2 hTexelf = hCoord * hSizef - 0.5;\n    ivec2 hTexel = ivec2(hTexelf);\n    vec2 f = fract(hTexelf);\n\n    ivec2 texel[] = ivec2[](\n      hTexel + ivec2(0, 0),\n      hTexel + ivec2(1, 0),\n      hTexel + ivec2(0, 1),\n      hTexel + ivec2(1, 1)\n    );\n\n    float weights[] = float[](\n      (1.0 - f.x) * (1.0 - f.y),\n      f.x * (1.0 - f.y),\n      (1.0 - f.x) * f.y,\n      f.x * f.y\n    );\n\n    vec4 history;\n    float sum;\n\n    // bilinear sampling, rejecting samples that don't have a matching mesh id\n    for (int i = 0; i < 4; i++) {\n      float histMeshId = texelFetch(previousPosition, texel[i], 0).w;\n\n      float isValid = histMeshId != currentMeshId || any(greaterThanEqual(texel[i], hSize)) ? 0.0 : 1.0;\n      // float isValid = 0.0;\n\n      float weight = isValid * weights[i];\n      history += weight * texelFetch(previousLight, texel[i], 0);\n      sum += weight;\n    }\n\n    if (sum > 0.0) {\n      history /= sum;\n    } else {\n      // If all samples of bilinear fail, try a 3x3 box filter\n      hTexel = ivec2(hTexelf + 0.5);\n\n      for (int x = -1; x <= 1; x++) {\n        for (int y = -1; y <= 1; y++) {\n          ivec2 texel = hTexel + ivec2(x, y);\n\n          float histMeshId = texelFetch(previousPosition, texel, 0).w;\n\n          float isValid = histMeshId != currentMeshId || any(greaterThanEqual(texel, hSize)) ? 0.0 : 1.0;\n\n          float weight = isValid;\n          vec4 h = texelFetch(previousLight, texel, 0);\n          history += weight * h;\n          sum += weight;\n        }\n      }\n      history = sum > 0.0 ? history / sum : history;\n    }\n\n    if (history.w > MAX_SAMPLES) {\n      history.xyz *= MAX_SAMPLES / history.w;\n      history.w = MAX_SAMPLES;\n    }\n\n    out_light = blendAmount * history + lightTex;\n\n  }\n"
+  };
 
-    function bindGl(uniform, _ref, unit) {
-      var target = _ref.target,
-          texture = _ref.texture;
-
-      if (!uniform) {
-        // uniform location does not exist
-        return;
-      }
-
-      gl.activeTexture(gl.TEXTURE0 + unit);
-      gl.bindTexture(target, texture);
-      gl.uniform1i(uniform, unit);
-    }
-
-    function bind(uniform, textureObj) {
-      bindGl(uniform, textureObj, nextUnit++);
-    }
-
-    function reserveSlot() {
-      var unit = nextUnit++;
-      return {
-        bind: function bind(uniform, textureObj) {
-          bindGl(uniform, textureObj, unit);
-        }
-      };
-    }
-
-    return {
-      bind: bind,
-      reserveSlot: reserveSlot
-    };
-  }
-
-  function fragString$2 (_ref) {
-    var rayTracingRenderTargets = _ref.rayTracingRenderTargets,
-        defines = _ref.defines;
-    return "#version 300 es\n\nprecision mediump float;\nprecision mediump int;\n\nin vec2 vCoord;\n\n".concat(rayTracingRenderTargets.get('historyBuffer'), "\n").concat(rayTracingRenderTargets.get('hdrBuffer'), "\n").concat(rayTracingRenderTargets.set(), "\n\n").concat(addDefines(defines), "\n\nuniform mat4 historyCamera;\nuniform float blendAmount;\nuniform vec2 jitter;\n\nvec2 reproject(vec3 position) {\n  vec4 historyCoord = historyCamera * vec4(position, 1.0);\n  return 0.5 * historyCoord.xy / historyCoord.w + 0.5;\n}\n\nvoid main() {\n  vec4 positionTex = texture(hdrBuffer, vec3(vCoord, hdrBuffer_position));\n  vec4 lightTex = texture(hdrBuffer, vec3(vCoord, hdrBuffer_light));\n\n  vec3 currentPosition = positionTex.xyz;\n  float currentMeshId = positionTex.w;\n\n  vec2 hCoord = reproject(currentPosition) - jitter;\n\n  ivec2 hSize = textureSize(historyBuffer, 0).xy;\n  vec2 hSizef = vec2(hSize);\n\n  vec2 hTexelf = hCoord * hSizef - 0.5;\n  ivec2 hTexel = ivec2(hTexelf);\n  vec2 f = fract(hTexelf);\n\n  ivec2 texel[] = ivec2[](\n    hTexel + ivec2(0, 0),\n    hTexel + ivec2(1, 0),\n    hTexel + ivec2(0, 1),\n    hTexel + ivec2(1, 1)\n  );\n\n  float weights[] = float[](\n    (1.0 - f.x) * (1.0 - f.y),\n    f.x * (1.0 - f.y),\n    (1.0 - f.x) * f.y,\n    f.x * f.y\n  );\n\n  vec4 history;\n  float sum;\n\n  // bilinear sampling, rejecting samples that don't have a matching mesh id\n  for (int i = 0; i < 4; i++) {\n    float histMeshId = texelFetch(historyBuffer, ivec3(texel[i], historyBuffer_position), 0).w;\n\n    float isValid = histMeshId != currentMeshId ? 0.0 : 1.0;\n\n    float weight = isValid * weights[i];\n    history += weight * texelFetch(historyBuffer, ivec3(texel[i], historyBuffer_light), 0);\n    sum += weight;\n  }\n\n  if (sum > 0.0) {\n    history /= sum;\n  } else {\n    // If all samples of bilinear fail, try a 3x3 box filter\n    hTexel = ivec2(hTexelf + 0.5);\n\n    for (int x = -1; x <= 1; x++) {\n      for (int y = -1; y <= 1; y++) {\n        ivec2 texel = hTexel + ivec2(x, y);\n\n        float histMeshId = texelFetch(historyBuffer, ivec3(texel, historyBuffer_position), 0).w;\n\n        float isValid = histMeshId != currentMeshId ? 0.0 : 1.0;\n\n        float weight = isValid;\n        vec4 h = texelFetch(historyBuffer, ivec3(texel, historyBuffer_light), 0);\n        history += weight * h;\n        sum += weight;\n      }\n    }\n    history = sum > 0.0 ? history / sum : history;\n  }\n\n  if (history.w > MAX_SAMPLES) {\n    history.xyz *= MAX_SAMPLES / history.w;\n    history.w = MAX_SAMPLES;\n  }\n\n  out_light = blendAmount * history + lightTex;\n  out_position = positionTex;\n}\n  ");
-  }
-
-  function makeReprojectShader(params) {
+  function makeReprojectPass(gl, params) {
     var fullscreenQuad = params.fullscreenQuad,
-        gl = params.gl,
-        maxReprojectedSamples = params.maxReprojectedSamples,
-        textureAllocator = params.textureAllocator;
-    var fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragString$2({
-      rayTracingRenderTargets: rayTracingRenderTargets,
+        maxReprojectedSamples = params.maxReprojectedSamples;
+    var renderPass = makeRenderPass(gl, {
       defines: {
         MAX_SAMPLES: maxReprojectedSamples.toFixed(1)
-      }
-    }));
-    var program = createProgram(gl, fullscreenQuad.vertexShader, fragmentShader);
-    var uniforms = getUniforms(gl, program);
-    var hdrBufferLocation = textureAllocator.reserveSlot();
-    var historyBufferLocation = textureAllocator.reserveSlot();
+      },
+      vertex: fullscreenQuad.vertexShader,
+      fragment: fragment$2
+    });
     var historyCamera = new THREE$1.Matrix4();
 
     function setPreviousCamera(camera) {
-      gl.useProgram(program);
       historyCamera.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
-      gl.uniformMatrix4fv(uniforms.historyCamera, false, historyCamera.elements);
-    }
-
-    function setBlendAmount(x) {
-      gl.useProgram(program);
-      gl.uniform1f(uniforms.blendAmount, x);
+      renderPass.setUniform('historyCamera', historyCamera.elements);
     }
 
     function setJitter(x, y) {
-      gl.useProgram(program);
-      gl.uniform2f(uniforms.jitter, x, y);
+      renderPass.setUniform('jitter', x, y);
     }
 
-    function draw(hdrBuffer, historyBuffer) {
-      gl.useProgram(program);
-      hdrBufferLocation.bind(uniforms.hdrBuffer, hdrBuffer);
-      historyBufferLocation.bind(uniforms.historyBuffer, historyBuffer);
+    function draw(params) {
+      var blendAmount = params.blendAmount,
+          light = params.light,
+          position = params.position,
+          previousLight = params.previousLight,
+          previousPosition = params.previousPosition,
+          textureScale = params.textureScale,
+          previousTextureScale = params.previousTextureScale;
+      renderPass.setUniform('blendAmount', blendAmount);
+      renderPass.setUniform('textureScale', textureScale.x, textureScale.y);
+      renderPass.setUniform('previousTextureScale', previousTextureScale.x, previousTextureScale.y);
+      renderPass.setTexture('light', light);
+      renderPass.setTexture('position', position);
+      renderPass.setTexture('previousLight', previousLight);
+      renderPass.setTexture('previousPosition', previousPosition);
+      renderPass.useProgram();
       fullscreenQuad.draw();
     }
 
     return {
       draw: draw,
-      setBlendAmount: setBlendAmount,
       setJitter: setJitter,
       setPreviousCamera: setPreviousCamera
     };
@@ -2708,96 +2813,125 @@
         scene = _ref.scene,
         toneMappingParams = _ref.toneMappingParams,
         bounces = _ref.bounces;
-    var ready = false;
-    var reprojectDecay = 0.975;
-    var maxReprojectedSamples = Math.round(reprojectDecay / (1 - reprojectDecay));
+    var maxReprojectedSamples = 20; // how many samples to render with uniform noise before switching to stratified noise
+
+    var numUniformSamples = 4; // how many partitions of stratified noise should be created
+    // higher number results in faster convergence over time, but with lower quality initial samples
+
+    var strataCount = 6;
     var fullscreenQuad = makeFullscreenQuad(gl);
-    var textureAllocator = makeTextureAllocator(gl);
-    var rayTracingShader = makeRayTracingShader({
+    var rayTracePass = makeRayTracePass(gl, {
       bounces: bounces,
       fullscreenQuad: fullscreenQuad,
-      gl: gl,
       optionalExtensions: optionalExtensions,
-      scene: scene,
-      textureAllocator: textureAllocator
+      scene: scene
     });
-    var reprojectShader = makeReprojectShader({
+    var reprojectPass = makeReprojectPass(gl, {
       fullscreenQuad: fullscreenQuad,
-      gl: gl,
-      maxReprojectedSamples: maxReprojectedSamples,
-      textureAllocator: textureAllocator
+      maxReprojectedSamples: maxReprojectedSamples
     });
-    var toneMapShader = makeToneMapShader({
+    var toneMapPass = makeToneMapPass(gl, {
       fullscreenQuad: fullscreenQuad,
-      gl: gl,
       optionalExtensions: optionalExtensions,
-      textureAllocator: textureAllocator,
       toneMappingParams: toneMappingParams
-    });
+    }); // used to sample only a portion of the scene to the HDR Buffer to prevent the GPU from locking up from excessive computation
+
+    var tileRender = makeTileRender(gl);
+    var clearToBlack = new Float32Array([0, 0, 0, 0]);
+    var ready = false;
     var noiseImage = new Image();
     noiseImage.src = noiseBase64;
 
     noiseImage.onload = function () {
-      rayTracingShader.setNoise(noiseImage);
+      rayTracePass.setNoise(noiseImage);
       ready = true;
-    }; // full resolution buffer representing the rendered scene with HDR lighting
+    };
 
-
-    var hdrBuffer = makeFramebuffer({
-      gl: gl,
-      renderTarget: rayTracingRenderTargets
-    });
-    var hdrPreviewBuffer = makeFramebuffer({
-      gl: gl,
-      renderTarget: rayTracingRenderTargets
-    });
-    var historyBuffer = makeFramebuffer({
-      gl: gl,
-      renderTarget: rayTracingRenderTargets,
-      linearFiltering: true
-    });
-    var reprojectBuffer = makeFramebuffer({
-      gl: gl,
-      renderTarget: rayTracingRenderTargets
-    });
-    var reprojectPreviewBuffer = makeFramebuffer({
-      gl: gl,
-      renderTarget: rayTracingRenderTargets,
-      linearFiltering: true
-    });
-    var lastToneMappedBuffer = reprojectPreviewBuffer;
-    var clearToBlack = new Float32Array([0, 0, 0, 0]); // used to sample only a portion of the scene to the HDR Buffer to prevent the GPU from locking up from excessive computation
-
-    var tileRender = makeTileRender(gl);
-    var lastCamera = new THREE$1.PerspectiveCamera(); // how many samples to render with uniform noise before switching to stratified noise
-
-    var numUniformSamples = 6; // how many partitions of stratified noise should be created
-    // higher number results in faster convergence over time, but with lower quality initial samples
-
-    var strataCount = 6;
-    var sampleCount = 1;
+    var screenWidth = 0;
+    var screenHeight = 0;
+    var previewWidth = 0;
+    var previewHeight = 0;
+    var previewScale = new THREE$1.Vector2(1, 1);
+    var fullscreenScale = new THREE$1.Vector2(1, 1);
+    var hdrBuffer;
+    var hdrBackBuffer;
+    var reprojectBuffer;
+    var reprojectBackBuffer;
+    var lastToneMappedScale;
+    var lastToneMappedTexture;
+    var lastCamera = new THREE$1.PerspectiveCamera();
+    lastCamera.position.set(1, 1, 1);
+    lastCamera.updateMatrixWorld();
+    var sampleCount = 0;
 
     var sampleRenderedCallback = function sampleRenderedCallback() {};
 
-    function initFirstSample() {
-      sampleCount = 1;
-      tileRender.reset();
+    function initFrameBuffers(width, height) {
+      var floatTex = function floatTex() {
+        return makeTexture(gl, {
+          width: width,
+          height: height,
+          storage: 'float'
+        });
+      };
+
+      var makeHdrBuffer = function makeHdrBuffer() {
+        var _attachments;
+
+        return makeFramebuffer(gl, {
+          attachments: (_attachments = {}, _defineProperty(_attachments, rayTracePass.outputLocs.light, floatTex()), _defineProperty(_attachments, rayTracePass.outputLocs.position, floatTex()), _attachments)
+        });
+      };
+
+      var makeReprojectBuffer = function makeReprojectBuffer() {
+        return makeFramebuffer(gl, {
+          attachments: {
+            0: floatTex()
+          }
+        });
+      };
+
+      hdrBuffer = makeHdrBuffer();
+      hdrBackBuffer = makeHdrBuffer();
+      reprojectBuffer = makeReprojectBuffer();
+      reprojectBackBuffer = makeReprojectBuffer();
+      lastToneMappedScale = fullscreenScale;
+      lastToneMappedTexture = hdrBuffer.attachments[rayTracePass.outputLocs.light];
+    }
+
+    function swapReprojectBuffer() {
+      var temp = reprojectBuffer;
+      reprojectBuffer = reprojectBackBuffer;
+      reprojectBackBuffer = temp;
+    }
+
+    function swapHdrBuffer() {
+      var temp = hdrBuffer;
+      hdrBuffer = hdrBackBuffer;
+      hdrBackBuffer = temp;
+    } // Shaders will read from the back buffer and draw to the front buffer
+    // Buffers are swapped after every render
+
+
+    function swapBuffers() {
+      swapHdrBuffer();
+      swapReprojectBuffer();
+    }
+
+    function setSize(w, h) {
+      screenWidth = w;
+      screenHeight = h;
+      tileRender.setSize(w, h);
+      initFrameBuffers(w, h);
     }
 
     function setPreviewBufferDimensions() {
       var desiredTimeForPreview = 10;
       var numPixelsForPreview = desiredTimeForPreview / tileRender.getTimePerPixel();
-      var aspectRatio = hdrBuffer.width / hdrBuffer.height;
-      var previewWidth = Math.round(clamp(Math.sqrt(numPixelsForPreview * aspectRatio), 1, hdrBuffer.width));
-      var previewHeight = Math.round(clamp(previewWidth / aspectRatio, 1, hdrBuffer.height));
-      var diff = Math.abs(previewWidth - hdrPreviewBuffer.width) / previewWidth;
-
-      if (diff > 0.05) {
-        // don't bother resizing if the buffer size is only slightly different
-        hdrPreviewBuffer.setSize(previewWidth, previewHeight);
-        reprojectPreviewBuffer.setSize(previewWidth, previewHeight);
-        historyBuffer.setSize(previewWidth, previewHeight);
-      }
+      var aspectRatio = screenWidth / screenHeight;
+      previewWidth = Math.round(clamp(Math.sqrt(numPixelsForPreview * aspectRatio), 1, screenWidth));
+      previewHeight = Math.round(clamp(previewWidth / aspectRatio, 1, screenHeight));
+      previewScale.set(previewWidth / screenWidth, previewHeight / screenHeight);
     }
 
     function areCamerasEqual(cam1, cam2) {
@@ -2810,113 +2944,147 @@
       buffer.unbind();
     }
 
-    function addSampleToBuffer(buffer) {
+    function addSampleToBuffer(buffer, width, height) {
       buffer.bind();
       gl.blendEquation(gl.FUNC_ADD);
       gl.blendFunc(gl.ONE, gl.ONE);
       gl.enable(gl.BLEND);
-      gl.clearBufferfv(gl.COLOR, rayTracingRenderTargets.location.position, clearToBlack);
-      gl.viewport(0, 0, buffer.width, buffer.height);
-      rayTracingShader.draw();
+      gl.clearBufferfv(gl.COLOR, rayTracePass.outputLocs.position, clearToBlack);
+      gl.viewport(0, 0, width, height);
+      rayTracePass.draw();
       gl.disable(gl.BLEND);
       buffer.unbind();
     }
 
-    function newSampleToBuffer(buffer) {
+    function newSampleToBuffer(buffer, width, height) {
       buffer.bind();
-      gl.viewport(0, 0, buffer.width, buffer.height);
-      rayTracingShader.draw();
+      gl.viewport(0, 0, width, height);
+      rayTracePass.draw();
       buffer.unbind();
     }
 
-    function toneMapToScreen(buffer) {
+    function toneMapToScreen(lightTexture, textureScale) {
       gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
-      toneMapShader.draw(buffer.texture);
-      lastToneMappedBuffer = buffer;
+      toneMapPass.draw({
+        light: lightTexture,
+        textureScale: textureScale
+      });
+      lastToneMappedTexture = lightTexture;
+      lastToneMappedScale = textureScale;
     }
 
     function renderTile(buffer, x, y, width, height) {
       gl.scissor(x, y, width, height);
       gl.enable(gl.SCISSOR_TEST);
-      addSampleToBuffer(buffer);
+      addSampleToBuffer(buffer, screenWidth, screenHeight);
       gl.disable(gl.SCISSOR_TEST);
     }
 
     function updateSeed(width, height) {
-      rayTracingShader.setSize(width, height);
+      rayTracePass.setSize(width, height);
       var jitterX = (Math.random() - 0.5) / width;
       var jitterY = (Math.random() - 0.5) / height;
-      rayTracingShader.setJitter(jitterX, jitterY);
-      reprojectShader.setJitter(jitterX, jitterY);
+      rayTracePass.setJitter(jitterX, jitterY);
+      reprojectPass.setJitter(jitterX, jitterY);
 
-      if (sampleCount === 1) {
-        rayTracingShader.setStrataCount(1);
+      if (sampleCount === 0) {
+        rayTracePass.setStrataCount(1);
       } else if (sampleCount === numUniformSamples) {
-        rayTracingShader.setStrataCount(strataCount);
+        rayTracePass.setStrataCount(strataCount);
       } else {
-        rayTracingShader.nextSeed();
+        rayTracePass.nextSeed();
+      }
+
+      rayTracePass.bindTextures();
+    }
+
+    function drawPreview(camera, lastCamera) {
+      if (sampleCount > 0) {
+        swapBuffers();
+      }
+
+      sampleCount = 0;
+      tileRender.reset();
+      setPreviewBufferDimensions();
+      rayTracePass.setCamera(camera);
+      reprojectPass.setPreviousCamera(lastCamera);
+      lastCamera.copy(camera);
+      updateSeed(previewWidth, previewHeight);
+      newSampleToBuffer(hdrBuffer, previewWidth, previewHeight);
+      reprojectBuffer.bind();
+      gl.viewport(0, 0, previewWidth, previewHeight);
+      reprojectPass.draw({
+        blendAmount: 1.0,
+        light: hdrBuffer.attachments[rayTracePass.outputLocs.light],
+        position: hdrBuffer.attachments[rayTracePass.outputLocs.position],
+        textureScale: previewScale,
+        previousLight: lastToneMappedTexture,
+        previousPosition: hdrBackBuffer.attachments[rayTracePass.outputLocs.position],
+        previousTextureScale: lastToneMappedScale
+      });
+      reprojectBuffer.unbind();
+      toneMapToScreen(reprojectBuffer.attachments[0], previewScale);
+      swapBuffers();
+    }
+
+    function drawTile() {
+      var _tileRender$nextTile = tileRender.nextTile(),
+          x = _tileRender$nextTile.x,
+          y = _tileRender$nextTile.y,
+          tileWidth = _tileRender$nextTile.tileWidth,
+          tileHeight = _tileRender$nextTile.tileHeight,
+          isFirstTile = _tileRender$nextTile.isFirstTile,
+          isLastTile = _tileRender$nextTile.isLastTile; // move to isLastTile?
+
+
+      if (isFirstTile) {
+        if (sampleCount === 0) {
+          // previous rendered image was a preview image
+          clearBuffer(hdrBuffer);
+          reprojectPass.setPreviousCamera(lastCamera);
+        }
+
+        updateSeed(screenWidth, screenHeight);
+      }
+
+      renderTile(hdrBuffer, x, y, tileWidth, tileHeight);
+
+      if (isLastTile) {
+        sampleCount++;
+        var blendAmount = clamp(1.0 - sampleCount / maxReprojectedSamples, 0, 1);
+        blendAmount *= blendAmount;
+
+        if (blendAmount > 0.0) {
+          reprojectBuffer.bind();
+          gl.viewport(0, 0, screenWidth, screenHeight);
+          reprojectPass.draw({
+            blendAmount: blendAmount,
+            light: hdrBuffer.attachments[rayTracePass.outputLocs.light],
+            position: hdrBuffer.attachments[rayTracePass.outputLocs.position],
+            textureScale: fullscreenScale,
+            previousLight: reprojectBackBuffer.attachments[0],
+            previousPosition: hdrBackBuffer.attachments[rayTracePass.outputLocs.position],
+            previousTextureScale: previewScale
+          });
+          reprojectBuffer.unbind();
+          toneMapToScreen(reprojectBuffer.attachments[0], fullscreenScale);
+        } else {
+          toneMapToScreen(hdrBuffer.attachments[rayTracePass.outputLocs.light], fullscreenScale);
+        }
+
+        sampleRenderedCallback(sampleCount);
       }
     }
 
-    function drawTile(camera) {
+    function draw(camera) {
       if (!ready) {
         return;
       }
 
-      if (sampleCount === 1) {
-        reprojectShader.setPreviousCamera(lastCamera);
-      }
-
       if (!areCamerasEqual(camera, lastCamera)) {
-        initFirstSample();
-        setPreviewBufferDimensions();
-        rayTracingShader.setCamera(camera);
-        updateSeed(hdrPreviewBuffer.width, hdrPreviewBuffer.height);
-        newSampleToBuffer(hdrPreviewBuffer);
-        reprojectShader.setBlendAmount(reprojectDecay);
-        var temp = historyBuffer;
-        historyBuffer = reprojectPreviewBuffer;
-        reprojectPreviewBuffer = temp;
-        reprojectPreviewBuffer.bind();
-        gl.viewport(0, 0, reprojectPreviewBuffer.width, reprojectPreviewBuffer.height);
-        reprojectShader.draw(hdrPreviewBuffer.texture, lastToneMappedBuffer.texture);
-        reprojectPreviewBuffer.unbind();
-        toneMapToScreen(reprojectPreviewBuffer);
-        clearBuffer(hdrBuffer);
-        lastCamera.copy(camera);
+        drawPreview(camera, lastCamera);
       } else {
-        var _tileRender$nextTile = tileRender.nextTile(),
-            x = _tileRender$nextTile.x,
-            y = _tileRender$nextTile.y,
-            tileWidth = _tileRender$nextTile.tileWidth,
-            tileHeight = _tileRender$nextTile.tileHeight,
-            isFirstTile = _tileRender$nextTile.isFirstTile,
-            isLastTile = _tileRender$nextTile.isLastTile;
-
-        if (isFirstTile) {
-          sampleCount++;
-          updateSeed(hdrBuffer.width, hdrBuffer.height);
-        }
-
-        renderTile(hdrBuffer, x, y, tileWidth, tileHeight);
-
-        if (isLastTile) {
-          var blendAmount = clamp(1.0 - sampleCount / maxReprojectedSamples, 0, 1);
-          blendAmount *= blendAmount;
-
-          if (blendAmount > 0.0) {
-            reprojectShader.setBlendAmount(blendAmount);
-            reprojectBuffer.bind();
-            gl.viewport(0, 0, reprojectBuffer.width, reprojectBuffer.height);
-            reprojectShader.draw(hdrBuffer.texture, reprojectPreviewBuffer.texture);
-            reprojectBuffer.unbind();
-            toneMapToScreen(reprojectBuffer);
-          } else {
-            toneMapToScreen(hdrBuffer);
-          }
-
-          sampleRenderedCallback(sampleCount);
-        }
+        drawTile();
       }
     } // debug draw call to measure performance
     // use full resolution buffers every frame
@@ -2928,49 +3096,40 @@
         return;
       }
 
-      if (sampleCount === 1) {
-        reprojectShader.setPreviousCamera(lastCamera);
+      if (sampleCount === 0) {
+        reprojectPass.setPreviousCamera(lastCamera);
       }
 
       if (!areCamerasEqual(camera, lastCamera)) {
-        sampleCount = 1;
-        rayTracingShader.setCamera(camera);
-        clearBuffer(hdrBuffer);
+        sampleCount = 0;
+        rayTracePass.setCamera(camera);
         lastCamera.copy(camera);
+        swapHdrBuffer();
+        clearBuffer(hdrBuffer);
       } else {
         sampleCount++;
       }
 
-      updateSeed(hdrBuffer.width, hdrBuffer.height);
-      addSampleToBuffer(hdrBuffer);
-      var blendAmount = clamp(1.0 - sampleCount / maxReprojectedSamples, 0, 1);
-      blendAmount *= blendAmount;
-      reprojectShader.setBlendAmount(blendAmount);
-
-      if (historyBuffer.width !== hdrBuffer.width) {
-        historyBuffer.setSize(hdrBuffer.width, hdrBuffer.height);
-      }
-
-      var temp = historyBuffer;
-      historyBuffer = reprojectBuffer;
-      reprojectBuffer = temp;
+      updateSeed(screenWidth, screenHeight);
+      addSampleToBuffer(hdrBuffer, screenWidth, screenHeight);
       reprojectBuffer.bind();
-      gl.viewport(0, 0, reprojectBuffer.width, reprojectBuffer.height);
-      reprojectShader.draw(hdrBuffer.texture, historyBuffer.texture);
+      gl.viewport(0, 0, screenWidth, screenHeight);
+      reprojectPass.draw({
+        blendAmount: 1.0,
+        light: hdrBuffer.attachments[rayTracePass.outputLocs.light],
+        position: hdrBuffer.attachments[rayTracePass.outputLocs.position],
+        previousLight: reprojectBackBuffer.attachments[0],
+        previousPosition: hdrBackBuffer.attachments[rayTracePass.outputLocs.position],
+        textureScale: fullscreenScale,
+        previousTextureScale: fullscreenScale
+      });
       reprojectBuffer.unbind();
-      toneMapToScreen(reprojectBuffer);
-    }
-
-    function setSize(w, h) {
-      rayTracingShader.setSize(w, h);
-      tileRender.setSize(w, h);
-      hdrBuffer.setSize(w, h);
-      reprojectBuffer.setSize(w, h);
-      initFirstSample();
+      toneMapToScreen(reprojectBuffer.attachments[0], fullscreenScale);
+      swapReprojectBuffer();
     }
 
     return {
-      drawTile: drawTile,
+      draw: draw,
       drawFull: drawFull,
       restartTimer: tileRender.restartTimer,
       setSize: setSize,
@@ -3009,7 +3168,7 @@
     var size = new THREE$1.Vector2();
     var pixelRatio = 1;
     var module = {
-      bounces: 3,
+      bounces: 2,
       domElement: canvas,
       maxHardwareUsage: false,
       needsUpdate: true,
@@ -3129,7 +3288,7 @@
           pipeline.drawFull(camera);
         } else {
           // render new sample for a tiled subset of the screen
-          pipeline.drawTile(camera);
+          pipeline.draw(camera);
         }
       } else {
         pipeline.drawOffscreenTile(camera);
@@ -3144,7 +3303,7 @@
 
     module.dispose = function () {
       document.removeEventListener('visibilitychange', restartTimer);
-      pipeline = false;
+      pipeline = null;
     };
 
     return module;
