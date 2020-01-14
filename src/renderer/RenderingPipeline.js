@@ -18,10 +18,10 @@ export function makeRenderingPipeline({
     bounces, // number of global illumination bounces
   }) {
 
-  const maxReprojectedSamples = 25;
+  const maxReprojectedSamples = 20;
 
   // how many samples to render with uniform noise before switching to stratified noise
-  const numUniformSamples = 6;
+  const numUniformSamples = 3;
 
   // how many partitions of stratified noise should be created
   // higher number results in faster convergence over time, but with lower quality initial samples
