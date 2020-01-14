@@ -31,7 +31,7 @@ export function RayTracingRenderer(params = {}) {
   let pixelRatio = 1;
 
   const module = {
-    bounces: 3,
+    bounces: 2,
     domElement: canvas,
     maxHardwareUsage: false,
     needsUpdate: true,

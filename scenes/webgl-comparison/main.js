@@ -154,6 +154,7 @@ function initRenderer(renderer) {
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.5;
   renderer.renderWhenOffFocus = false;
+  renderer.bounces = 3;
 }
 
 function unloadRenderer(renderer) {
