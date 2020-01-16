@@ -41,7 +41,7 @@ struct Triangle {
   vec3 p2;
 };
 
-void surfaceInteractionFromIntersection(inout SurfaceInteraction si, Triangle tri, vec3 barycentric, ivec3 index, vec3 faceNormal, int materialIndex) {
+void surfaceInteractionFromBVH(inout SurfaceInteraction si, Triangle tri, vec3 barycentric, ivec3 index, vec3 faceNormal, int materialIndex) {
   si.hit = true;
   si.faceNormal = faceNormal;
   si.position = barycentric.x * tri.p0 + barycentric.y * tri.p1 + barycentric.z * tri.p2;
@@ -236,9 +236,7 @@ int maxDimension(vec3 v) {
 }
 
 // Traverse BVH, find closest triangle intersection, and return surface information
-SurfaceInteraction intersectScene(inout Ray ray) {
-  SurfaceInteraction si;
-
+void intersectScene(inout Ray ray, inout SurfaceInteraction si) {
   int maxDim = maxDimension(abs(ray.d));
 
   // Permute space so that the z dimension is the one where the absolute value of the ray's direction is largest.
@@ -294,7 +292,7 @@ SurfaceInteraction intersectScene(inout Ray ray) {
         ray.tMax = hit.t;
         int materialIndex = floatBitsToInt(r2.w);
         vec3 faceNormal = r2.xyz;
-        surfaceInteractionFromIntersection(si, tri, hit.barycentric, index, faceNormal, materialIndex);
+        surfaceInteractionFromBVH(si, tri, hit.barycentric, index, faceNormal, materialIndex);
       }
     }
   }
@@ -302,8 +300,6 @@ SurfaceInteraction intersectScene(inout Ray ray) {
   // Values must be clamped outside of intersection loop. Clamping inside the loop produces incorrect numbers on some devices.
   si.roughness = clamp(si.roughness, 0.03, 1.0);
   si.metalness = clamp(si.metalness, 0.0, 1.0);
-
-  return si;
 }
 
 bool intersectSceneShadow(inout Ray ray) {

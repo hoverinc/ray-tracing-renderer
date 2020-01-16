@@ -62,12 +62,17 @@ export function makeRayTracePass(gl, {
     renderPass.setUniform('jitter', x, y);
   }
 
+  function setGBuffers({ position, normal, faceNormal }) {
+    renderPass.setTexture('gPosition', position);
+    renderPass.setTexture('gNormal', normal);
+    renderPass.setTexture('gFaceNormal', faceNormal);
+  }
+
   function nextSeed() {
     renderPass.setUniform('stratifiedSamples[0]', samples.next());
   }
 
   function setStrataCount(strataCount) {
-
     if (strataCount > 1 && strataCount !== samples.strataCount) {
       // reinitailizing random has a performance cost. we can skip it if
       // * strataCount is 1, since a strataCount of 1 works with any sized StratifiedRandomCombined
@@ -99,6 +104,7 @@ export function makeRayTracePass(gl, {
     outputLocs: renderPass.outputLocs,
     setCamera,
     setJitter,
+    setGBuffers,
     setNoise,
     setSize,
     setStrataCount,
