@@ -37,19 +37,22 @@ function makeRenderPassFromProgram(gl, program) {
   let nextTexUnit = 1;
 
   function setTexture(name, texture) {
-    let cachedTex = textures[name];
+    if (!texture) {
+      return;
+    }
 
-    if (!cachedTex) {
+    if (!textures[name]) {
       const unit = nextTexUnit++;
 
       uniformSetter.setUniform(name, unit);
 
-      cachedTex = { unit };
-
-      textures[name] = cachedTex;
+      textures[name] = {
+        unit,
+        tex: texture
+      };
+    } else {
+      textures[name].tex = texture;
     }
-
-    cachedTex.tex = texture;
   }
 
   function bindTextures() {
@@ -86,7 +89,7 @@ function makeShaderStage(gl, type, shader, defines) {
     str += addDefines(defines);
   }
 
-  if (type === gl.FRAGMENT_SHADER) {
+  if (type === gl.FRAGMENT_SHADER && shader.outputs) {
     str += addOutputs(shader.outputs);
   }
 

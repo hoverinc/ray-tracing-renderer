@@ -41,7 +41,6 @@ export default `
     float roughness;
     float metalness;
     int materialType;
-    int meshId;
   };
 
   struct Camera {

@@ -1,6 +1,7 @@
 import { unrollLoop } from '../glslUtil';
 import core from './chunks/core.glsl';
 import textureLinear from './chunks/textureLinear.glsl';
+import materialBuffer from './chunks/materialBuffer.glsl';
 import intersect from './chunks/intersect.glsl';
 import surfaceInteractionDirect from './chunks/surfaceInteractionDirect.glsl';
 import random from './chunks/random.glsl';
@@ -15,6 +16,7 @@ export default {
 includes: [
   core,
   textureLinear,
+  materialBuffer,
   intersect,
   surfaceInteractionDirect,
   random,
@@ -74,7 +76,6 @@ source: (defines) => `
     SurfaceInteraction si;
 
     surfaceInteractionDirect(vCoord, si);
-    // intersectScene(path.ray, si);
     bounce(path, 1, si);
 
     // Manually unroll for loop.

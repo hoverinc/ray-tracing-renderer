@@ -6,35 +6,6 @@ uniform sampler2D normals;
 uniform sampler2D uvs;
 uniform sampler2D bvh;
 
-uniform Materials {
-  vec4 colorAndMaterialType[NUM_MATERIALS];
-  vec4 roughnessMetalnessNormalScale[NUM_MATERIALS];
-
-  #if defined(NUM_DIFFUSE_MAPS) || defined(NUM_NORMAL_MAPS) || defined(NUM_PBR_MAPS)
-    ivec4 diffuseNormalRoughnessMetalnessMapIndex[NUM_MATERIALS];
-  #endif
-
-  #if defined(NUM_DIFFUSE_MAPS) || defined(NUM_NORMAL_MAPS)
-    vec4 diffuseNormalMapSize[NUM_DIFFUSE_NORMAL_MAPS];
-  #endif
-
-  #if defined(NUM_PBR_MAPS)
-    vec2 pbrMapSize[NUM_PBR_MAPS];
-  #endif
-} materials;
-
-#ifdef NUM_DIFFUSE_MAPS
-  uniform mediump sampler2DArray diffuseMap;
-#endif
-
-#ifdef NUM_NORMAL_MAPS
-  uniform mediump sampler2DArray normalMap;
-#endif
-
-#ifdef NUM_PBR_MAPS
-  uniform mediump sampler2DArray pbrMap;
-#endif
-
 struct Triangle {
   vec3 p0;
   vec3 p1;
@@ -59,10 +30,6 @@ void surfaceInteractionFromBVH(inout SurfaceInteraction si, Triangle tri, vec3 b
   si.metalness = materials.roughnessMetalnessNormalScale[materialIndex].y;
 
   si.materialType = int(materials.colorAndMaterialType[materialIndex].w);
-
-  // TODO: meshId should be the actual mesh id instead of the material id, which can be shared amoung meshes.
-  // This will involve storing the mesh id AND the material id in the BVH texture
-  si.meshId = materialIndex + 1; // +1 so that the mesh id is never 0
 
   #if defined(NUM_DIFFUSE_MAPS) || defined(NUM_NORMAL_MAPS) || defined(NUM_PBR_MAPS)
     vec2 uv0 = texelFetch(uvs, i0, 0).xy;
@@ -237,6 +204,8 @@ int maxDimension(vec3 v) {
 
 // Traverse BVH, find closest triangle intersection, and return surface information
 void intersectScene(inout Ray ray, inout SurfaceInteraction si) {
+  si.hit = false;
+
   int maxDim = maxDimension(abs(ray.d));
 
   // Permute space so that the z dimension is the one where the absolute value of the ray's direction is largest.

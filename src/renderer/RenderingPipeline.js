@@ -2,6 +2,7 @@ import { decomposeScene } from './decomposeScene';
 import { makeFramebuffer } from './Framebuffer';
 import { makeFullscreenQuad } from './FullscreenQuad';
 import { makeGBufferPass } from './GBufferPass';
+import { makeMaterialBuffer } from './MaterialBuffer';
 import { mergeMeshesToGeometry } from './mergeMeshesToGeometry';
 import { makeRayTracePass } from './RayTracePass';
 import { makeReprojectPass } from './ReprojectPass';
@@ -33,9 +34,11 @@ export function makeRenderingPipeline({
 
   const mergedMesh = mergeMeshesToGeometry(decomposedScene.meshes);
 
+  const materialBuffer = makeMaterialBuffer(gl, mergedMesh.materials);
+
   const fullscreenQuad = makeFullscreenQuad(gl);
 
-  const rayTracePass = makeRayTracePass(gl, { bounces, decomposedScene, fullscreenQuad, mergedMesh, optionalExtensions, scene });
+  const rayTracePass = makeRayTracePass(gl, { bounces, decomposedScene, fullscreenQuad, materialBuffer, mergedMesh, optionalExtensions, scene });
 
   const reprojectPass = makeReprojectPass(gl, { fullscreenQuad, maxReprojectedSamples });
 
@@ -45,8 +48,6 @@ export function makeRenderingPipeline({
 
   // used to sample only a portion of the scene to the HDR Buffer to prevent the GPU from locking up from excessive computation
   const tileRender = makeTileRender(gl);
-
-  const clearToBlack = new Float32Array([0, 0, 0, 0]);
 
   let ready = false;
   const noiseImage = new Image();

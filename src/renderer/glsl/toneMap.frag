@@ -46,7 +46,6 @@ source: `
     // in addition, alpha contains a scale factor for the shadow catcher material
     // dividing by alpha normalizes the brightness of the shadow catcher to match the background envmap.
     vec3 light = tex.rgb / tex.a;
-    // vec3 light = 0.5 * tex.rgb + 0.5;
 
     light *= EXPOSURE;
 
