@@ -246,6 +246,8 @@ export function makeRenderingPipeline({
   }
 
   function drawTile() {
+    tileRender.updatePerf();
+
     const { x, y, tileWidth, tileHeight, isFirstTile, isLastTile } = tileRender.nextTile();
 
     // move to isLastTile?
@@ -350,7 +352,7 @@ export function makeRenderingPipeline({
   return {
     draw,
     drawFull,
-    restartTimer: tileRender.restartTimer,
+    restartTimer: tileRender.reset,
     setSize,
     getTotalSamplesRendered() {
       return sampleCount;

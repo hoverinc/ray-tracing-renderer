@@ -19,8 +19,6 @@ export function makeTileRender(gl) {
   let columns;
   let rows;
 
-  let firstTileTime = 0;
-
   let width = 0;
   let height = 0;
 
@@ -35,13 +33,25 @@ export function makeTileRender(gl) {
 
   let timePerPixel = desiredTimePerTile / pixelsPerTile;
 
-  function restartTimer() {
-    firstTileTime = 0;
+  let lastTime = 0;
+  let timeElapsed = 0;
+
+  function onFinished(time) {
+    if (lastTime) {
+      timeElapsed += time - lastTime;
+    }
+
+    lastTime = time;
+  }
+
+  function updatePerf() {
+    requestAnimationFrame(onFinished);
   }
 
   function reset() {
     currentTile = -1;
-    firstTileTime = 0;
+    timeElapsed = 0;
+    lastTime = 0;
   }
 
   function setSize(w, h) {
@@ -64,8 +74,7 @@ export function makeTileRender(gl) {
   }
 
   function initTiles() {
-    if (firstTileTime) {
-      const timeElapsed = Date.now() - firstTileTime;
+    if (timeElapsed) {
       const timePerTile = timeElapsed / numTiles;
 
       const expAvg = 0.5;
@@ -77,7 +86,7 @@ export function makeTileRender(gl) {
       timePerPixel = expAvg * timePerPixel + (1 - expAvg) * newTimePerPixel;
     }
 
-    firstTileTime = Date.now();
+    timeElapsed = 0;
 
     pixelsPerTile = clamp(pixelsPerTile, 8192, width * height);
 
@@ -111,8 +120,8 @@ export function makeTileRender(gl) {
     },
     nextTile,
     reset,
-    restartTimer,
-    setSize
+    setSize,
+    updatePerf,
   };
 }
 
