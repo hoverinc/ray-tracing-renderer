@@ -73,7 +73,7 @@
     return supported;
   }
 
-  function createShader(gl, type, source) {
+  function compileShader(gl, type, source) {
     const shader = gl.createShader(type);
     gl.shaderSource(shader, source);
     gl.compileShader(shader);
@@ -113,14 +113,16 @@
   }
 
   function getUniforms(gl, program) {
-    const uniforms = {};
+    const uniforms = [];
 
     const count = gl.getProgramParameter(program, gl.ACTIVE_UNIFORMS);
     for (let i = 0; i < count; i++) {
-      const { name } = gl.getActiveUniform(program, i);
+      const { name, type } = gl.getActiveUniform(program, i);
       const location = gl.getUniformLocation(program, name);
       if (location) {
-        uniforms[name] = location;
+        uniforms.push({
+          name, type, location
+        });
       }
     }
 
@@ -219,18 +221,276 @@
     }
   }
 
-  function vertString() {
-    return `#version 300 es
+  var vertex = {
+  source: `
+  layout(location = 0) in vec2 a_position;
 
-layout(location = 0) in vec2 position;
-out vec2 vCoord;
+  out vec2 vCoord;
 
-void main() {
-  vCoord = position;
-  gl_Position = vec4(2. * position - 1., 0, 1);
-}
+  void main() {
+    vCoord = a_position;
+    gl_Position = vec4(2. * a_position - 1., 0, 1);
+  }
+`
+  };
 
-`;
+  let typeMap;
+
+  function makeUniformSetter(gl, program) {
+    const uniformInfo = getUniforms(gl, program);
+    const uniforms = {};
+    const needsUpload = [];
+
+    for (let { name, type, location } of uniformInfo) {
+      const uniform = {
+        type,
+        location,
+        v0: 0,
+        v1: 0,
+        v2: 0,
+        v3: 0
+      };
+
+      uniforms[name] = uniform;
+    }
+
+    const failedUnis = new Set();
+
+    function setUniform(name, v0, v1, v2, v3) {
+      // v0 - v4 are the values to be passed to the uniform
+      // v0 can either be a number or an array, and v1-v3 are optional
+      const uni = uniforms[name];
+
+      if (!uni) {
+        if (!failedUnis.has(name)) {
+          console.warn(`Uniform "${name}" does not exist in shader`);
+          failedUnis.add(name);
+        }
+
+        return;
+      }
+
+      uni.v0 = v0;
+      uni.v1 = v1;
+      uni.v2 = v2;
+      uni.v3 = v3;
+      needsUpload.push(uni);
+    }
+
+    typeMap = typeMap || initTypeMap(gl);
+
+    function upload() {
+      while (needsUpload.length > 0) {
+
+        const { type, location, v0, v1, v2, v3 } = needsUpload.pop();
+        const glMethod = typeMap[type];
+
+        if (v0.length) {
+          if (glMethod.matrix) {
+            const array = v0;
+            const transpose = v1 || false;
+            gl[glMethod.matrix](location, transpose, array);
+          } else {
+            gl[glMethod.array](location, v0);
+          }
+        } else {
+          gl[glMethod.values](location, v0, v1, v2, v3);
+        }
+      }
+    }
+
+    return {
+      setUniform,
+      upload,
+    };
+  }
+
+  function initTypeMap(gl) {
+    return {
+      [gl.FLOAT]: glName(1, 'f'),
+      [gl.FLOAT_VEC2]: glName(2, 'f'),
+      [gl.FLOAT_VEC3]: glName(3, 'f'),
+      [gl.FLOAT_VEC4]: glName(4, 'f'),
+      [gl.INT]: glName(1, 'i'),
+      [gl.INT_VEC2]: glName(2, 'i'),
+      [gl.INT_VEC3]: glName(3, 'i'),
+      [gl.INT_VEC4]: glName(4, 'i'),
+      [gl.SAMPLER_2D]: glName(1, 'i'),
+      [gl.SAMPLER_2D_ARRAY]: glName(1, 'i'),
+      [gl.FLOAT_MAT2]: glNameMatrix(2, 2),
+      [gl.FLOAT_MAT3]: glNameMatrix(3, 3),
+      [gl.FLOAT_MAT4]: glNameMatrix(4, 4)
+    };
+  }
+
+  function glName(numComponents, type) {
+    return {
+      values: `uniform${numComponents}${type}`,
+      array: `uniform${numComponents}${type}v`
+    };
+  }
+
+  function glNameMatrix(rows, columns) {
+    return {
+      matrix: rows === columns ?
+        `uniformMatrix${rows}fv` :
+        `uniformMatrix${rows}x${columns}fv`
+    };
+  }
+
+  function makeRenderPass(gl, params) {
+    const {
+      defines,
+      fragment,
+      vertex,
+    } = params;
+
+    const vertexCompiled = vertex instanceof WebGLShader ? vertex : makeVertexShader(gl, params);
+
+    const fragmentCompiled = fragment instanceof WebGLShader ? fragment : makeFragmentShader(gl, params);
+
+    const program = createProgram(gl, vertexCompiled, fragmentCompiled);
+
+    return {
+      ...makeRenderPassFromProgram(gl, program),
+      outputLocs: fragment.outputs ? getOutputLocations(fragment.outputs) : {}
+    };
+  }
+
+  function makeVertexShader(gl, { defines, vertex }) {
+    return makeShaderStage(gl, gl.VERTEX_SHADER, vertex, defines);
+  }
+
+  function makeFragmentShader(gl, { defines, fragment }) {
+    return makeShaderStage(gl, gl.FRAGMENT_SHADER, fragment, defines);
+  }
+
+
+  function makeRenderPassFromProgram(gl, program) {
+
+    const uniformSetter = makeUniformSetter(gl, program);
+
+    const textures = {};
+
+    let nextTexUnit = 1;
+
+    function setTexture(name, texture) {
+      let cachedTex = textures[name];
+
+      if (!cachedTex) {
+        const unit = nextTexUnit++;
+
+        uniformSetter.setUniform(name, unit);
+
+        cachedTex = { unit };
+
+        textures[name] = cachedTex;
+      }
+
+      cachedTex.tex = texture;
+    }
+
+    function bindTextures() {
+      for (let name in textures) {
+        const { tex, unit } = textures[name];
+        gl.activeTexture(gl.TEXTURE0 + unit);
+        gl.bindTexture(tex.target, tex.texture);
+      }
+    }
+
+    function useProgram(autoBindTextures = true) {
+      gl.useProgram(program);
+      uniformSetter.upload();
+      if (autoBindTextures) {
+        bindTextures();
+      }
+    }
+
+    return {
+      bindTextures,
+      program,
+      setTexture,
+      setUniform: uniformSetter.setUniform,
+      textures,
+      useProgram,
+    };
+  }
+
+  function makeShaderStage(gl, type, shader, defines) {
+    let str = '#version 300 es\nprecision mediump float;\nprecision mediump int;\n';
+
+    if (defines) {
+      str += addDefines(defines);
+    }
+
+    if (type === gl.FRAGMENT_SHADER) {
+      str += addOutputs(shader.outputs);
+    }
+
+    if (shader.includes) {
+      str += addIncludes(shader.includes, defines);
+    }
+
+    if (typeof shader.source === 'function') {
+      str += shader.source(defines);
+    } else {
+      str += shader.source;
+    }
+
+    return compileShader(gl, type, str);
+  }
+
+  function addDefines(defines) {
+    let str = '';
+
+    for (const name in defines) {
+      const value = defines[name];
+
+      // don't define falsy values such as false, 0, and ''.
+      // this adds support for #ifdef on falsy values
+      if (value) {
+        str += `#define ${name} ${value}\n`;
+      }
+    }
+
+    return str;
+  }
+
+  function addOutputs(outputs) {
+    let str = '';
+
+    const locations = getOutputLocations(outputs);
+
+    for (let name in locations) {
+      const location = locations[name];
+      str += `layout(location = ${location}) out vec4 out_${name};\n`;
+    }
+
+    return str;
+  }
+
+  function addIncludes(includes, defines) {
+    let str = '';
+
+    for (let include of includes) {
+      if (typeof include === 'function') {
+        str += include(defines);
+      } else {
+        str += include;
+      }
+    }
+
+    return str;
+  }
+
+  function getOutputLocations(outputs) {
+    let locations = {};
+
+    for (let i = 0; i < outputs.length; i++) {
+      locations[outputs[i]] = i;
+    }
+
+    return locations;
   }
 
   function makeFullscreenQuad(gl) {
@@ -244,7 +504,7 @@ void main() {
     gl.enableVertexAttribArray(posLoc);
     gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0);
 
-    const vertexShader = createShader(gl, gl.VERTEX_SHADER, vertString());
+    const vertexShader = makeVertexShader(gl, { vertex });
 
     function draw() {
       gl.drawArrays(gl.TRIANGLES, 0, 6);
@@ -910,35 +1170,136 @@ void main() {
     };
   }
 
+  function unrollLoop(indexName, start, limit, step, code) {
+    let unrolled = `int ${indexName};\n`;
+
+    for (let i = start; (step > 0 && i < limit) || (step < 0 && i > limit); i += step) {
+      unrolled += `${indexName} = ${i};\n`;
+      unrolled += code;
+    }
+
+    return unrolled;
+  }
+
+  var core = `
+  #define PI 3.14159265359
+  #define TWOPI 6.28318530718
+  #define INVPI 0.31830988618
+  #define INVPI2 0.10132118364
+  #define EPS 0.0005
+  #define INF 1.0e999
+  #define RAY_MAX_DISTANCE 9999.0
+
+  #define STANDARD 0
+  #define THIN_GLASS 1
+  #define THICK_GLASS 2
+  #define SHADOW_CATCHER 3
+
+  #define SAMPLES_PER_MATERIAL 8
+
+  const float IOR = 1.5;
+  const float INV_IOR = 1.0 / IOR;
+
+  const float IOR_THIN = 1.015;
+  const float INV_IOR_THIN = 1.0 / IOR_THIN;
+
+  const float R0 = (1.0 - IOR) * (1.0 - IOR)  / ((1.0 + IOR) * (1.0 + IOR));
+
+  // https://www.w3.org/WAI/GL/wiki/Relative_luminance
+  const vec3 luminance = vec3(0.2126, 0.7152, 0.0722);
+
+  struct Ray {
+    vec3 o;
+    vec3 d;
+    vec3 invD;
+    float tMax;
+  };
+
+  struct SurfaceInteraction {
+    bool hit;
+    vec3 position;
+    vec3 normal; // smoothed normal from the three triangle vertices
+    vec3 faceNormal; // normal of the triangle
+    vec3 color;
+    float roughness;
+    float metalness;
+    int materialType;
+    int meshId;
+  };
+
+  struct Camera {
+    mat4 transform;
+    float aspect;
+    float fov;
+    float focus;
+    float aperture;
+  };
+
+  void initRay(inout Ray ray, vec3 origin, vec3 direction) {
+    ray.o = origin;
+    ray.d = direction;
+    ray.invD = 1.0 / ray.d;
+    ray.tMax = RAY_MAX_DISTANCE;
+  }
+
+  // given the index from a 1D array, retrieve corresponding position from packed 2D texture
+  ivec2 unpackTexel(int i, int columnsLog2) {
+    ivec2 u;
+    u.y = i >> columnsLog2; // equivalent to (i / 2^columnsLog2)
+    u.x = i - (u.y << columnsLog2); // equivalent to (i % 2^columnsLog2)
+    return u;
+  }
+
+  vec4 fetchData(sampler2D s, int i, int columnsLog2) {
+    return texelFetch(s, unpackTexel(i, columnsLog2), 0);
+  }
+
+  ivec4 fetchData(isampler2D s, int i, int columnsLog2) {
+    return texelFetch(s, unpackTexel(i, columnsLog2), 0);
+  }
+
+  struct Path {
+    Ray ray;
+    vec3 li;
+    vec3 albedo;
+    float alpha;
+    vec3 beta;
+    bool specularBounce;
+    bool abort;
+  };
+
+  uniform Camera camera;
+  uniform vec2 pixelSize; // 1 / screenResolution
+  uniform vec2 jitter;
+
+  in vec2 vCoord;
+`;
+
   // Manually performs linear filtering if the extension OES_texture_float_linear is not supported
 
-  function textureLinear(defines) {
-    return `
+  var textureLinear = `
+vec4 textureLinear(sampler2D map, vec2 uv) {
+  #ifdef OES_texture_float_linear
+    return texture(map, uv);
+  #else
+    vec2 size = vec2(textureSize(map, 0));
+    vec2 texelSize = 1.0 / size;
 
-  vec4 textureLinear(sampler2D map, vec2 uv) {
-    #ifdef OES_texture_float_linear
-      return texture(map, uv);
-    #else
-      vec2 size = vec2(textureSize(map, 0));
-      vec2 texelSize = 1.0 / size;
+    uv = uv * size - 0.5;
+    vec2 f = fract(uv);
+    uv = floor(uv) + 0.5;
 
-      uv = uv * size - 0.5;
-      vec2 f = fract(uv);
-      uv = floor(uv) + 0.5;
+    vec4 s1 = texture(map, (uv + vec2(0, 0)) * texelSize);
+    vec4 s2 = texture(map, (uv + vec2(1, 0)) * texelSize);
+    vec4 s3 = texture(map, (uv + vec2(0, 1)) * texelSize);
+    vec4 s4 = texture(map, (uv + vec2(1, 1)) * texelSize);
 
-      vec4 s1 = texture(map, (uv + vec2(0, 0)) * texelSize);
-      vec4 s2 = texture(map, (uv + vec2(1, 0)) * texelSize);
-      vec4 s3 = texture(map, (uv + vec2(0, 1)) * texelSize);
-      vec4 s4 = texture(map, (uv + vec2(1, 1)) * texelSize);
-
-      return mix(mix(s1, s2, f.x), mix(s3, s4, f.x), f.y);
-    #endif
-  }
+    return mix(mix(s1, s2, f.x), mix(s3, s4, f.x), f.y);
+  #endif
+}
 `;
-  }
 
-  function intersect(defines) {
-    return `
+  var intersect = `
 
 uniform highp isampler2D indices;
 uniform sampler2D positions;
@@ -955,7 +1316,7 @@ uniform Materials {
   #endif
 
   #if defined(NUM_DIFFUSE_MAPS) || defined(NUM_NORMAL_MAPS)
-    vec4 diffuseNormalMapSize[${Math.max(defines.NUM_DIFFUSE_MAPS, defines.NUM_NORMAL_MAPS)}];
+    vec4 diffuseNormalMapSize[NUM_DIFFUSE_NORMAL_MAPS];
   #endif
 
   #if defined(NUM_PBR_MAPS)
@@ -1303,11 +1664,10 @@ bool intersectSceneShadow(inout Ray ray) {
 
   return false;
 }
-`;
-  }
 
-  function random(defines) {
-    return `
+`;
+
+  var random = `
 
 // Noise texture used to generate a different random number for each pixel.
 // We use blue noise in particular, but any type of noise will work.
@@ -1345,13 +1705,11 @@ vec2 randomSampleVec2() {
   return vec2(randomSample(), randomSample());
 }
 `;
-  }
 
   // Sample the environment map using a cumulative distribution function as described in
   // http://www.pbr-book.org/3ed-2018/Light_Transport_I_Surface_Reflection/Sampling_Light_Sources.html#InfiniteAreaLights
 
-  function envmap(defines) {
-    return `
+  var envmap = `
 
 uniform sampler2D envmap;
 uniform sampler2D envmapDistribution;
@@ -1461,10 +1819,8 @@ vec3 sampleBackgroundFromDirection(vec3 d) {
 }
 
 `;
-  }
 
-  function bsdf(defines) {
-    return `
+  var bsdf = `
 
 // Computes the exact value of the Fresnel factor
 // https://seblagarde.wordpress.com/2013/04/29/memo-on-fresnel-equations/
@@ -1558,10 +1914,8 @@ vec3 materialBrdf(SurfaceInteraction si, vec3 viewDir, vec3 lightDir, float cosT
 }
 
 `;
-  }
 
-  function sample(defines) {
-    return `
+  var sample = `
 
 // https://graphics.pixar.com/library/OrthonormalB/paper.pdf
 mat3 orthonormalBasis(vec3 n) {
@@ -1617,13 +1971,11 @@ float powerHeuristic(float f, float g) {
 }
 
 `;
-  }
 
   // Estimate the direct lighting integral using multiple importance sampling
   // http://www.pbr-book.org/3ed-2018/Light_Transport_I_Surface_Reflection/Direct_Lighting.html#EstimatingtheDirectLightingIntegral
 
-  function sampleMaterial(defines) {
-    return `
+  var sampleMaterial = `
 
 vec3 importanceSampleLight(SurfaceInteraction si, vec3 viewDir, bool lastBounce, vec2 random) {
   vec3 li;
@@ -1741,10 +2093,8 @@ void sampleMaterial(SurfaceInteraction si, int bounce, inout Path path) {
 }
 
 `;
-  }
 
-  function sampleShadowCatcher (defines) {
-    return `
+  var sampleShadowCatcher = `
 
 #ifdef USE_SHADOW_CATCHER
 
@@ -1875,11 +2225,10 @@ void sampleShadowCatcher(SurfaceInteraction si, int bounce, inout Path path) {
 }
 
 #endif
-`;
-  }
 
-  function sampleGlass (defines) {
-    return `
+`;
+
+  var sampleGlass = `
 
 #ifdef USE_GLASS
 
@@ -1916,270 +2265,149 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
 #endif
 
 `;
-  }
 
-  function unrollLoop(indexName, start, limit, step, code) {
-    let unrolled = `int ${indexName};\n`;
+  // import sampleGlass from './chunks/sampleGlassMicrofacet.glsl';
 
-    for (let i = start; (step > 0 && i < limit) || (step < 0 && i > limit); i += step) {
-      unrolled += `${indexName} = ${i};\n`;
-      unrolled += code;
+  var fragment = {
+  includes: [
+    core,
+    textureLinear,
+    intersect,
+    random,
+    envmap,
+    bsdf,
+    sample,
+    sampleMaterial,
+    sampleGlass,
+    sampleShadowCatcher,
+  ],
+  outputs: ['light', 'position'],
+  source: (defines) => `
+  void bounce(inout Path path, int i, inout SurfaceInteraction si) {
+    if (path.abort) {
+      return;
     }
 
-    return unrolled;
-  }
+    si = intersectScene(path.ray);
 
-  function addDefines(params) {
-    let defines = '';
+    if (!si.hit) {
+      if (path.specularBounce) {
+        path.li += path.beta * sampleBackgroundFromDirection(path.ray.d);
+      }
 
-    for (let [name, value] of Object.entries(params)) {
-      // don't define falsy values such as false, 0, and ''.
-      // this adds support for #ifdef on falsy values
-      if (value) {
-        defines += `#define ${name} ${value}\n`;
+      path.abort = true;
+    } else {
+      #ifdef USE_GLASS
+        if (si.materialType == THIN_GLASS || si.materialType == THICK_GLASS) {
+          sampleGlassSpecular(si, i, path);
+        }
+      #endif
+      #ifdef USE_SHADOW_CATCHER
+        if (si.materialType == SHADOW_CATCHER) {
+          sampleShadowCatcher(si, i, path);
+        }
+      #endif
+      if (si.materialType == STANDARD) {
+        sampleMaterial(si, i, path);
+      }
+
+      // Russian Roulette sampling
+      if (i >= 2) {
+        float q = 1.0 - dot(path.beta, luminance);
+        if (randomSample() < q) {
+          path.abort = true;
+        }
+        path.beta /= 1.0 - q;
       }
     }
-
-    return defines;
   }
 
-  function fragString({ rayTracingRenderTargets, defines }) {
-    return `#version 300 es
+  // Path tracing integrator as described in
+  // http://www.pbr-book.org/3ed-2018/Light_Transport_I_Surface_Reflection/Path_Tracing.html#
+  vec4 integrator(inout Ray ray, inout SurfaceInteraction si) {
+    Path path;
+    path.ray = ray;
+    path.li = vec3(0);
+    path.alpha = 1.0;
+    path.beta = vec3(1.0);
+    path.specularBounce = true;
+    path.abort = false;
 
-precision mediump float;
-precision mediump int;
+    bounce(path, 1, si);
 
-${addDefines(defines)}
+    SurfaceInteraction indirectSi;
 
-${rayTracingRenderTargets.set()}
+    // Manually unroll for loop.
+    // Some hardware fails to interate over a GLSL loop, so we provide this workaround
+    // for (int i = 1; i < defines.bounces + 1, i += 1)
+    // equivelant to
+    ${unrollLoop('i', 2, defines.BOUNCES + 1, 1, `
+      bounce(path, i, indirectSi);
+    `)}
 
-#define PI 3.14159265359
-#define TWOPI 6.28318530718
-#define INVPI 0.31830988618
-#define INVPI2 0.10132118364
-#define EPS 0.0005
-#define INF 1.0e999
-#define RAY_MAX_DISTANCE 9999.0
-
-#define STANDARD 0
-#define THIN_GLASS 1
-#define THICK_GLASS 2
-#define SHADOW_CATCHER 3
-
-#define SAMPLES_PER_MATERIAL 8
-
-const float IOR = 1.5;
-const float INV_IOR = 1.0 / IOR;
-
-const float IOR_THIN = 1.015;
-const float INV_IOR_THIN = 1.0 / IOR_THIN;
-
-const float R0 = (1.0 - IOR) * (1.0 - IOR)  / ((1.0 + IOR) * (1.0 + IOR));
-
-// https://www.w3.org/WAI/GL/wiki/Relative_luminance
-const vec3 luminance = vec3(0.2126, 0.7152, 0.0722);
-
-struct Ray {
-  vec3 o;
-  vec3 d;
-  vec3 invD;
-  float tMax;
-};
-
-struct SurfaceInteraction {
-  bool hit;
-  vec3 position;
-  vec3 normal; // smoothed normal from the three triangle vertices
-  vec3 faceNormal; // normal of the triangle
-  vec3 color;
-  float roughness;
-  float metalness;
-  int materialType;
-  int meshId;
-};
-
-struct Camera {
-  mat4 transform;
-  float aspect;
-  float fov;
-  float focus;
-  float aperture;
-};
-
-uniform Camera camera;
-uniform vec2 pixelSize; // 1 / screenResolution
-uniform vec2 jitter;
-
-in vec2 vCoord;
-
-void initRay(inout Ray ray, vec3 origin, vec3 direction) {
-  ray.o = origin;
-  ray.d = direction;
-  ray.invD = 1.0 / ray.d;
-  ray.tMax = RAY_MAX_DISTANCE;
-}
-
-// given the index from a 1D array, retrieve corresponding position from packed 2D texture
-ivec2 unpackTexel(int i, int columnsLog2) {
-  ivec2 u;
-  u.y = i >> columnsLog2; // equivalent to (i / 2^columnsLog2)
-  u.x = i - (u.y << columnsLog2); // equivalent to (i % 2^columnsLog2)
-  return u;
-}
-
-vec4 fetchData(sampler2D s, int i, int columnsLog2) {
-  return texelFetch(s, unpackTexel(i, columnsLog2), 0);
-}
-
-ivec4 fetchData(isampler2D s, int i, int columnsLog2) {
-  return texelFetch(s, unpackTexel(i, columnsLog2), 0);
-}
-
-struct Path {
-  Ray ray;
-  vec3 li;
-  vec3 albedo;
-  float alpha;
-  vec3 beta;
-  bool specularBounce;
-  bool abort;
-};
-
-${textureLinear()}
-${intersect(defines)}
-${random()}
-${envmap()}
-${bsdf()}
-${sample()}
-${sampleMaterial()}
-${sampleGlass()}
-${sampleShadowCatcher()}
-
-void bounce(inout Path path, int i, inout SurfaceInteraction si) {
-  if (path.abort) {
-    return;
+    return vec4(path.li, path.alpha);
   }
 
-  si = intersectScene(path.ray);
+  void main() {
+    initRandom();
 
-  if (!si.hit) {
-    if (path.specularBounce) {
-      path.li += path.beta * sampleBackgroundFromDirection(path.ray.d);
+    vec2 vCoordAntiAlias = vCoord + jitter;
+
+    vec3 direction = normalize(vec3(vCoordAntiAlias - 0.5, -1.0) * vec3(camera.aspect, 1.0, camera.fov));
+
+    // Thin lens model with depth-of-field
+    // http://www.pbr-book.org/3ed-2018/Camera_Models/Projective_Camera_Models.html#TheThinLensModelandDepthofField
+    // vec2 lensPoint = camera.aperture * sampleCircle(randomSampleVec2());
+    // vec3 focusPoint = -direction * camera.focus / direction.z; // intersect ray direction with focus plane
+
+    // vec3 origin = vec3(lensPoint, 0.0);
+    // direction = normalize(focusPoint - origin);
+
+    // origin = vec3(camera.transform * vec4(origin, 1.0));
+    // direction = mat3(camera.transform) * direction;
+
+    vec3 origin = camera.transform[3].xyz;
+    direction = mat3(camera.transform) * direction;
+
+    Ray cam;
+    initRay(cam, origin, direction);
+
+    SurfaceInteraction si;
+
+    vec4 liAndAlpha = integrator(cam, si);
+
+    if (dot(si.position, si.position) == 0.0) {
+      si.position = origin + direction * RAY_MAX_DISTANCE;
     }
 
-    path.abort = true;
-  } else {
-    #ifdef USE_GLASS
-      if (si.materialType == THIN_GLASS || si.materialType == THICK_GLASS) {
-        sampleGlassSpecular(si, i, path);
-      }
-    #endif
-    #ifdef USE_SHADOW_CATCHER
-      if (si.materialType == SHADOW_CATCHER) {
-        sampleShadowCatcher(si, i, path);
-      }
-    #endif
-    if (si.materialType == STANDARD) {
-      sampleMaterial(si, i, path);
+    if (!(liAndAlpha.x < INF && liAndAlpha.x > -EPS)) {
+      liAndAlpha = vec4(0, 0, 0, 1);
     }
 
-    // Russian Roulette sampling
-    if (i >= 2) {
-      float q = 1.0 - dot(path.beta, luminance);
-      if (randomSample() < q) {
-        path.abort = true;
-      }
-      path.beta /= 1.0 - q;
-    }
-  }
+    out_light = liAndAlpha;
+    out_position = vec4(si.position, si.meshId);
+
+    // Stratified Sampling Sample Count Test
+    // ---------------
+    // Uncomment the following code
+    // Then observe the colors of the image
+    // If:
+    // * The resulting image is pure black
+    //   Extra samples are being passed to the shader that aren't being used.
+    // * The resulting image contains red
+    //   Not enough samples are being passed to the shader
+    // * The resulting image contains only white with some black
+    //   All samples are used by the shader. Correct result!
+
+    // fragColor = vec4(0, 0, 0, 1);
+    // if (sampleIndex == SAMPLING_DIMENSIONS) {
+    //   fragColor = vec4(1, 1, 1, 1);
+    // } else if (sampleIndex > SAMPLING_DIMENSIONS) {
+    //   fragColor = vec4(1, 0, 0, 1);
+    // }
 }
-
-// Path tracing integrator as described in
-// http://www.pbr-book.org/3ed-2018/Light_Transport_I_Surface_Reflection/Path_Tracing.html#
-vec4 integrator(inout Ray ray, inout SurfaceInteraction si) {
-  Path path;
-  path.ray = ray;
-  path.li = vec3(0);
-  path.alpha = 1.0;
-  path.beta = vec3(1.0);
-  path.specularBounce = true;
-  path.abort = false;
-
-  bounce(path, 1, si);
-
-  SurfaceInteraction indirectSi;
-
-  // Manually unroll for loop.
-  // Some hardware fails to interate over a GLSL loop, so we provide this workaround
-  // for (int i = 1; i < defines.bounces + 1, i += 1)
-  // equivelant to
-  ${unrollLoop('i', 2, defines.BOUNCES + 1, 1, `
-    bounce(path, i, indirectSi);
-  `)}
-
-  return vec4(path.li, path.alpha);
-}
-
-void main() {
-  initRandom();
-
-  vec2 vCoordAntiAlias = vCoord + jitter;
-
-  vec3 direction = normalize(vec3(vCoordAntiAlias - 0.5, -1.0) * vec3(camera.aspect, 1.0, camera.fov));
-
-  // Thin lens model with depth-of-field
-  // http://www.pbr-book.org/3ed-2018/Camera_Models/Projective_Camera_Models.html#TheThinLensModelandDepthofField
-  // vec2 lensPoint = camera.aperture * sampleCircle(randomSampleVec2());
-  // vec3 focusPoint = -direction * camera.focus / direction.z; // intersect ray direction with focus plane
-
-  // vec3 origin = vec3(lensPoint, 0.0);
-  // direction = normalize(focusPoint - origin);
-
-  // origin = vec3(camera.transform * vec4(origin, 1.0));
-  // direction = mat3(camera.transform) * direction;
-
-  vec3 origin = camera.transform[3].xyz;
-  direction = mat3(camera.transform) * direction;
-
-  Ray cam;
-  initRay(cam, origin, direction);
-
-  SurfaceInteraction si;
-
-  vec4 liAndAlpha = integrator(cam, si);
-
-  if (dot(si.position, si.position) == 0.0) {
-    si.position = origin + direction * RAY_MAX_DISTANCE;
-  }
-
-  if (!(liAndAlpha.x < INF && liAndAlpha.x > -EPS)) {
-    liAndAlpha = vec4(0, 0, 0, 1);
-  }
-
-  out_light = liAndAlpha;
-  out_position = vec4(si.position, si.meshId);
-
-  // Stratified Sampling Sample Count Test
-  // ---------------
-  // Uncomment the following code
-  // Then observe the colors of the image
-  // If:
-  // * The resulting image is pure black
-  //   Extra samples are being passed to the shader that aren't being used.
-  // * The resulting image contains red
-  //   Not enough samples are being passed to the shader
-  // * The resulting image contains only white with some black
-  //   All samples are used by the shader. Correct result!
-
-  // fragColor = vec4(0, 0, 0, 1);
-  // if (sampleIndex == SAMPLING_DIMENSIONS) {
-  //   fragColor = vec4(1, 1, 1, 1);
-  // } else if (sampleIndex > SAMPLING_DIMENSIONS) {
-  //   fragColor = vec4(1, 0, 0, 1);
-  // }
-}
-`;
-  }
+`
+  };
 
   function mergeMeshesToGeometry(meshes) {
 
@@ -2465,7 +2693,11 @@ void main() {
     gl.texParameteri(target, gl.TEXTURE_MAG_FILTER, magFilter);
 
     if (!channels) {
-      channels = data.length / (width * height) || 4; // infer number of channels from data size
+      if (data && data.length) {
+        channels = data.length / (width * height); // infer number of channels from data size
+      } else {
+        channels = 4;
+      }
     }
 
     channels = clamp(channels, 1, 4);
@@ -2664,54 +2896,11 @@ void main() {
     return interleaved;
   }
 
-  // targets is array of { name: string, storage: 'byte' | 'float'}
-  function makeRenderTargets({storage, names}) {
-    const location = {};
-
-    for (let i = 0; i < names.length; i++) {
-      location[names[i]] = i;
-    }
-
-    return {
-      isRenderTargets: true,
-      storage,
-      names,
-      location,
-      get(textureName) {
-        let inputs = '';
-
-        inputs += `uniform mediump sampler2DArray ${textureName};\n`;
-
-        for (let i = 0; i < names.length; i++) {
-          inputs += `#define ${textureName}_${names[i]} ${i}\n`;
-        }
-
-        return inputs;
-      },
-      set() {
-        let outputs = '';
-
-        for (let i = 0; i < names.length; i++) {
-          outputs += `layout(location = ${i}) out vec4 out_${names[i]};\n`;
-        }
-
-        return outputs;
-      }
-    };
-  }
-
-  const rayTracingRenderTargets = makeRenderTargets({
-    storage: 'float',
-    names: ['light', 'position']
-  });
-
-  function makeRayTracingShader({
+  function makeRayTracePass(gl, {
       bounces, // number of global illumination bounces
       fullscreenQuad,
-      gl,
       optionalExtensions,
       scene,
-      textureAllocator,
     }) {
 
     bounces = clamp(bounces, 1, 6);
@@ -2730,18 +2919,17 @@ void main() {
 
     let samples;
 
-    const { program, uniforms } = makeProgramFromScene({
-      bounces, fullscreenQuad, gl, optionalExtensions, samplingDimensions, scene, textureAllocator
+    const renderPass = makeRenderPassFromScene({
+      bounces, fullscreenQuad, gl, optionalExtensions, samplingDimensions, scene
     });
 
     function setSize(width, height) {
-      gl.useProgram(program);
-      gl.uniform2f(uniforms.pixelSize, 1 / width, 1 / height);
+      renderPass.setUniform('pixelSize', 1 / width, 1 / height);
     }
 
     // noiseImage is a 32-bit PNG image
     function setNoise(noiseImage) {
-      textureAllocator.bind(uniforms.noise, makeTexture(gl, {
+      renderPass.setTexture('noise', makeTexture(gl, {
         data: noiseImage,
         minFilter: gl.NEAREST,
         magFilter: gl.NEAREST,
@@ -2750,26 +2938,20 @@ void main() {
     }
 
     function setCamera(camera) {
-      gl.useProgram(program);
-      gl.uniformMatrix4fv(uniforms['camera.transform'], false, camera.matrixWorld.elements);
-      gl.uniform1f(uniforms['camera.aspect'], camera.aspect);
-      gl.uniform1f(uniforms['camera.fov'], 0.5 / Math.tan(0.5 * Math.PI * camera.fov / 180));
-      gl.uniform1f(uniforms['camera.focus'], camera.focus || 0);
-      gl.uniform1f(uniforms['camera.aperture'], camera.aperture || 0);
+      renderPass.setUniform('camera.transform', camera.matrixWorld.elements);
+      renderPass.setUniform('camera.aspect', camera.aspect);
+      renderPass.setUniform('camera.fov', 0.5 / Math.tan(0.5 * Math.PI * camera.fov / 180));
     }
 
     function setJitter(x, y) {
-      gl.useProgram(program);
-      gl.uniform2f(uniforms.jitter, x, y);
+      renderPass.setUniform('jitter', x, y);
     }
 
     function nextSeed() {
-      gl.useProgram(program);
-      gl.uniform1fv(uniforms['stratifiedSamples[0]'], samples.next());
+      renderPass.setUniform('stratifiedSamples[0]', samples.next());
     }
 
     function setStrataCount(strataCount) {
-      gl.useProgram(program);
 
       if (strataCount > 1 && strataCount !== samples.strataCount) {
         // reinitailizing random has a performance cost. we can skip it if
@@ -2780,20 +2962,26 @@ void main() {
         samples.restart();
       }
 
-      gl.uniform1f(uniforms.strataSize, 1.0 / strataCount);
+      renderPass.setUniform('strataSize', 1.0 / strataCount);
       nextSeed();
     }
 
+    function bindTextures() {
+      renderPass.bindTextures();
+    }
+
     function draw() {
-      gl.useProgram(program);
+      renderPass.useProgram(false);
       fullscreenQuad.draw();
     }
 
     samples = makeStratifiedSamplerCombined(1, samplingDimensions);
 
     return {
+      bindTextures,
       draw,
       nextSeed,
+      outputLocs: renderPass.outputLocs,
       setCamera,
       setJitter,
       setNoise,
@@ -2801,14 +2989,13 @@ void main() {
       setStrataCount,
     };
   }
-  function makeProgramFromScene({
+  function makeRenderPassFromScene({
       bounces,
       fullscreenQuad,
       gl,
       optionalExtensions,
       samplingDimensions,
       scene,
-      textureAllocator
     }) {
     const { OES_texture_float_linear } = optionalExtensions;
 
@@ -2832,8 +3019,7 @@ void main() {
     const useGlass = materials.some(m => m.transparent);
     const useShadowCatcher = materials.some(m => m.shadowCatcher);
 
-    const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragString({
-      rayTracingRenderTargets,
+    const renderPass = makeRenderPass(gl, {
       defines: {
         OES_texture_float_linear,
         BVH_COLUMNS: textureDimensionsFromArray(flattenedBvh.count).columnsLog,
@@ -2844,18 +3030,16 @@ void main() {
         NUM_MATERIALS: materials.length,
         NUM_DIFFUSE_MAPS: maps.map.textures.length,
         NUM_NORMAL_MAPS: maps.normalMap.textures.length,
+        NUM_DIFFUSE_NORMAL_MAPS: Math.max(maps.map.textures.length, maps.normalMap.textures.length),
         NUM_PBR_MAPS: pbrMap.textures.length,
         BOUNCES: bounces,
         USE_GLASS: useGlass,
         USE_SHADOW_CATCHER: useShadowCatcher,
         SAMPLING_DIMENSIONS: samplingDimensions.reduce((a, b) => a + b)
-      }
-    }));
-
-    const program = createProgram(gl, fullscreenQuad.vertexShader, fragmentShader);
-    gl.useProgram(program);
-
-    const uniforms = getUniforms(gl, program);
+      },
+      fragment,
+      vertex: fullscreenQuad.vertexShader
+    });
 
     const bufferData = {};
 
@@ -2875,47 +3059,35 @@ void main() {
 
     if (maps.map.textures.length > 0) {
       const { relativeSizes, texture } = makeTextureArray$1(gl, maps.map.textures, true);
-      textureAllocator.bind(uniforms.diffuseMap, texture);
+      renderPass.setTexture('diffuseMap', texture);
       bufferData.diffuseMapSize = relativeSizes;
       bufferData.diffuseMapIndex = maps.map.indices;
     }
 
     if (maps.normalMap.textures.length > 0) {
       const { relativeSizes, texture } = makeTextureArray$1(gl, maps.normalMap.textures, false);
-      textureAllocator.bind(uniforms.normalMap, texture);
+      renderPass.setTexture('normalMap', texture);
       bufferData.normalMapSize = relativeSizes;
       bufferData.normalMapIndex = maps.normalMap.indices;
     }
 
     if (pbrMap.textures.length > 0) {
       const { relativeSizes, texture } = makeTextureArray$1(gl, pbrMap.textures, false);
-      textureAllocator.bind(uniforms.pbrMap, texture);
+      renderPass.setTexture('pbrMap', texture);
       bufferData.pbrMapSize = relativeSizes;
       bufferData.roughnessMapIndex = pbrMap.indices.roughnessMap;
       bufferData.metalnessMapIndex = pbrMap.indices.metalnessMap;
     }
 
-    uploadBuffers(gl, program, bufferData);
+    uploadBuffers(gl, renderPass.program, bufferData);
 
-    textureAllocator.bind(
-      uniforms.positions,
-      makeDataTexture(gl, geometry.getAttribute('position').array, 3)
-    );
+    renderPass.setTexture('positions', makeDataTexture(gl, geometry.getAttribute('position').array, 3));
 
-    textureAllocator.bind(
-      uniforms.normals,
-      makeDataTexture(gl, geometry.getAttribute('normal').array, 3)
-    );
+    renderPass.setTexture('normals', makeDataTexture(gl, geometry.getAttribute('normal').array, 3));
 
-    textureAllocator.bind(
-      uniforms.uvs,
-      makeDataTexture(gl, geometry.getAttribute('uv').array, 2)
-    );
+    renderPass.setTexture('uvs', makeDataTexture(gl, geometry.getAttribute('uv').array, 2));
 
-    textureAllocator.bind(
-      uniforms.bvh,
-      makeDataTexture(gl, flattenedBvh.buffer, 4)
-    );
+    renderPass.setTexture('bvh', makeDataTexture(gl, flattenedBvh.buffer, 4));
 
     const envImage = generateEnvMapFromSceneComponents(directionalLights, ambientLights, environmentLights);
     const envImageTextureObject = makeTexture(gl, {
@@ -2926,7 +3098,7 @@ void main() {
       height: envImage.height,
     });
 
-    textureAllocator.bind(uniforms.envmap, envImageTextureObject);
+    renderPass.setTexture('envmap', envImageTextureObject);
 
     let backgroundImageTextureObject;
     if (scene.background) {
@@ -2941,10 +3113,12 @@ void main() {
     } else {
       backgroundImageTextureObject = envImageTextureObject;
     }
-    textureAllocator.bind(uniforms.backgroundMap, backgroundImageTextureObject);
+
+    renderPass.setTexture('backgroundMap', backgroundImageTextureObject);
 
     const distribution = envmapDistribution(envImage);
-    textureAllocator.bind(uniforms.envmapDistribution, makeTexture(gl, {
+
+    renderPass.setTexture('envmapDistribution', makeTexture(gl, {
       data: distribution.data,
       minFilter: gl.NEAREST,
       magFilter: gl.NEAREST,
@@ -2952,10 +3126,7 @@ void main() {
       height: distribution.height,
     }));
 
-    return {
-      program,
-      uniforms,
-    };
+    return renderPass;
   }
 
   function decomposeScene(scene) {
@@ -3075,68 +3246,63 @@ void main() {
       && (texture.map.encoding === THREE$1.RGBEEncoding || texture.map.encoding === THREE$1.LinearEncoding);
   }
 
-  function fragString$1({ rayTracingRenderTargets, defines }) {
-    return `#version 300 es
+  var fragment$1 = {
+  includes: [textureLinear],
+  outputs: ['color'],
+  source: `
+  in vec2 vCoord;
 
-precision mediump float;
-precision mediump int;
+  uniform mediump sampler2D light;
 
-in vec2 vCoord;
+  uniform vec2 textureScale;
 
-out vec4 fragColor;
+  // Tonemapping functions from THREE.js
 
-${rayTracingRenderTargets.get('hdrBuffer')}
-
-${textureLinear()}
-
-// Tonemapping functions from THREE.js
-
-vec3 linear(vec3 color) {
-  return color;
-}
-// https://www.cs.utah.edu/~reinhard/cdrom/
-vec3 reinhard(vec3 color) {
-  return clamp(color / (vec3(1.0) + color), vec3(0.0), vec3(1.0));
-}
-// http://filmicworlds.com/blog/filmic-tonemapping-operators/
-#define uncharted2Helper(x) max(((x * (0.15 * x + 0.10 * 0.50) + 0.20 * 0.02) / (x * (0.15 * x + 0.50) + 0.20 * 0.30)) - 0.02 / 0.30, vec3(0.0))
-const vec3 uncharted2WhitePoint = 1.0 / uncharted2Helper(vec3(${defines.whitePoint}));
-vec3 uncharted2( vec3 color ) {
-  // John Hable's filmic operator from Uncharted 2 video game
-  return clamp(uncharted2Helper(color) * uncharted2WhitePoint, vec3(0.0), vec3(1.0));
-}
-// http://filmicworlds.com/blog/filmic-tonemapping-operators/
-vec3 cineon( vec3 color ) {
-  // optimized filmic operator by Jim Hejl and Richard Burgess-Dawson
-  color = max(vec3( 0.0 ), color - 0.004);
-  return pow((color * (6.2 * color + 0.5)) / (color * (6.2 * color + 1.7) + 0.06), vec3(2.2));
-}
-// https://knarkowicz.wordpress.com/2016/01/06/aces-filmic-tone-mapping-curve/
-vec3 acesFilmic( vec3 color ) {
-  return clamp((color * (2.51 * color + 0.03)) / (color * (2.43 * color + 0.59) + 0.14), vec3(0.0), vec3(1.0));
-}
-
-void main() {
-  vec4 tex = texture(hdrBuffer, vec3(vCoord, hdrBuffer_light));
-
-  // alpha channel stores the number of samples progressively rendered
-  // divide the sum of light by alpha to obtain average contribution of light
-
-  // in addition, alpha contains a scale factor for the shadow catcher material
-  // dividing by alpha normalizes the brightness of the shadow catcher to match the background envmap.
-  vec3 light = tex.rgb / tex.a;
-
-  light *= ${defines.exposure}; // exposure
-
-  light = ${defines.toneMapping}(light); // tone mapping
-
-  light = pow(light, vec3(1.0 / 2.2)); // gamma correction
-
-  fragColor = vec4(light, 1.0);
-}
-
-`;
+  vec3 linear(vec3 color) {
+    return color;
   }
+  // https://www.cs.utah.edu/~reinhard/cdrom/
+  vec3 reinhard(vec3 color) {
+    return clamp(color / (vec3(1.0) + color), vec3(0.0), vec3(1.0));
+  }
+  // http://filmicworlds.com/blog/filmic-tonemapping-operators/
+  #define uncharted2Helper(x) max(((x * (0.15 * x + 0.10 * 0.50) + 0.20 * 0.02) / (x * (0.15 * x + 0.50) + 0.20 * 0.30)) - 0.02 / 0.30, vec3(0.0))
+  const vec3 uncharted2WhitePoint = 1.0 / uncharted2Helper(vec3(WHITE_POINT));
+  vec3 uncharted2( vec3 color ) {
+    // John Hable's filmic operator from Uncharted 2 video game
+    return clamp(uncharted2Helper(color) * uncharted2WhitePoint, vec3(0.0), vec3(1.0));
+  }
+  // http://filmicworlds.com/blog/filmic-tonemapping-operators/
+  vec3 cineon( vec3 color ) {
+    // optimized filmic operator by Jim Hejl and Richard Burgess-Dawson
+    color = max(vec3( 0.0 ), color - 0.004);
+    return pow((color * (6.2 * color + 0.5)) / (color * (6.2 * color + 1.7) + 0.06), vec3(2.2));
+  }
+  // https://knarkowicz.wordpress.com/2016/01/06/aces-filmic-tone-mapping-curve/
+  vec3 acesFilmic( vec3 color ) {
+    return clamp((color * (2.51 * color + 0.03)) / (color * (2.43 * color + 0.59) + 0.14), vec3(0.0), vec3(1.0));
+  }
+
+  void main() {
+    vec4 tex = texture(light, textureScale * vCoord);
+
+    // alpha channel stores the number of samples progressively rendered
+    // divide the sum of light by alpha to obtain average contribution of light
+
+    // in addition, alpha contains a scale factor for the shadow catcher material
+    // dividing by alpha normalizes the brightness of the shadow catcher to match the background envmap.
+    vec3 light = tex.rgb / tex.a;
+
+    light *= EXPOSURE;
+
+    light = TONE_MAPPING(light);
+
+    light = pow(light, vec3(1.0 / 2.2)); // gamma correction
+
+    out_color = vec4(light, 1.0);
+  }
+`
+  };
 
   const toneMapFunctions = {
     [THREE$1.LinearToneMapping]: 'linear',
@@ -3146,37 +3312,39 @@ void main() {
     [THREE$1.ACESFilmicToneMapping]: 'acesFilmic'
   };
 
-  function makeToneMapShader(params) {
+  function makeToneMapPass(gl, params) {
     const {
       fullscreenQuad,
-      gl,
-      optionalExtensions,
-      textureAllocator,
+      // optionalExtensions,
       toneMappingParams
     } = params;
 
-    const { OES_texture_float_linear } = optionalExtensions;
+    // const { OES_texture_float_linear } = optionalExtensions;
     const { toneMapping, whitePoint, exposure } = toneMappingParams;
 
-    const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragString$1({
-      rayTracingRenderTargets,
+    const renderPass = makeRenderPass(gl, {
+      gl,
       defines: {
-        OES_texture_float_linear,
-        toneMapping: toneMapFunctions[toneMapping] || 'linear',
-        whitePoint: whitePoint.toExponential(), // toExponential allows integers to be represented as GLSL floats
-        exposure: exposure.toExponential()
-      }
-    }));
-    const program = createProgram(gl, fullscreenQuad.vertexShader, fragmentShader);
+        // OES_texture_float_linear,
+        TONE_MAPPING: toneMapFunctions[toneMapping] || 'linear',
+        WHITE_POINT: whitePoint.toExponential(), // toExponential allows integers to be represented as GLSL floats
+        EXPOSURE: exposure.toExponential()
+      },
+      vertex: fullscreenQuad.vertexShader,
+      fragment: fragment$1,
+    });
 
-    const uniforms = getUniforms(gl, program);
-    const hdrBufferLocation = textureAllocator.reserveSlot();
+    function draw(params) {
+      const {
+        light,
+        textureScale
+      } = params;
 
-    function draw(texture) {
-      gl.useProgram(program);
+      renderPass.setUniform('textureScale', textureScale.x, textureScale.y);
 
-      hdrBufferLocation.bind(uniforms.hdrBuffer, texture);
+      renderPass.setTexture('light', light);
 
+      renderPass.useProgram();
       fullscreenQuad.draw();
     }
 
@@ -3185,21 +3353,9 @@ void main() {
     };
   }
 
-  function makeFramebuffer(params) {
-    const {
-      gl,
-      linearFiltering = false, // linearly filter textures
-
-      // A single render target in the form { storage: 'byte' | 'float' }
-      // Or multiple render targets passed as a RenderTargets object
-      renderTarget
-    } = params;
+  function makeFramebuffer(gl, { attachments }) {
 
     const framebuffer = gl.createFramebuffer();
-    let texture;
-
-    let width = 0;
-    let height = 0;
 
     function bind() {
       gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
@@ -3209,81 +3365,35 @@ void main() {
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     }
 
-    function setSize(w, h) {
-      this.bind();
+    function init() {
+      bind();
 
-      width = Math.floor(w);
-      height = Math.floor(h);
+      const drawBuffers = [];
 
-      if (renderTarget.isRenderTargets) {
-        // RenderTargets object
-        texture = initArrayTexture(gl, width, height, linearFiltering, renderTarget);
-      } else {
-        // single render target in the form { storage }
-        texture = initTexture(gl, width, height, linearFiltering, renderTarget);
+      for (let location in attachments) {
+        location = Number(location);
+
+        if (location === undefined) {
+          console.error('invalid location');
+        }
+
+        const tex = attachments[location];
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0 + location, tex.target, tex.texture, 0);
+        drawBuffers.push(gl.COLOR_ATTACHMENT0 + location);
       }
 
-      this.unbind();
+      gl.drawBuffers(drawBuffers);
+
+      unbind();
     }
 
-    function copyToScreen() {
-      gl.bindFramebuffer(gl.READ_FRAMEBUFFER, framebuffer);
-      gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null);
-      gl.blitFramebuffer(0, 0, width, height, 0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight, gl.COLOR_BUFFER_BIT, gl.NEAREST);
-    }
+    init();
 
     return {
+      attachments,
       bind,
-      copyToScreen,
-      get height() {
-        return height;
-      },
-      setSize,
-      get texture() {
-        return texture;
-      },
-      unbind,
-      get width() {
-        return width;
-      },
+      unbind
     };
-  }
-
-  function initTexture(gl, width, height, linearFiltering, { storage }) {
-    const texture = makeTexture(gl, {
-      width,
-      height,
-      storage,
-      minFilter: linearFiltering ? gl.LINEAR : gl.NEAREST,
-      magFilter: linearFiltering ? gl.LINEAR : gl.NEAREST,
-      channels: 4
-    });
-    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, texture.target, texture.texture, 0);
-
-    return texture;
-  }
-
-  function initArrayTexture(gl, width, height, linearFiltering, { storage, names }) {
-    const drawBuffers = [];
-
-    const texture = makeTexture(gl, {
-      width,
-      height,
-      length: names.length,
-      storage: storage,
-      minFilter: linearFiltering ? gl.LINEAR : gl.NEAREST,
-      magFilter: linearFiltering ? gl.LINEAR : gl.NEAREST,
-      channels: 4
-    });
-
-    for (let i = 0; i < names.length; i++) {
-      gl.framebufferTextureLayer(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0 + i, texture.texture, 0, i);
-      drawBuffers.push(gl.COLOR_ATTACHMENT0 + i);
-    }
-
-    gl.drawBuffers(drawBuffers);
-
-    return texture;
   }
 
   // TileRender is based on the concept of a compute shader's work group.
@@ -3414,202 +3524,167 @@ void main() {
     }
   }
 
-  function makeTextureAllocator(gl) {
-    // texture unit 0 reserved for setting parameters on new textures
-    let nextUnit = 1;
+  var fragment$2 = {
+  outputs: ['light'],
+  source: `
+  in vec2 vCoord;
 
-    function bindGl(uniform, { target, texture }, unit) {
-      if (!uniform) {
-        // uniform location does not exist
-        return;
-      }
+  uniform mediump sampler2D light;
+  uniform mediump sampler2D position;
+  uniform vec2 textureScale;
 
-      gl.activeTexture(gl.TEXTURE0 + unit);
-      gl.bindTexture(target, texture);
-      gl.uniform1i(uniform, unit);
+  uniform mediump sampler2D previousLight;
+  uniform mediump sampler2D previousPosition;
+  uniform vec2 previousTextureScale;
+
+  uniform mat4 historyCamera;
+  uniform float blendAmount;
+  uniform vec2 jitter;
+
+  vec2 reproject(vec3 position) {
+    vec4 historyCoord = historyCamera * vec4(position, 1.0);
+    return 0.5 * historyCoord.xy / historyCoord.w + 0.5;
+  }
+
+  void main() {
+    vec2 scaledCoord = textureScale * vCoord;
+
+    vec4 positionTex = texture(position, scaledCoord);
+    vec4 lightTex = texture(light, scaledCoord);
+
+    vec3 currentPosition = positionTex.xyz;
+    float currentMeshId = positionTex.w;
+
+    vec2 hCoord = reproject(currentPosition) - jitter;
+
+    vec2 hSizef = previousTextureScale * vec2(textureSize(previousPosition, 0));
+    ivec2 hSize = ivec2(hSizef);
+
+    vec2 hTexelf = hCoord * hSizef - 0.5;
+    ivec2 hTexel = ivec2(hTexelf);
+    vec2 f = fract(hTexelf);
+
+    ivec2 texel[] = ivec2[](
+      hTexel + ivec2(0, 0),
+      hTexel + ivec2(1, 0),
+      hTexel + ivec2(0, 1),
+      hTexel + ivec2(1, 1)
+    );
+
+    float weights[] = float[](
+      (1.0 - f.x) * (1.0 - f.y),
+      f.x * (1.0 - f.y),
+      (1.0 - f.x) * f.y,
+      f.x * f.y
+    );
+
+    vec4 history;
+    float sum;
+
+    // bilinear sampling, rejecting samples that don't have a matching mesh id
+    for (int i = 0; i < 4; i++) {
+      float histMeshId = texelFetch(previousPosition, texel[i], 0).w;
+
+      float isValid = histMeshId != currentMeshId || any(greaterThanEqual(texel[i], hSize)) ? 0.0 : 1.0;
+      // float isValid = 0.0;
+
+      float weight = isValid * weights[i];
+      history += weight * texelFetch(previousLight, texel[i], 0);
+      sum += weight;
     }
 
-    function bind(uniform, textureObj) {
-      bindGl(uniform, textureObj, nextUnit++);
-    }
+    if (sum > 0.0) {
+      history /= sum;
+    } else {
+      // If all samples of bilinear fail, try a 3x3 box filter
+      hTexel = ivec2(hTexelf + 0.5);
 
-    function reserveSlot() {
-      const unit = nextUnit++;
-      return {
-        bind(uniform, textureObj) {
-          bindGl(uniform, textureObj, unit);
+      for (int x = -1; x <= 1; x++) {
+        for (int y = -1; y <= 1; y++) {
+          ivec2 texel = hTexel + ivec2(x, y);
+
+          float histMeshId = texelFetch(previousPosition, texel, 0).w;
+
+          float isValid = histMeshId != currentMeshId || any(greaterThanEqual(texel, hSize)) ? 0.0 : 1.0;
+
+          float weight = isValid;
+          vec4 h = texelFetch(previousLight, texel, 0);
+          history += weight * h;
+          sum += weight;
         }
-      };
-    }
-
-    return {
-      bind,
-      reserveSlot
-    };
-  }
-
-  function fragString$2({ rayTracingRenderTargets, defines }) {
-    return `#version 300 es
-
-precision mediump float;
-precision mediump int;
-
-in vec2 vCoord;
-
-${rayTracingRenderTargets.get('historyBuffer')}
-${rayTracingRenderTargets.get('hdrBuffer')}
-${rayTracingRenderTargets.set()}
-
-${addDefines(defines)}
-
-uniform mat4 historyCamera;
-uniform float blendAmount;
-uniform vec2 jitter;
-
-vec2 reproject(vec3 position) {
-  vec4 historyCoord = historyCamera * vec4(position, 1.0);
-  return 0.5 * historyCoord.xy / historyCoord.w + 0.5;
-}
-
-void main() {
-  vec4 positionTex = texture(hdrBuffer, vec3(vCoord, hdrBuffer_position));
-  vec4 lightTex = texture(hdrBuffer, vec3(vCoord, hdrBuffer_light));
-
-  vec3 currentPosition = positionTex.xyz;
-  float currentMeshId = positionTex.w;
-
-  vec2 hCoord = reproject(currentPosition) - jitter;
-
-  ivec2 hSize = textureSize(historyBuffer, 0).xy;
-  vec2 hSizef = vec2(hSize);
-
-  vec2 hTexelf = hCoord * hSizef - 0.5;
-  ivec2 hTexel = ivec2(hTexelf);
-  vec2 f = fract(hTexelf);
-
-  ivec2 texel[] = ivec2[](
-    hTexel + ivec2(0, 0),
-    hTexel + ivec2(1, 0),
-    hTexel + ivec2(0, 1),
-    hTexel + ivec2(1, 1)
-  );
-
-  float weights[] = float[](
-    (1.0 - f.x) * (1.0 - f.y),
-    f.x * (1.0 - f.y),
-    (1.0 - f.x) * f.y,
-    f.x * f.y
-  );
-
-  vec4 history;
-  float sum;
-
-  // bilinear sampling, rejecting samples that don't have a matching mesh id
-  for (int i = 0; i < 4; i++) {
-    float histMeshId = texelFetch(historyBuffer, ivec3(texel[i], historyBuffer_position), 0).w;
-
-    float isValid = histMeshId != currentMeshId ? 0.0 : 1.0;
-
-    float weight = isValid * weights[i];
-    history += weight * texelFetch(historyBuffer, ivec3(texel[i], historyBuffer_light), 0);
-    sum += weight;
-  }
-
-  if (sum > 0.0) {
-    history /= sum;
-  } else {
-    // If all samples of bilinear fail, try a 3x3 box filter
-    hTexel = ivec2(hTexelf + 0.5);
-
-    for (int x = -1; x <= 1; x++) {
-      for (int y = -1; y <= 1; y++) {
-        ivec2 texel = hTexel + ivec2(x, y);
-
-        float histMeshId = texelFetch(historyBuffer, ivec3(texel, historyBuffer_position), 0).w;
-
-        float isValid = histMeshId != currentMeshId ? 0.0 : 1.0;
-
-        float weight = isValid;
-        vec4 h = texelFetch(historyBuffer, ivec3(texel, historyBuffer_light), 0);
-        history += weight * h;
-        sum += weight;
       }
+      history = sum > 0.0 ? history / sum : history;
     }
-    history = sum > 0.0 ? history / sum : history;
-  }
 
-  if (history.w > MAX_SAMPLES) {
-    history.xyz *= MAX_SAMPLES / history.w;
-    history.w = MAX_SAMPLES;
-  }
+    if (history.w > MAX_SAMPLES) {
+      history.xyz *= MAX_SAMPLES / history.w;
+      history.w = MAX_SAMPLES;
+    }
 
-  out_light = blendAmount * history + lightTex;
-  out_position = positionTex;
-}
-  `;
-  }
+    out_light = blendAmount * history + lightTex;
 
-  function makeReprojectShader(params) {
+  }
+`
+  };
+
+  function makeReprojectPass(gl, params) {
     const {
       fullscreenQuad,
-      gl,
       maxReprojectedSamples,
-      textureAllocator,
     } = params;
 
-    const fragmentShader = createShader(gl, gl.FRAGMENT_SHADER, fragString$2({
-      rayTracingRenderTargets,
-      defines: {
-        MAX_SAMPLES: maxReprojectedSamples.toFixed(1)
-      }
-    }));
-
-    const program = createProgram(gl, fullscreenQuad.vertexShader, fragmentShader);
-    const uniforms = getUniforms(gl, program);
-
-    const hdrBufferLocation = textureAllocator.reserveSlot();
-    const historyBufferLocation = textureAllocator.reserveSlot();
+    const renderPass = makeRenderPass(gl, {
+        defines: {
+          MAX_SAMPLES: maxReprojectedSamples.toFixed(1)
+        },
+        vertex: fullscreenQuad.vertexShader,
+        fragment: fragment$2
+      });
 
     const historyCamera = new THREE$1.Matrix4();
 
     function setPreviousCamera(camera) {
-      gl.useProgram(program);
-
       historyCamera.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
 
-      gl.uniformMatrix4fv(uniforms.historyCamera, false, historyCamera.elements);
-    }
-
-    function setBlendAmount(x) {
-      gl.useProgram(program);
-      gl.uniform1f(uniforms.blendAmount, x);
+      renderPass.setUniform('historyCamera', historyCamera.elements);
     }
 
     function setJitter(x, y) {
-      gl.useProgram(program);
-      gl.uniform2f(uniforms.jitter, x, y);
+      renderPass.setUniform('jitter', x, y);
     }
 
-    function draw(hdrBuffer, historyBuffer) {
-      gl.useProgram(program);
+    function draw(params) {
+      const {
+        blendAmount,
+        light,
+        position,
+        previousLight,
+        previousPosition,
+        textureScale,
+        previousTextureScale,
+      } = params;
 
-      hdrBufferLocation.bind(uniforms.hdrBuffer, hdrBuffer);
-      historyBufferLocation.bind(uniforms.historyBuffer, historyBuffer);
+      renderPass.setUniform('blendAmount', blendAmount);
+      renderPass.setUniform('textureScale', textureScale.x, textureScale.y);
+      renderPass.setUniform('previousTextureScale', previousTextureScale.x, previousTextureScale.y);
 
+      renderPass.setTexture('light', light);
+      renderPass.setTexture('position', position);
+      renderPass.setTexture('previousLight', previousLight);
+      renderPass.setTexture('previousPosition', previousPosition);
+
+      renderPass.useProgram();
       fullscreenQuad.draw();
     }
 
     return {
       draw,
-      setBlendAmount,
       setJitter,
       setPreviousCamera,
     };
   }
 
   var noiseBase64 = 'data:image/png;base64,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';
-
-  // Important TODO: Refactor this file to get rid of duplicate and confusing code
 
   function makeRenderingPipeline({
       gl,
@@ -3619,97 +3694,123 @@ void main() {
       bounces, // number of global illumination bounces
     }) {
 
-    let ready = false;
-
-    const reprojectDecay = 0.975;
-    const maxReprojectedSamples = Math.round(reprojectDecay / (1 - reprojectDecay));
-
-    const fullscreenQuad = makeFullscreenQuad(gl);
-
-    const textureAllocator = makeTextureAllocator(gl);
-
-    const rayTracingShader = makeRayTracingShader({bounces, fullscreenQuad, gl, optionalExtensions, scene, textureAllocator});
-
-    const reprojectShader = makeReprojectShader({ fullscreenQuad, gl, maxReprojectedSamples, textureAllocator });
-
-    const toneMapShader = makeToneMapShader({
-      fullscreenQuad, gl, optionalExtensions, textureAllocator, toneMappingParams
-    });
-
-    const noiseImage = new Image();
-    noiseImage.src = noiseBase64;
-    noiseImage.onload = () => {
-      rayTracingShader.setNoise(noiseImage);
-      ready = true;
-    };
-
-    // full resolution buffer representing the rendered scene with HDR lighting
-    let hdrBuffer = makeFramebuffer({
-      gl,
-      renderTarget: rayTracingRenderTargets,
-    });
-
-    let hdrPreviewBuffer = makeFramebuffer({
-      gl,
-      renderTarget: rayTracingRenderTargets,
-    });
-
-    let historyBuffer = makeFramebuffer({
-      gl,
-      renderTarget: rayTracingRenderTargets,
-      linearFiltering: true
-    });
-
-    let reprojectBuffer = makeFramebuffer({
-      gl,
-      renderTarget: rayTracingRenderTargets
-    });
-
-    let reprojectPreviewBuffer = makeFramebuffer({
-      gl,
-      renderTarget: rayTracingRenderTargets,
-      linearFiltering: true
-    });
-
-    let lastToneMappedBuffer = reprojectPreviewBuffer;
-
-    const clearToBlack = new Float32Array([0, 0, 0, 0]);
-
-    // used to sample only a portion of the scene to the HDR Buffer to prevent the GPU from locking up from excessive computation
-    const tileRender = makeTileRender(gl);
-
-    const lastCamera = new THREE$1.PerspectiveCamera();
+    const maxReprojectedSamples = 20;
 
     // how many samples to render with uniform noise before switching to stratified noise
-    const numUniformSamples = 6;
+    const numUniformSamples = 4;
 
     // how many partitions of stratified noise should be created
     // higher number results in faster convergence over time, but with lower quality initial samples
     const strataCount = 6;
 
-    let sampleCount = 1;
+    const fullscreenQuad = makeFullscreenQuad(gl);
+
+    const rayTracePass = makeRayTracePass(gl, { bounces, fullscreenQuad, optionalExtensions, scene });
+
+    const reprojectPass = makeReprojectPass(gl, { fullscreenQuad, maxReprojectedSamples });
+
+    const toneMapPass = makeToneMapPass(gl, {
+      fullscreenQuad, optionalExtensions, toneMappingParams
+    });
+
+    // used to sample only a portion of the scene to the HDR Buffer to prevent the GPU from locking up from excessive computation
+    const tileRender = makeTileRender(gl);
+
+    const clearToBlack = new Float32Array([0, 0, 0, 0]);
+
+    let ready = false;
+    const noiseImage = new Image();
+    noiseImage.src = noiseBase64;
+    noiseImage.onload = () => {
+      rayTracePass.setNoise(noiseImage);
+      ready = true;
+    };
+
+    let screenWidth = 0;
+    let screenHeight = 0;
+
+    let previewWidth = 0;
+    let previewHeight = 0;
+
+    const previewScale = new THREE$1.Vector2(1, 1);
+    const fullscreenScale = new THREE$1.Vector2(1, 1);
+
+    let hdrBuffer;
+    let hdrBackBuffer;
+    let reprojectBuffer;
+    let reprojectBackBuffer;
+
+    let lastToneMappedScale;
+    let lastToneMappedTexture;
+
+    const lastCamera = new THREE$1.PerspectiveCamera();
+    lastCamera.position.set(1, 1, 1);
+    lastCamera.updateMatrixWorld();
+
+    let sampleCount = 0;
 
     let sampleRenderedCallback = () => {};
 
-    function initFirstSample() {
-      sampleCount = 1;
-      tileRender.reset();
+    function initFrameBuffers(width, height) {
+      const floatTex = () => makeTexture(gl, { width, height, storage: 'float' });
+
+      const makeHdrBuffer = () => makeFramebuffer(gl, {
+          attachments: {
+            [rayTracePass.outputLocs.light]: floatTex(),
+            [rayTracePass.outputLocs.position]: floatTex(),
+          }
+        });
+
+      const makeReprojectBuffer = () => makeFramebuffer(gl, {
+          attachments: { 0: floatTex() }
+        });
+
+      hdrBuffer = makeHdrBuffer();
+      hdrBackBuffer = makeHdrBuffer();
+
+      reprojectBuffer = makeReprojectBuffer();
+      reprojectBackBuffer = makeReprojectBuffer();
+
+      lastToneMappedScale = fullscreenScale;
+      lastToneMappedTexture = hdrBuffer.attachments[rayTracePass.outputLocs.light];
+    }
+
+    function swapReprojectBuffer() {
+      let temp = reprojectBuffer;
+      reprojectBuffer = reprojectBackBuffer;
+      reprojectBackBuffer = temp;
+    }
+
+    function swapHdrBuffer() {
+      let temp = hdrBuffer;
+      hdrBuffer = hdrBackBuffer;
+      hdrBackBuffer = temp;
+    }
+
+    // Shaders will read from the back buffer and draw to the front buffer
+    // Buffers are swapped after every render
+    function swapBuffers() {
+      swapHdrBuffer();
+      swapReprojectBuffer();
+    }
+
+    function setSize(w, h) {
+      screenWidth = w;
+      screenHeight = h;
+
+      tileRender.setSize(w, h);
+      initFrameBuffers(w, h);
     }
 
     function setPreviewBufferDimensions() {
       const desiredTimeForPreview = 10;
       const numPixelsForPreview = desiredTimeForPreview / tileRender.getTimePerPixel();
 
-      const aspectRatio = hdrBuffer.width / hdrBuffer.height;
-      const previewWidth = Math.round(clamp(Math.sqrt(numPixelsForPreview * aspectRatio), 1, hdrBuffer.width));
-      const previewHeight = Math.round(clamp(previewWidth / aspectRatio, 1, hdrBuffer.height));
+      const aspectRatio = screenWidth / screenHeight;
 
-      const diff = Math.abs(previewWidth - hdrPreviewBuffer.width) / previewWidth;
-      if (diff > 0.05) { // don't bother resizing if the buffer size is only slightly different
-        hdrPreviewBuffer.setSize(previewWidth, previewHeight);
-        reprojectPreviewBuffer.setSize(previewWidth, previewHeight);
-        historyBuffer.setSize(previewWidth, previewHeight);
-      }
+      previewWidth = Math.round(clamp(Math.sqrt(numPixelsForPreview * aspectRatio), 1, screenWidth));
+      previewHeight = Math.round(clamp(previewWidth / aspectRatio, 1, screenHeight));
+      previewScale.set(previewWidth / screenWidth, previewHeight / screenHeight);
     }
 
     function areCamerasEqual(cam1, cam2) {
@@ -3725,119 +3826,155 @@ void main() {
       buffer.unbind();
     }
 
-    function addSampleToBuffer(buffer) {
+    function addSampleToBuffer(buffer, width, height) {
       buffer.bind();
 
       gl.blendEquation(gl.FUNC_ADD);
       gl.blendFunc(gl.ONE, gl.ONE);
       gl.enable(gl.BLEND);
 
-      gl.clearBufferfv(gl.COLOR, rayTracingRenderTargets.location.position, clearToBlack);
+      gl.clearBufferfv(gl.COLOR, rayTracePass.outputLocs.position, clearToBlack);
 
-      gl.viewport(0, 0, buffer.width, buffer.height);
-      rayTracingShader.draw();
+      gl.viewport(0, 0, width, height);
+      rayTracePass.draw();
 
       gl.disable(gl.BLEND);
       buffer.unbind();
     }
 
-    function newSampleToBuffer(buffer) {
+    function newSampleToBuffer(buffer, width, height) {
       buffer.bind();
-      gl.viewport(0, 0, buffer.width, buffer.height);
-      rayTracingShader.draw();
+      gl.viewport(0, 0, width, height);
+      rayTracePass.draw();
       buffer.unbind();
     }
 
-    function toneMapToScreen(buffer) {
+    function toneMapToScreen(lightTexture, textureScale) {
       gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
-      toneMapShader.draw(buffer.texture);
-      lastToneMappedBuffer = buffer;
+      toneMapPass.draw({
+        light: lightTexture,
+        textureScale
+      });
+
+      lastToneMappedTexture = lightTexture;
+      lastToneMappedScale = textureScale;
     }
 
     function renderTile(buffer, x, y, width, height) {
       gl.scissor(x, y, width, height);
       gl.enable(gl.SCISSOR_TEST);
-      addSampleToBuffer(buffer);
+      addSampleToBuffer(buffer, screenWidth, screenHeight);
       gl.disable(gl.SCISSOR_TEST);
     }
 
     function updateSeed(width, height) {
-      rayTracingShader.setSize(width, height);
+      rayTracePass.setSize(width, height);
 
       const jitterX = (Math.random() - 0.5) / width;
       const jitterY = (Math.random() - 0.5) / height;
-      rayTracingShader.setJitter(jitterX, jitterY);
-      reprojectShader.setJitter(jitterX, jitterY);
+      rayTracePass.setJitter(jitterX, jitterY);
+      reprojectPass.setJitter(jitterX, jitterY);
 
-      if ( sampleCount === 1) {
-        rayTracingShader.setStrataCount(1);
+      if (sampleCount === 0) {
+        rayTracePass.setStrataCount(1);
       } else if (sampleCount === numUniformSamples) {
-        rayTracingShader.setStrataCount(strataCount);
+        rayTracePass.setStrataCount(strataCount);
       } else {
-        rayTracingShader.nextSeed();
+        rayTracePass.nextSeed();
+      }
+
+      rayTracePass.bindTextures();
+    }
+
+
+    function drawPreview(camera, lastCamera) {
+      if (sampleCount > 0) {
+        swapBuffers();
+      }
+
+      sampleCount = 0;
+      tileRender.reset();
+      setPreviewBufferDimensions();
+
+      rayTracePass.setCamera(camera);
+      reprojectPass.setPreviousCamera(lastCamera);
+      lastCamera.copy(camera);
+
+      updateSeed(previewWidth, previewHeight);
+      newSampleToBuffer(hdrBuffer, previewWidth, previewHeight);
+
+      reprojectBuffer.bind();
+      gl.viewport(0, 0, previewWidth, previewHeight);
+      reprojectPass.draw({
+        blendAmount: 1.0,
+        light: hdrBuffer.attachments[rayTracePass.outputLocs.light],
+        position: hdrBuffer.attachments[rayTracePass.outputLocs.position],
+        textureScale: previewScale,
+        previousLight: lastToneMappedTexture,
+        previousPosition: hdrBackBuffer.attachments[rayTracePass.outputLocs.position],
+        previousTextureScale: lastToneMappedScale,
+      });
+      reprojectBuffer.unbind();
+
+      toneMapToScreen(reprojectBuffer.attachments[0], previewScale);
+
+      swapBuffers();
+    }
+
+    function drawTile() {
+      const { x, y, tileWidth, tileHeight, isFirstTile, isLastTile } = tileRender.nextTile();
+
+      // move to isLastTile?
+      if (isFirstTile) {
+
+        if (sampleCount === 0) { // previous rendered image was a preview image
+          clearBuffer(hdrBuffer);
+          reprojectPass.setPreviousCamera(lastCamera);
+        }
+
+        updateSeed(screenWidth, screenHeight);
+      }
+
+      renderTile(hdrBuffer, x, y, tileWidth, tileHeight);
+
+      if (isLastTile) {
+        sampleCount++;
+
+        let blendAmount = clamp(1.0 - sampleCount / maxReprojectedSamples, 0, 1);
+        blendAmount *= blendAmount;
+
+        if (blendAmount > 0.0) {
+          reprojectBuffer.bind();
+          gl.viewport(0, 0, screenWidth, screenHeight);
+          reprojectPass.draw({
+            blendAmount,
+            light: hdrBuffer.attachments[rayTracePass.outputLocs.light],
+            position: hdrBuffer.attachments[rayTracePass.outputLocs.position],
+            textureScale: fullscreenScale,
+            previousLight: reprojectBackBuffer.attachments[0],
+            previousPosition: hdrBackBuffer.attachments[rayTracePass.outputLocs.position],
+            previousTextureScale: previewScale,
+          });
+          reprojectBuffer.unbind();
+
+          toneMapToScreen(reprojectBuffer.attachments[0], fullscreenScale);
+        } else {
+          toneMapToScreen(hdrBuffer.attachments[rayTracePass.outputLocs.light], fullscreenScale);
+        }
+
+        sampleRenderedCallback(sampleCount);
       }
     }
 
-    function drawTile(camera) {
+    function draw(camera) {
       if (!ready) {
         return;
       }
 
-      if (sampleCount === 1) {
-        reprojectShader.setPreviousCamera(lastCamera);
-      }
-
       if (!areCamerasEqual(camera, lastCamera)) {
-        initFirstSample();
-        setPreviewBufferDimensions();
-
-        rayTracingShader.setCamera(camera);
-        updateSeed(hdrPreviewBuffer.width, hdrPreviewBuffer.height);
-        newSampleToBuffer(hdrPreviewBuffer);
-
-        reprojectShader.setBlendAmount(reprojectDecay);
-
-        const temp = historyBuffer;
-        historyBuffer = reprojectPreviewBuffer;
-        reprojectPreviewBuffer = temp;
-
-        reprojectPreviewBuffer.bind();
-        gl.viewport(0, 0, reprojectPreviewBuffer.width, reprojectPreviewBuffer.height);
-        reprojectShader.draw(hdrPreviewBuffer.texture, lastToneMappedBuffer.texture);
-        reprojectPreviewBuffer.unbind();
-
-        toneMapToScreen(reprojectPreviewBuffer);
-
-        clearBuffer(hdrBuffer);
-        lastCamera.copy(camera);
+        drawPreview(camera, lastCamera);
       } else {
-        const { x, y, tileWidth, tileHeight, isFirstTile, isLastTile } = tileRender.nextTile();
-
-        if (isFirstTile) {
-          sampleCount++;
-          updateSeed(hdrBuffer.width, hdrBuffer.height);
-        }
-
-        renderTile(hdrBuffer, x, y, tileWidth, tileHeight);
-
-        if (isLastTile) {
-          let blendAmount = clamp(1.0 - sampleCount / maxReprojectedSamples, 0, 1);
-          blendAmount *= blendAmount;
-
-          if (blendAmount > 0.0) {
-            reprojectShader.setBlendAmount(blendAmount);
-            reprojectBuffer.bind();
-            gl.viewport(0, 0, reprojectBuffer.width, reprojectBuffer.height);
-            reprojectShader.draw(hdrBuffer.texture, reprojectPreviewBuffer.texture);
-            reprojectBuffer.unbind();
-
-            toneMapToScreen(reprojectBuffer);
-          } else {
-            toneMapToScreen(hdrBuffer);
-          }
-
-          sampleRenderedCallback(sampleCount);
-        }
+        drawTile();
       }
     }
 
@@ -3849,55 +3986,45 @@ void main() {
         return;
       }
 
-      if (sampleCount === 1) {
-        reprojectShader.setPreviousCamera(lastCamera);
+      if (sampleCount === 0) {
+        reprojectPass.setPreviousCamera(lastCamera);
       }
 
       if (!areCamerasEqual(camera, lastCamera)) {
-        sampleCount = 1;
-
-        rayTracingShader.setCamera(camera);
-
-        clearBuffer(hdrBuffer);
+        sampleCount = 0;
+        rayTracePass.setCamera(camera);
         lastCamera.copy(camera);
+        swapHdrBuffer();
+        clearBuffer(hdrBuffer);
       } else {
         sampleCount++;
       }
 
-      updateSeed(hdrBuffer.width, hdrBuffer.height);
+      updateSeed(screenWidth, screenHeight);
 
-      addSampleToBuffer(hdrBuffer);
-
-      let blendAmount = clamp(1.0 - sampleCount / maxReprojectedSamples, 0, 1);
-      blendAmount *= blendAmount;
-      reprojectShader.setBlendAmount(blendAmount);
-
-      if (historyBuffer.width !== hdrBuffer.width) {
-        historyBuffer.setSize(hdrBuffer.width, hdrBuffer.height);
-      }
-
-      const temp = historyBuffer;
-      historyBuffer = reprojectBuffer;
-      reprojectBuffer = temp;
+      addSampleToBuffer(hdrBuffer, screenWidth, screenHeight);
 
       reprojectBuffer.bind();
-      gl.viewport(0, 0, reprojectBuffer.width, reprojectBuffer.height);
-      reprojectShader.draw(hdrBuffer.texture, historyBuffer.texture);
+      gl.viewport(0, 0, screenWidth, screenHeight);
+      reprojectPass.draw({
+        blendAmount: 1.0,
+        light: hdrBuffer.attachments[rayTracePass.outputLocs.light],
+        position: hdrBuffer.attachments[rayTracePass.outputLocs.position],
+        previousLight: reprojectBackBuffer.attachments[0],
+        previousPosition: hdrBackBuffer.attachments[rayTracePass.outputLocs.position],
+        textureScale: fullscreenScale,
+        previousTextureScale: fullscreenScale
+
+      });
       reprojectBuffer.unbind();
 
-      toneMapToScreen(reprojectBuffer);
-    }
+      toneMapToScreen(reprojectBuffer.attachments[0], fullscreenScale);
 
-    function setSize(w, h) {
-      rayTracingShader.setSize(w, h);
-      tileRender.setSize(w, h);
-      hdrBuffer.setSize(w, h);
-      reprojectBuffer.setSize(w, h);
-      initFirstSample();
+      swapReprojectBuffer();
     }
 
     return {
-      drawTile,
+      draw,
       drawFull,
       restartTimer: tileRender.restartTimer,
       setSize,
@@ -3942,7 +4069,7 @@ void main() {
     let pixelRatio = 1;
 
     const module = {
-      bounces: 3,
+      bounces: 2,
       domElement: canvas,
       maxHardwareUsage: false,
       needsUpdate: true,
@@ -4053,7 +4180,7 @@ void main() {
           pipeline.drawFull(camera);
         } else {
           // render new sample for a tiled subset of the screen
-          pipeline.drawTile(camera);
+          pipeline.draw(camera);
         }
 
       } else {
@@ -4069,7 +4196,7 @@ void main() {
 
     module.dispose = () => {
       document.removeEventListener('visibilitychange', restartTimer);
-      pipeline = false;
+      pipeline = null;
     };
 
     return module;
