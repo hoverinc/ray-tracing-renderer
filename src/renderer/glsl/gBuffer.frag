@@ -14,7 +14,7 @@ source: `
 
   void main() {
     out_position = vec4(vPosition, 1);
-    out_normal = vec4(vNormal, 1);
+    out_normal = vec4(normalize(vNormal), 1);
     out_faceNormal = vec4(faceNormals(vPosition), vMaterialIndex);
   }
 `
