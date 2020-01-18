@@ -44,8 +44,8 @@ export function makeRayTracePass(gl, {
   function setNoise(noiseImage) {
     renderPass.setTexture('noise', makeTexture(gl, {
       data: noiseImage,
-      minFilter: gl.NEAREST,
-      magFilter: gl.NEAREST,
+      wrapS: gl.REPEAT,
+      wrapT: gl.REPEAT,
       storage: 'float'
     }));
   }
@@ -189,8 +189,6 @@ function makeRenderPassFromScene({
 
   renderPass.setTexture('envmapDistribution', makeTexture(gl, {
     data: distribution.data,
-    minFilter: gl.NEAREST,
-    magFilter: gl.NEAREST,
     width: distribution.width,
     height: distribution.height,
   }));
@@ -214,8 +212,6 @@ function makeDataTexture(gl, dataArray, channels) {
   const textureDim = textureDimensionsFromArray(dataArray.length / channels);
   return makeTexture(gl, {
     data: padArray(dataArray, channels * textureDim.size),
-    minFilter: gl.NEAREST,
-    magFilter: gl.NEAREST,
     width: textureDim.columns,
     height: textureDim.rows,
   });

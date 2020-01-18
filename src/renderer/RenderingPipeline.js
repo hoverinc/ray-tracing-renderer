@@ -380,6 +380,7 @@ export function makeRenderingPipeline({
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     gl.viewport(0, 0, screenWidth, screenHeight);
     gBufferPass.draw();
+    gBuffer.unbind();
 
     rayTracePass.setCamera(camera);
 
@@ -393,6 +394,7 @@ export function makeRenderingPipeline({
     addSampleToBuffer(hdrBuffer, screenWidth, screenHeight);
 
     toneMapToScreen(hdrBuffer.color[0], fullscreenScale);
+    // toneMapToScreen(gBuffer.color[gBufferPass.outputLocs.faceNormal], fullscreenScale);
 
     sampleCount++;
   }

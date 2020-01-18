@@ -70,7 +70,7 @@ export function makeMaterialBuffer(gl, materials) {
     defines
   });
 
-  uploadBuffers(gl, renderPass.program, bufferData);
+  uploadToUniformBuffer(gl, renderPass.program, bufferData);
 
   return { defines, textures };
 }
@@ -87,7 +87,9 @@ function makeTextureArray(gl, textures, gammaCorrection = false) {
     gammaCorrection,
     data: images,
     flipY,
-    channels: 3
+    channels: 3,
+    minFilter: gl.LINEAR,
+    magFilter: gl.LINEAR,
   });
 
   return {
@@ -120,7 +122,7 @@ function maxImageSize(images) {
 // Upload arrays to uniform buffer objects
 // Packs different arrays into vec4's to take advantage of GLSL's std140 memory layout
 
-function uploadBuffers(gl, program, bufferData) {
+function uploadToUniformBuffer(gl, program, bufferData) {
   const materialBuffer = makeUniformBuffer(gl, program, 'Materials');
 
   materialBuffer.set('Materials.colorAndMaterialType[0]', interleave(

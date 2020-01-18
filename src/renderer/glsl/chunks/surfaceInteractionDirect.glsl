@@ -11,10 +11,11 @@ export default `
     si.faceNormal = texture(gFaceNormal, coord).xyz;
 
     si.normal *= sign(dot(si.normal, si.faceNormal));
+    int materialIndex = int(EPS + texture(gFaceNormal, coord).w);
 
-    si.color = vec3(1.0);
-    si.roughness = 0.8;
-    si.metalness = 0.0;
-    si.materialType = 0;
+    si.color = materials.colorAndMaterialType[materialIndex].xyz;
+    si.roughness = materials.roughnessMetalnessNormalScale[materialIndex].x;
+    si.metalness = materials.roughnessMetalnessNormalScale[materialIndex].y;
+    si.materialType = int(materials.colorAndMaterialType[materialIndex].w);
   }
 `;

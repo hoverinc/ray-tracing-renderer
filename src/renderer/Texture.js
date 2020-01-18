@@ -24,10 +24,10 @@ export function makeTexture(gl, params) {
 
     // sampling properties
     gammaCorrection = false,
-    wrapS = gl.REPEAT,
-    wrapT = gl.REPEAT,
-    minFilter = gl.LINEAR,
-    magFilter = gl.LINEAR,
+    wrapS = gl.CLAMP_TO_EDGE,
+    wrapT = gl.CLAMP_TO_EDGE,
+    minFilter = gl.NEAREST,
+    magFilter = gl.NEAREST,
   } = params;
 
   width = width || data.width || 0;

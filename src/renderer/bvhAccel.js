@@ -7,8 +7,8 @@ import { partition, nthElement } from './bvhUtil';
 
 const size = new Vector3();
 
-export function bvhAccel(geometry, materialIndices) {
-  const primitiveInfo = makePrimitiveInfo(geometry, materialIndices);
+export function bvhAccel(geometry) {
+  const primitiveInfo = makePrimitiveInfo(geometry);
   const node = recursiveBuild(primitiveInfo, 0, primitiveInfo.length);
 
   return node;
@@ -89,10 +89,12 @@ export function flattenBvh(bvh) {
   };
 }
 
-function makePrimitiveInfo(geometry, materialIndices) {
+function makePrimitiveInfo(geometry) {
   const primitiveInfo = [];
   const indices = geometry.getIndex().array;
   const position = geometry.getAttribute('position');
+  const materialIndex = geometry.getAttribute('materialIndex');
+
   const v0 = new Vector3();
   const v1 = new Vector3();
   const v2 = new Vector3();
@@ -100,11 +102,15 @@ function makePrimitiveInfo(geometry, materialIndices) {
   const e1 = new Vector3();
 
   for (let i = 0; i < indices.length; i += 3) {
+    const i0 = indices[i];
+    const i1 = indices[i + 1];
+    const i2 = indices[i + 2];
+
     const bounds = new Box3();
 
-    v0.fromBufferAttribute(position, indices[i]);
-    v1.fromBufferAttribute(position, indices[i + 1]);
-    v2.fromBufferAttribute(position, indices[i + 2]);
+    v0.fromBufferAttribute(position, i0);
+    v1.fromBufferAttribute(position, i1);
+    v2.fromBufferAttribute(position, i2);
     e0.subVectors(v2, v0);
     e1.subVectors(v1, v0);
 
@@ -115,9 +121,9 @@ function makePrimitiveInfo(geometry, materialIndices) {
     const info = {
       bounds: bounds,
       center: bounds.getCenter(new Vector3()),
-      indices: [indices[i], indices[i + 1], indices[i + 2]],
+      indices: [i0, i1, i2],
       faceNormal: new Vector3().crossVectors(e1, e0).normalize(),
-      materialIndex: materialIndices[i / 3]
+      materialIndex: materialIndex.getX(i0)
     };
 
     primitiveInfo.push(info);

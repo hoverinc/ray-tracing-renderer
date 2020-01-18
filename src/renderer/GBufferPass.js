@@ -18,6 +18,7 @@ export function makeGBufferPass(gl, { mergedMesh }) {
 
   setAttribute(gl, renderPass.attribLocs.aPosition, geometry.getAttribute('position'));
   setAttribute(gl, renderPass.attribLocs.aNormal, geometry.getAttribute('normal'));
+  setAttribute(gl, renderPass.attribLocs.aMaterialIndex, geometry.getAttribute('materialIndex'));
 
   gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, gl.createBuffer());
   gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, geometry.getIndex().array, gl.STATIC_DRAW);

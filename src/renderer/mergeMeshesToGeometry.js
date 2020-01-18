@@ -5,9 +5,8 @@ export function mergeMeshesToGeometry(meshes) {
   let vertexCount = 0;
   let indexCount = 0;
 
-  const bakedGeometries = [];
+  const geometryAndMaterialIndex = [];
   const materialIndexMap = new Map();
-  const materialIndices = [];
 
   for (const mesh of meshes) {
     const geometry = cloneBufferGeometry(mesh.geometry, ['position', 'normal', 'uv']);
@@ -25,10 +24,8 @@ export function mergeMeshesToGeometry(meshes) {
       geometry.normalizeNormals();
     }
 
-    const indices = geometry.getIndex().count;
-
     vertexCount += geometry.getAttribute('position').count;
-    indexCount += indices;
+    indexCount += geometry.getIndex().count;
 
     const material = mesh.material;
     let materialIndex = materialIndexMap.get(material);
@@ -37,51 +34,53 @@ export function mergeMeshesToGeometry(meshes) {
       materialIndexMap.set(material, materialIndex);
     }
 
-    const tris = indices / 3;
-    for (let i = 0; i < tris; i++) {
-      materialIndices.push(materialIndex);
-    }
-
-    bakedGeometries.push(geometry);
+    geometryAndMaterialIndex.push({
+      geometry,
+      materialIndex
+    });
   }
 
+  const geometry = mergeGeometry(geometryAndMaterialIndex, vertexCount, indexCount);
+
   return {
-    geometry: mergeGeometry(bakedGeometries, vertexCount, indexCount),
-    materialIndices,
+    geometry,
     materials: Array.from(materialIndexMap.keys())
   };
 }
 
-function mergeGeometry(geometries, vertexCount, indexCount) {
-  const position = new BufferAttribute(new Float32Array(3 * vertexCount), 3, false);
-  const normal = new BufferAttribute(new Float32Array(3 * vertexCount), 3, false);
-  const uv = new BufferAttribute(new Float32Array(2 * vertexCount), 2, false);
-  const index = new BufferAttribute(new Uint32Array(indexCount), 1, false);
+function mergeGeometry(geometryAndMaterialIndex, vertexCount, indexCount) {
+  const possitionAttrib = new BufferAttribute(new Float32Array(3 * vertexCount), 3, false);
+  const normalAttrib = new BufferAttribute(new Float32Array(3 * vertexCount), 3, false);
+  const uvAttrib = new BufferAttribute(new Float32Array(2 * vertexCount), 2, false);
+  const materialIndexAttrib = new BufferAttribute(new Float32Array(vertexCount), 1, false);
+  const indexAttrib = new BufferAttribute(new Uint32Array(indexCount), 1, false);
 
-  const mergedGeo = new BufferGeometry();
-
-  mergedGeo.addAttribute('position', position);
-  mergedGeo.addAttribute('normal', normal);
-  mergedGeo.addAttribute('uv', uv);
-  mergedGeo.setIndex(index);
+  const mergedGeometry = new BufferGeometry();
+  mergedGeometry.addAttribute('position', possitionAttrib);
+  mergedGeometry.addAttribute('normal', normalAttrib);
+  mergedGeometry.addAttribute('uv', uvAttrib);
+  mergedGeometry.addAttribute('materialIndex', materialIndexAttrib);
+  mergedGeometry.setIndex(indexAttrib);
 
   let currentVertex = 0;
   let currentIndex = 0;
 
-  for (const geometry of geometries) {
+  for (const { geometry, materialIndex } of geometryAndMaterialIndex) {
     const vertexCount = geometry.getAttribute('position').count;
-    mergedGeo.merge(geometry, currentVertex);
+    mergedGeometry.merge(geometry, currentVertex);
 
     const meshIndex = geometry.getIndex();
     for (let i = 0; i < meshIndex.count; i++) {
-      index.setX(currentIndex + i, currentVertex + meshIndex.getX(i));
+      indexAttrib.setX(currentIndex + i, currentVertex + meshIndex.getX(i));
     }
+
+    materialIndexAttrib.array.fill(materialIndex, currentVertex, currentVertex + vertexCount);
 
     currentVertex += vertexCount;
     currentIndex += meshIndex.count;
   }
 
-  return mergedGeo;
+  return mergedGeometry;
 }
 
 // Similar to buffergeometry.clone(), except we only copy

@@ -1,6 +1,5 @@
 export default `
 
-uniform highp isampler2D indices;
 uniform sampler2D positions;
 uniform sampler2D normals;
 uniform sampler2D uvs;

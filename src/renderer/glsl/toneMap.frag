@@ -6,7 +6,7 @@ outputs: ['color'],
 source: `
   in vec2 vCoord;
 
-  uniform mediump sampler2D light;
+  uniform sampler2D light;
 
   uniform vec2 textureScale;
 
@@ -54,6 +54,7 @@ source: `
     light = pow(light, vec3(1.0 / 2.2)); // gamma correction
 
     out_color = vec4(light, 1.0);
+    // out_color = vec4(0.1 * tex.www, 1);
   }
 `
 }
