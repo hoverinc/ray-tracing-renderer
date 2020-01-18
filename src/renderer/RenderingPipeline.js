@@ -127,7 +127,7 @@ export function makeRenderingPipeline({
   }
 
   function setPreviewBufferDimensions() {
-    const desiredTimeForPreview = 10;
+    const desiredTimeForPreview = 11;
     const numPixelsForPreview = desiredTimeForPreview / tileRender.getTimePerPixel();
 
     const aspectRatio = screenWidth / screenHeight;
@@ -246,11 +246,8 @@ export function makeRenderingPipeline({
   }
 
   function drawTile() {
-    tileRender.updatePerf();
-
     const { x, y, tileWidth, tileHeight, isFirstTile, isLastTile } = tileRender.nextTile();
 
-    // move to isLastTile?
     if (isFirstTile) {
 
       if (sampleCount === 0) { // previous rendered image was a preview image
