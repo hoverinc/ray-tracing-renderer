@@ -1,9 +1,17 @@
+import constants from './chunks/constants.glsl';
+import materialBuffer from './chunks/materialBuffer.glsl';
+
 export default {
 
-outputs: ['position', 'normal', 'faceNormal'],
+outputs: ['position', 'normal', 'faceNormal', 'color'],
+includes: [
+  constants,
+  materialBuffer,
+],
 source: `
   in vec3 vPosition;
   in vec3 vNormal;
+  in vec2 vUv;
   in float vMaterialIndex;
 
   vec3 faceNormals(vec3 pos) {
@@ -13,9 +21,33 @@ source: `
   }
 
   void main() {
-    out_position = vec4(vPosition, 1);
-    out_normal = vec4(normalize(vNormal), 1);
-    out_faceNormal = vec4(faceNormals(vPosition), vMaterialIndex);
+    int materialIndex = int(EPS + vMaterialIndex);
+
+    vec3 color = getMatColor(materialIndex, vUv);
+    float roughness = getMatRoughness(materialIndex, vUv);
+    float metalness = getMatMetalness(materialIndex, vUv);
+    float materialType = getMatType(materialIndex);
+
+    roughness = clamp(roughness, ROUGHNESS_MIN, 1.0);
+    metalness = clamp(metalness, 0.0, 1.0);
+
+    vec3 normal = normalize(vNormal);
+    vec3 faceNormal = faceNormals(vPosition);
+    normal *= sign(dot(normal, faceNormal));
+
+    #ifdef NUM_NORMAL_MAPS
+      vec3 dp1 = dFdx(vPosition);
+      vec3 dp2 = dFdy(vPosition);
+      vec2 duv1 = dFdx(vUv);
+      vec2 duv2 = dFdy(vUv);
+      normal = getMatNormal(materialIndex, vUv, normal, dp1, dp2, duv1, duv2);
+    #endif
+
+
+    out_position = vec4(vPosition, 0.0);
+    out_normal = vec4(normal, roughness);
+    out_faceNormal = vec4(faceNormal, metalness);
+    out_color = vec4(color, materialType);
   }
 `
 

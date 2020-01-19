@@ -1,12 +1,4 @@
 export default `
-  #define PI 3.14159265359
-  #define TWOPI 6.28318530718
-  #define INVPI 0.31830988618
-  #define INVPI2 0.10132118364
-  #define EPS 0.0005
-  #define INF 1.0e999
-  #define RAY_MAX_DISTANCE 9999.0
-
   #define STANDARD 0
   #define THIN_GLASS 1
   #define THICK_GLASS 2
@@ -24,6 +16,8 @@ export default `
 
   // https://www.w3.org/WAI/GL/wiki/Relative_luminance
   const vec3 luminance = vec3(0.2126, 0.7152, 0.0722);
+
+  #define RAY_MAX_DISTANCE 9999.0
 
   struct Ray {
     vec3 o;

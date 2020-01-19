@@ -22,86 +22,30 @@ void surfaceInteractionFromBVH(inout SurfaceInteraction si, Triangle tri, vec3 b
   vec3 n0 = texelFetch(normals, i0, 0).xyz;
   vec3 n1 = texelFetch(normals, i1, 0).xyz;
   vec3 n2 = texelFetch(normals, i2, 0).xyz;
-  si.normal = normalize(barycentric.x * n0 + barycentric.y * n1 + barycentric.z * n2);
-
-  si.color = materials.colorAndMaterialType[materialIndex].xyz;
-  si.roughness = materials.roughnessMetalnessNormalScale[materialIndex].x;
-  si.metalness = materials.roughnessMetalnessNormalScale[materialIndex].y;
-
-  si.materialType = int(materials.colorAndMaterialType[materialIndex].w);
+  vec3 normal = normalize(barycentric.x * n0 + barycentric.y * n1 + barycentric.z * n2);
 
   #if defined(NUM_DIFFUSE_MAPS) || defined(NUM_NORMAL_MAPS) || defined(NUM_PBR_MAPS)
     vec2 uv0 = texelFetch(uvs, i0, 0).xy;
     vec2 uv1 = texelFetch(uvs, i1, 0).xy;
     vec2 uv2 = texelFetch(uvs, i2, 0).xy;
     vec2 uv = fract(barycentric.x * uv0 + barycentric.y * uv1 + barycentric.z * uv2);
+  #else
+    vec2 uv = vec2();
   #endif
 
-  #ifdef NUM_DIFFUSE_MAPS
-    int diffuseMapIndex = materials.diffuseNormalRoughnessMetalnessMapIndex[materialIndex].x;
-    if (diffuseMapIndex >= 0) {
-      si.color *= texture(diffuseMap, vec3(uv * materials.diffuseNormalMapSize[diffuseMapIndex].xy, diffuseMapIndex)).rgb;
-    }
-  #endif
+  si.materialType = int(getMatType(materialIndex));
+  si.color = getMatColor(materialIndex, uv);
+  si.roughness = getMatRoughness(materialIndex, uv);
+  si.metalness = getMatMetalness(materialIndex, uv);
 
   #ifdef NUM_NORMAL_MAPS
-    int normalMapIndex = materials.diffuseNormalRoughnessMetalnessMapIndex[materialIndex].y;
-    if (normalMapIndex >= 0) {
-      vec2 duv02 = uv0 - uv2;
-      vec2 duv12 = uv1 - uv2;
-      vec3 dp02 = tri.p0 - tri.p2;
-      vec3 dp12 = tri.p1 - tri.p2;
-
-      // Method One
-      // http://www.pbr-book.org/3ed-2018/Shapes/Triangle_Meshes.html#fragment-Computetrianglepartialderivatives-0
-      // Compute tangent vectors relative to the face normal. These vectors won't necessarily be orthogonal to the smoothed normal
-      // This means the TBN matrix won't be orthogonal which is technically incorrect.
-      // This is Three.js's method (https://github.com/mrdoob/three.js/blob/dev/src/renderers/shaders/ShaderChunk/normalmap_pars_fragment.glsl.js)
-      // --------------
-      // float scale = sign(duv02.x * duv12.y - duv02.y * duv12.x);
-      // vec3 dpdu = normalize((duv12.y * dp02 - duv02.y * dp12) * scale);
-      // vec3 dpdv = normalize((-duv12.x * dp02 + duv02.x * dp12) * scale);
-
-      // Method Two
-      // Compute tangent vectors as in Method One but apply Gram-Schmidt process to make vectors orthogonal to smooth normal
-      // This might inadvertently flip coordinate space orientation
-      // --------------
-      // float scale = sign(duv02.x * duv12.y - duv02.y * duv12.x);
-      // vec3 dpdu = normalize((duv12.y * dp02 - duv02.y * dp12) * scale);
-      // dpdu = (dpdu - dot(dpdu, si.normal) * si.normal); // Gram-Schmidt process
-      // vec3 dpdv = cross(si.normal, dpdu) * scale;
-
-      // Method Three
-      // http://www.thetenthplanet.de/archives/1180
-      // Compute co-tangent and co-bitangent vectors
-      // These vectors are orthongal and maintain a consistent coordinate space
-      // --------------
-      vec3 dp12perp = cross(dp12, si.normal);
-      vec3 dp02perp = cross(si.normal, dp02);
-      vec3 dpdu = dp12perp * duv02.x + dp02perp * duv12.x;
-      vec3 dpdv = dp12perp * duv02.y + dp02perp * duv12.y;
-      float invmax = inversesqrt(max(dot(dpdu, dpdu), dot(dpdv, dpdv)));
-      dpdu *= invmax;
-      dpdv *= invmax;
-
-      vec3 n = 2.0 * texture(normalMap, vec3(uv * materials.diffuseNormalMapSize[normalMapIndex].zw, normalMapIndex)).rgb - 1.0;
-      n.xy *= materials.roughnessMetalnessNormalScale[materialIndex].zw;
-
-      mat3 tbn = mat3(dpdu, dpdv, si.normal);
-
-      si.normal = normalize(tbn * n);
-    }
-  #endif
-
-  #ifdef NUM_PBR_MAPS
-    int roughnessMapIndex = materials.diffuseNormalRoughnessMetalnessMapIndex[materialIndex].z;
-    int metalnessMapIndex = materials.diffuseNormalRoughnessMetalnessMapIndex[materialIndex].w;
-    if (roughnessMapIndex >= 0) {
-      si.roughness *= texture(pbrMap, vec3(uv * materials.pbrMapSize[roughnessMapIndex].xy, roughnessMapIndex)).g;
-    }
-    if (metalnessMapIndex >= 0) {
-      si.metalness *= texture(pbrMap, vec3(uv * materials.pbrMapSize[metalnessMapIndex].xy, metalnessMapIndex)).b;
-    }
+    vec3 dp1 = tri.p0 - tri.p2;
+    vec3 dp2 = tri.p1 - tri.p2;
+    vec2 duv1 = uv0 - uv2;
+    vec2 duv2 = uv1 - uv2;
+    si.normal = getMatNormal(materialIndex, uv, normal, dp1, dp2, duv1, duv2);
+  #else
+    si.normal = normal;
   #endif
 }
 
@@ -266,7 +210,7 @@ void intersectScene(inout Ray ray, inout SurfaceInteraction si) {
   }
 
   // Values must be clamped outside of intersection loop. Clamping inside the loop produces incorrect numbers on some devices.
-  si.roughness = clamp(si.roughness, 0.03, 1.0);
+  si.roughness = clamp(si.roughness, ROUGHNESS_MIN, 1.0);
   si.metalness = clamp(si.metalness, 0.0, 1.0);
 }
 

@@ -44,7 +44,7 @@ export function makeRenderingPipeline({
 
   const toneMapPass = makeToneMapPass(gl, { fullscreenQuad, toneMappingParams });
 
-  const gBufferPass = makeGBufferPass(gl, { mergedMesh });
+  const gBufferPass = makeGBufferPass(gl, { materialBuffer, mergedMesh });
 
   // used to sample only a portion of the scene to the HDR Buffer to prevent the GPU from locking up from excessive computation
   const tileRender = makeTileRender(gl);
@@ -109,6 +109,7 @@ export function makeRenderingPipeline({
         [gBufferPass.outputLocs.position]: floatTex(),
         [gBufferPass.outputLocs.normal]: floatTex(),
         [gBufferPass.outputLocs.faceNormal]: floatTex(),
+        [gBufferPass.outputLocs.color]: floatTex(),
       },
       depth: makeDepthTarget(gl, width, height)
     });
@@ -388,6 +389,7 @@ export function makeRenderingPipeline({
       position: gBuffer.color[gBufferPass.outputLocs.position],
       normal: gBuffer.color[gBufferPass.outputLocs.normal],
       faceNormal: gBuffer.color[gBufferPass.outputLocs.faceNormal],
+      color: gBuffer.color[gBufferPass.outputLocs.color],
     });
 
     updateSeed(screenWidth, screenHeight);

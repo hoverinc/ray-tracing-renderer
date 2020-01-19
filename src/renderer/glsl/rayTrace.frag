@@ -1,5 +1,6 @@
 import { unrollLoop } from '../glslUtil';
-import core from './chunks/core.glsl';
+import constants from './chunks/constants.glsl';
+import rayTraceCore from './chunks/rayTraceCore.glsl';
 import textureLinear from './chunks/textureLinear.glsl';
 import materialBuffer from './chunks/materialBuffer.glsl';
 import intersect from './chunks/intersect.glsl';
@@ -14,7 +15,8 @@ import sampleGlass from './chunks/sampleGlassSpecular.glsl';
 
 export default {
 includes: [
-  core,
+  constants,
+  rayTraceCore,
   textureLinear,
   materialBuffer,
   intersect,
@@ -88,6 +90,7 @@ source: (defines) => `
         bounce(path, i, si);
       }
     `)}
+
     return vec4(path.li, path.alpha);
   }
 

@@ -2,11 +2,16 @@ import { makeRenderPass } from './RenderPass';
 import vertex from './glsl/gBuffer.vert';
 import fragment from './glsl/gBuffer.frag';
 
-export function makeGBufferPass(gl, { mergedMesh }) {
+export function makeGBufferPass(gl, { materialBuffer, mergedMesh }) {
   const renderPass = makeRenderPass(gl, {
+    defines: materialBuffer.defines,
     vertex,
     fragment
   });
+
+  renderPass.setTexture('diffuseMap', materialBuffer.textures.diffuseMap);
+  renderPass.setTexture('normalMap', materialBuffer.textures.normalMap);
+  renderPass.setTexture('pbrMap', materialBuffer.textures.pbrMap);
 
   const geometry = mergedMesh.geometry;
 
@@ -18,6 +23,7 @@ export function makeGBufferPass(gl, { mergedMesh }) {
 
   setAttribute(gl, renderPass.attribLocs.aPosition, geometry.getAttribute('position'));
   setAttribute(gl, renderPass.attribLocs.aNormal, geometry.getAttribute('normal'));
+  setAttribute(gl, renderPass.attribLocs.aUv, geometry.getAttribute('uv'));
   setAttribute(gl, renderPass.attribLocs.aMaterialIndex, geometry.getAttribute('materialIndex'));
 
   gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, gl.createBuffer());

@@ -54,7 +54,6 @@ source: `
     light = pow(light, vec3(1.0 / 2.2)); // gamma correction
 
     out_color = vec4(light, 1.0);
-    // out_color = vec4(0.1 * tex.www, 1);
   }
 `
 }

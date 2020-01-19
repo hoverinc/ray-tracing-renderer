@@ -3,22 +3,24 @@ export default `
   uniform sampler2D gPosition;
   uniform sampler2D gNormal;
   uniform sampler2D gFaceNormal;
+  uniform sampler2D gColor;
 
   void surfaceInteractionDirect(vec2 coord, inout SurfaceInteraction si) {
+    vec4 positionMeshId = texture(gPosition, coord);
+    vec4 normalRoughness = texture(gNormal, coord);
+    vec4 faceNormalMetalness = texture(gFaceNormal, coord);
+    vec4 colorMaterialType = texture(gColor, coord);
 
-    vec4 faceNormalAndMaterialIndex = texture(gFaceNormal, coord);
-    si.hit = true;
-    si.position = texture(gPosition, coord).xyz;
-    si.normal = texture(gNormal, coord).xyz;
-    si.faceNormal = faceNormalAndMaterialIndex.xyz;
-    si.normal *= sign(dot(si.normal, si.faceNormal));
+    si.position = positionMeshId.xyz;
+    si.normal = normalRoughness.xyz;
+    si.faceNormal = faceNormalMetalness.xyz;
 
-    int materialIndex = int(EPS + faceNormalAndMaterialIndex.w);
+    si.color = colorMaterialType.rgb;
+    si.materialType = int(colorMaterialType.w);
 
-    si.color = materials.colorAndMaterialType[materialIndex].xyz;
-    si.materialType = int(materials.colorAndMaterialType[materialIndex].w);
+    si.roughness = normalRoughness.w;
+    si.metalness = faceNormalMetalness.w;
 
-    si.roughness = clamp(materials.roughnessMetalnessNormalScale[materialIndex].x, 0.03, 1.0);
-    si.metalness = clamp(materials.roughnessMetalnessNormalScale[materialIndex].y, 0.0, 1.0);
+    si.hit = dot(si.normal, si.normal) > 0.0 ? true : false;
   }
 `;
