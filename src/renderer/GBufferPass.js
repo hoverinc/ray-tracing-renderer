@@ -1,6 +1,7 @@
 import { makeRenderPass } from './RenderPass';
 import vertex from './glsl/gBuffer.vert';
 import fragment from './glsl/gBuffer.frag';
+import { Matrix4 } from 'three';
 
 export function makeGBufferPass(gl, { materialBuffer, mergedMesh }) {
   const renderPass = makeRenderPass(gl, {
@@ -20,20 +21,28 @@ export function makeGBufferPass(gl, { materialBuffer, mergedMesh }) {
   const vao = gl.createVertexArray();
 
   gl.bindVertexArray(vao);
-
-  setAttribute(gl, renderPass.attribLocs.aPosition, geometry.getAttribute('position'));
-  setAttribute(gl, renderPass.attribLocs.aNormal, geometry.getAttribute('normal'));
-  setAttribute(gl, renderPass.attribLocs.aUv, geometry.getAttribute('uv'));
-  setAttribute(gl, renderPass.attribLocs.aMaterialIndex, geometry.getAttribute('materialIndex'));
-
-  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, gl.createBuffer());
-  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, geometry.getIndex().array, gl.STATIC_DRAW);
-
+  uploadAttributes(gl, renderPass, geometry);
   gl.bindVertexArray(null);
 
+  let jitterX = 0;
+  let jitterY = 0;
+
+  function setJitter(x, y) {
+    jitterX = x;
+    jitterY = y;
+  }
+
+  let projView = new Matrix4();
+
   function setCamera(camera) {
-    renderPass.setUniform('view', camera.matrixWorldInverse.elements);
-    renderPass.setUniform('proj', camera.projectionMatrix.elements);
+    projView.copy(camera.projectionMatrix);
+
+    projView.elements[8] += 2 * jitterX;
+    projView.elements[9] += 2 * jitterY;
+
+    projView.multiply(camera.matrixWorldInverse);
+
+    renderPass.setUniform('projView', projView.elements);
   }
 
   function draw() {
@@ -47,8 +56,19 @@ export function makeGBufferPass(gl, { materialBuffer, mergedMesh }) {
   return {
     draw,
     outputLocs: renderPass.outputLocs,
-    setCamera
+    setCamera,
+    setJitter
   };
+}
+
+function uploadAttributes(gl, renderPass, geometry) {
+  setAttribute(gl, renderPass.attribLocs.aPosition, geometry.getAttribute('position'));
+  setAttribute(gl, renderPass.attribLocs.aNormal, geometry.getAttribute('normal'));
+  setAttribute(gl, renderPass.attribLocs.aUv, geometry.getAttribute('uv'));
+  setAttribute(gl, renderPass.attribLocs.aMaterialIndex, geometry.getAttribute('materialIndex'));
+
+  gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, gl.createBuffer());
+  gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, geometry.getIndex().array, gl.STATIC_DRAW);
 }
 
 function setAttribute(gl, location, bufferAttribute) {

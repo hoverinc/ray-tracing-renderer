@@ -208,10 +208,11 @@ export function makeRenderingPipeline({
   function updateSeed(width, height) {
     rayTracePass.setSize(width, height);
 
-    // const jitterX = (Math.random() - 0.5) / width;
-    // const jitterY = (Math.random() - 0.5) / height;
-    // rayTracePass.setJitter(jitterX, jitterY);
-    // reprojectPass.setJitter(jitterX, jitterY);
+    const jitterX = (Math.random() - 0.5) / width;
+    const jitterY = (Math.random() - 0.5) / height;
+    gBufferPass.setJitter(jitterX, jitterY);
+    rayTracePass.setJitter(jitterX, jitterY);
+    reprojectPass.setJitter(jitterX, jitterY);
 
     if (sampleCount === 0) {
       rayTracePass.setStrataCount(1);
@@ -371,13 +372,13 @@ export function makeRenderingPipeline({
 
       clearBuffer(hdrBuffer);
 
-      rayTracePass.setCamera(camera);
-      gBufferPass.setCamera(camera);
-
       lastCamera.copy(camera);
     }
 
+    updateSeed(screenWidth, screenHeight);
+
     gBuffer.bind();
+    gBufferPass.setCamera(camera);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     gl.viewport(0, 0, screenWidth, screenHeight);
     gBufferPass.draw();
@@ -392,11 +393,9 @@ export function makeRenderingPipeline({
       color: gBuffer.color[gBufferPass.outputLocs.color],
     });
 
-    updateSeed(screenWidth, screenHeight);
     addSampleToBuffer(hdrBuffer, screenWidth, screenHeight);
 
     toneMapToScreen(hdrBuffer.color[0], fullscreenScale);
-    // toneMapToScreen(gBuffer.color[gBufferPass.outputLocs.faceNormal], fullscreenScale);
 
     sampleCount++;
   }

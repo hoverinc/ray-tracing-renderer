@@ -6,8 +6,7 @@ source: `
   in vec2 aUv;
   in float aMaterialIndex;
 
-  uniform mat4 view;
-  uniform mat4 proj;
+  uniform mat4 projView;
 
   out vec3 vPosition;
   out vec3 vNormal;
@@ -19,7 +18,7 @@ source: `
     vNormal = aNormal;
     vUv = aUv;
     vMaterialIndex = aMaterialIndex;
-    gl_Position = proj * view * vec4(aPosition, 1);
+    gl_Position = projView * vec4(aPosition, 1);
   }
 `
 }

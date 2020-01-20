@@ -78,6 +78,7 @@ source: (defines) => `
     SurfaceInteraction si;
 
     surfaceInteractionDirect(vCoord, si);
+    // intersectScene(path.ray, si);
     bounce(path, 1, si);
 
     // Manually unroll for loop.
