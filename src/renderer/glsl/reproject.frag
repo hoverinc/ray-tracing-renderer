@@ -29,6 +29,11 @@ source: `
     vec3 currentPosition = positionTex.xyz;
     float currentMeshId = positionTex.w;
 
+    if (currentMeshId == 0.0) {
+      out_light = lightTex;
+      return;
+    }
+
     vec2 hCoord = reproject(currentPosition) - jitter;
 
     vec2 hSizef = previousTextureScale * vec2(textureSize(previousPosition, 0));

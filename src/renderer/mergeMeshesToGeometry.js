@@ -52,18 +52,19 @@ function mergeGeometry(geometryAndMaterialIndex, vertexCount, indexCount) {
   const possitionAttrib = new BufferAttribute(new Float32Array(3 * vertexCount), 3, false);
   const normalAttrib = new BufferAttribute(new Float32Array(3 * vertexCount), 3, false);
   const uvAttrib = new BufferAttribute(new Float32Array(2 * vertexCount), 2, false);
-  const materialIndexAttrib = new BufferAttribute(new Float32Array(vertexCount), 1, false);
+  const materialMeshIndexAttrib = new BufferAttribute(new Float32Array(2 * vertexCount), 2, false);
   const indexAttrib = new BufferAttribute(new Uint32Array(indexCount), 1, false);
 
   const mergedGeometry = new BufferGeometry();
   mergedGeometry.addAttribute('position', possitionAttrib);
   mergedGeometry.addAttribute('normal', normalAttrib);
   mergedGeometry.addAttribute('uv', uvAttrib);
-  mergedGeometry.addAttribute('materialIndex', materialIndexAttrib);
+  mergedGeometry.addAttribute('materialMeshIndex', materialMeshIndexAttrib);
   mergedGeometry.setIndex(indexAttrib);
 
   let currentVertex = 0;
   let currentIndex = 0;
+  let currentMesh = 1;
 
   for (const { geometry, materialIndex } of geometryAndMaterialIndex) {
     const vertexCount = geometry.getAttribute('position').count;
@@ -74,10 +75,13 @@ function mergeGeometry(geometryAndMaterialIndex, vertexCount, indexCount) {
       indexAttrib.setX(currentIndex + i, currentVertex + meshIndex.getX(i));
     }
 
-    materialIndexAttrib.array.fill(materialIndex, currentVertex, currentVertex + vertexCount);
+    for (let i = 0; i < vertexCount; i++) {
+      materialMeshIndexAttrib.setXY(currentVertex + i, materialIndex, currentMesh);
+    }
 
     currentVertex += vertexCount;
     currentIndex += meshIndex.count;
+    currentMesh++;
   }
 
   return mergedGeometry;

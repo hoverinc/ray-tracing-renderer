@@ -4,20 +4,20 @@ source: `
   in vec3 aPosition;
   in vec3 aNormal;
   in vec2 aUv;
-  in float aMaterialIndex;
+  in vec2 aMaterialMeshIndex;
 
   uniform mat4 projView;
 
   out vec3 vPosition;
   out vec3 vNormal;
   out vec2 vUv;
-  out float vMaterialIndex;
+  out vec2 vMaterialMeshIndex;
 
   void main() {
     vPosition = aPosition;
     vNormal = aNormal;
     vUv = aUv;
-    vMaterialIndex = aMaterialIndex;
+    vMaterialMeshIndex = aMaterialMeshIndex;
     gl_Position = projView * vec4(aPosition, 1);
   }
 `

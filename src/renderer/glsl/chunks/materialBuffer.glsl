@@ -72,6 +72,7 @@ float getMatMetalness(int materialIndex, vec2 uv) {
   return metalness;
 }
 
+#ifdef NUM_NORMAL_MAPS
 vec3 getMatNormal(int materialIndex, vec2 uv, vec3 normal, vec3 dp1, vec3 dp2, vec2 duv1, vec2 duv2) {
   int normalMapIndex = materials.diffuseNormalRoughnessMetalnessMapIndex[materialIndex].y;
   if (normalMapIndex >= 0) {
@@ -95,4 +96,5 @@ vec3 getMatNormal(int materialIndex, vec2 uv, vec3 normal, vec3 dp1, vec3 dp2, v
     return normal;
   }
 }
+#endif
 `;

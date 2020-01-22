@@ -65,7 +65,7 @@ function uploadAttributes(gl, renderPass, geometry) {
   setAttribute(gl, renderPass.attribLocs.aPosition, geometry.getAttribute('position'));
   setAttribute(gl, renderPass.attribLocs.aNormal, geometry.getAttribute('normal'));
   setAttribute(gl, renderPass.attribLocs.aUv, geometry.getAttribute('uv'));
-  setAttribute(gl, renderPass.attribLocs.aMaterialIndex, geometry.getAttribute('materialIndex'));
+  setAttribute(gl, renderPass.attribLocs.aMaterialMeshIndex, geometry.getAttribute('materialMeshIndex'));
 
   gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, gl.createBuffer());
   gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, geometry.getIndex().array, gl.STATIC_DRAW);

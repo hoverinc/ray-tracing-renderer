@@ -12,8 +12,6 @@ uniform float strataSize;
 // This allows us to use stratified sampling for each random variable in our path tracing
 int sampleIndex = 0;
 
-const highp float maxUint = 1.0 / 4294967295.0;
-
 float pixelSeed;
 
 void initRandom() {

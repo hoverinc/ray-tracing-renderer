@@ -93,7 +93,7 @@ function makePrimitiveInfo(geometry) {
   const primitiveInfo = [];
   const indices = geometry.getIndex().array;
   const position = geometry.getAttribute('position');
-  const materialIndex = geometry.getAttribute('materialIndex');
+  const materialMeshIndex = geometry.getAttribute('materialMeshIndex');
 
   const v0 = new Vector3();
   const v1 = new Vector3();
@@ -123,7 +123,7 @@ function makePrimitiveInfo(geometry) {
       center: bounds.getCenter(new Vector3()),
       indices: [i0, i1, i2],
       faceNormal: new Vector3().crossVectors(e1, e0).normalize(),
-      materialIndex: materialIndex.getX(i0)
+      materialIndex: materialMeshIndex.getX(i0)
     };
 
     primitiveInfo.push(info);

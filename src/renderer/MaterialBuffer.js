@@ -154,14 +154,17 @@ function uploadToUniformBuffer(gl, program, bufferData) {
 }
 
 function interleave(...arrays) {
-  const maxLength = arrays.reduce((m, a) => {
-    return Math.max(m, a.data.length / a.channels);
-  }, 0);
+  let maxLength = 0;
+  for (let i = 0; i < arrays.length; i++) {
+    const a = arrays[i];
+    const l = a.data ? a.data.length / a.channels : 0;
+    maxLength = Math.max(maxLength, l);
+  }
 
   const interleaved = [];
   for (let i = 0; i < maxLength; i++) {
     for (let j = 0; j < arrays.length; j++) {
-      const { data, channels } = arrays[j];
+      const { data = [], channels } = arrays[j];
       for (let c = 0; c < channels; c++) {
         interleaved.push(data[i * channels + c]);
       }

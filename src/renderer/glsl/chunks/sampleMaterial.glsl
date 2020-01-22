@@ -97,6 +97,10 @@ void sampleMaterial(SurfaceInteraction si, int bounce, inout Path path) {
 
   // Get new path direction
 
+  if (lastBounce) {
+    return;
+  }
+
   lightDir = diffuseOrSpecular.y < mix(0.5, 0.0, si.metalness) ?
     lightDirDiffuse(si.faceNormal, viewDir, basis, randomSampleVec2()) :
     lightDirSpecular(si.faceNormal, viewDir, basis, si.roughness, randomSampleVec2());
