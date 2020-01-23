@@ -5,15 +5,54 @@ source: `
 
   uniform mediump sampler2D light;
   uniform mediump sampler2D position;
-  uniform vec2 textureScale;
+  uniform vec2 lightScale;
 
   uniform mediump sampler2D previousLight;
   uniform mediump sampler2D previousPosition;
-  uniform vec2 previousTextureScale;
 
   uniform mat4 historyCamera;
   uniform float blendAmount;
   uniform vec2 jitter;
+
+  vec4 getUpscaledLight(vec2 coord) {
+    float meshId = texture(position, coord).w;
+
+    vec2 sizef = lightScale * vec2(textureSize(position, 0));
+    vec2 texelf = coord * sizef - 0.5;
+    ivec2 texel = ivec2(texelf);
+    vec2 f = fract(texelf);
+
+    ivec2 texels[] = ivec2[](
+      texel + ivec2(0, 0),
+      texel + ivec2(1, 0),
+      texel + ivec2(0, 1),
+      texel + ivec2(1, 1)
+    );
+
+    float weights[] = float[](
+      (1.0 - f.x) * (1.0 - f.y),
+      f.x * (1.0 - f.y),
+      (1.0 - f.x) * f.y,
+      f.x * f.y
+    );
+
+    vec4 upscaledLight;
+    float sum;
+    for (int i = 0; i < 4; i++) {
+      vec2 pCoord = (vec2(texels[i]) + 0.5) / sizef;
+      if (texture(position, pCoord).w == meshId) {
+        float weight = weights[i];
+        upscaledLight += weight * texelFetch(light, texels[i], 0);
+        sum += weight;
+      }
+    }
+
+    if (sum > 0.0) {
+      upscaledLight /= sum;
+    }
+
+    return upscaledLight;
+  }
 
   vec2 reproject(vec3 position) {
     vec4 historyCoord = historyCamera * vec4(position, 1.0);
@@ -21,22 +60,21 @@ source: `
   }
 
   void main() {
-    vec2 scaledCoord = textureScale * vCoord;
+    vec2 scaledCoord = lightScale * vCoord;
 
-    vec4 positionTex = texture(position, scaledCoord);
-    vec4 lightTex = texture(light, scaledCoord);
+    vec4 positionTex = texture(position, vCoord);
 
     vec3 currentPosition = positionTex.xyz;
     float currentMeshId = positionTex.w;
 
     if (currentMeshId == 0.0) {
-      out_light = lightTex;
+      out_light = texture(light, lightScale * vCoord);
       return;
     }
 
     vec2 hCoord = reproject(currentPosition) - jitter;
 
-    vec2 hSizef = previousTextureScale * vec2(textureSize(previousPosition, 0));
+    vec2 hSizef = vec2(textureSize(position, 0));
     ivec2 hSize = ivec2(hSizef);
 
     vec2 hTexelf = hCoord * hSizef - 0.5;
@@ -65,7 +103,6 @@ source: `
       float histMeshId = texelFetch(previousPosition, texel[i], 0).w;
 
       float isValid = histMeshId != currentMeshId || any(greaterThanEqual(texel[i], hSize)) ? 0.0 : 1.0;
-      // float isValid = 0.0;
 
       float weight = isValid * weights[i];
       history += weight * texelFetch(previousLight, texel[i], 0);
@@ -100,8 +137,9 @@ source: `
       history.w = MAX_SAMPLES;
     }
 
-    out_light = blendAmount * history + lightTex;
+    vec4 upscaledLight = getUpscaledLight(vCoord);
 
+    out_light = blendAmount * history + upscaledLight;
   }
 `
 }
