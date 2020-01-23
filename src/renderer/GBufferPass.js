@@ -1,6 +1,6 @@
 import { makeRenderPass } from './RenderPass';
-import vertex from './glsl/gBuffers.vert';
-import fragment from './glsl/gBuffers.frag';
+import vertex from './glsl/gBuffer.vert';
+import fragment from './glsl/gBuffer.frag';
 
 export function makeGBufferPass(gl, { mergedMesh }) {
   const renderPass = makeRenderPass(gl, {
@@ -12,10 +12,17 @@ export function makeGBufferPass(gl, { mergedMesh }) {
 
   const elementCount = geometry.getIndex().count;
 
-  setAttribute(gl, 0, geometry.getAttribute('position'));
+  const vao = gl.createVertexArray();
+
+  gl.bindVertexArray(vao);
+
+  setAttribute(gl, renderPass.attribLocs.aPosition, geometry.getAttribute('position'));
+  setAttribute(gl, renderPass.attribLocs.aNormal, geometry.getAttribute('normal'));
 
   gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, gl.createBuffer());
   gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, geometry.getIndex().array, gl.STATIC_DRAW);
+
+  gl.bindVertexArray(null);
 
   function setCamera(camera) {
     renderPass.setUniform('view', camera.matrixWorldInverse.elements);
@@ -23,13 +30,16 @@ export function makeGBufferPass(gl, { mergedMesh }) {
   }
 
   function draw() {
+    gl.bindVertexArray(vao);
     renderPass.useProgram();
     gl.enable(gl.DEPTH_TEST);
     gl.drawElements(gl.TRIANGLES, elementCount, gl.UNSIGNED_INT, 0);
+    gl.disable(gl.DEPTH_TEST);
   }
 
   return {
     draw,
+    outputLocs: renderPass.outputLocs,
     setCamera
   };
 }

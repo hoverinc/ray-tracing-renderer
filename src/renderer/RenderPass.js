@@ -1,4 +1,4 @@
-import { compileShader, createProgram } from './glUtil';
+import { compileShader, createProgram, getAttributes } from './glUtil';
 import { makeUniformSetter } from './UniformSetter';
 
 export function makeRenderPass(gl, params) {
@@ -27,7 +27,6 @@ export function makeVertexShader(gl, { defines, vertex }) {
 export function makeFragmentShader(gl, { defines, fragment }) {
   return makeShaderStage(gl, gl.FRAGMENT_SHADER, fragment, defines);
 }
-
 
 function makeRenderPassFromProgram(gl, program) {
 
@@ -70,6 +69,7 @@ function makeRenderPassFromProgram(gl, program) {
   }
 
   return {
+    attribLocs: getAttributes(gl, program),
     bindTextures,
     program,
     setTexture,

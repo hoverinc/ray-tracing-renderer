@@ -7,7 +7,9 @@ export function makeUniformSetter(gl, program) {
   const uniforms = {};
   const needsUpload = [];
 
-  for (let { name, type, location } of uniformInfo) {
+  for (let name in uniformInfo) {
+    const { type, location } = uniformInfo[name];
+
     const uniform = {
       type,
       location,

@@ -135,3 +135,17 @@ export function makeTexture(gl, params) {
     texture
   };
 }
+
+export function makeDepthTarget(gl, width, height) {
+  const texture = gl.createRenderbuffer();
+  const target = gl.RENDERBUFFER;
+
+  gl.bindRenderbuffer(target, texture);
+  gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT24, width, height);
+  gl.bindRenderbuffer(target, null);
+
+  return {
+    target,
+    texture
+  };
+}

@@ -1,17 +1,16 @@
+import { decomposeScene } from './decomposeScene';
+import { makeFramebuffer } from './Framebuffer';
 import { makeFullscreenQuad } from './FullscreenQuad';
 import { makeGBufferPass } from './GBufferPass';
-import { makeRayTracePass } from './RayTracePass';
-import { makeToneMapPass } from './ToneMapPass';
-import { makeFramebuffer } from './Framebuffer';
-import { numberArraysEqual } from './util';
-import { makeTileRender } from './TileRender';
-import { makeTexture } from './Texture';
-import { makeReprojectPass } from './ReprojectPass';
-import noiseBase64 from './texture/noise';
-import { clamp } from './util';
-import { PerspectiveCamera, Vector2 } from 'three';
-import { decomposeScene } from './decomposeScene';
 import { mergeMeshesToGeometry } from './mergeMeshesToGeometry';
+import { makeRayTracePass } from './RayTracePass';
+import { makeReprojectPass } from './ReprojectPass';
+import { makeToneMapPass } from './ToneMapPass';
+import { clamp, numberArraysEqual } from './util';
+import { makeTileRender } from './TileRender';
+import { makeDepthTarget, makeTexture } from './Texture';
+import noiseBase64 from './texture/noise';
+import { PerspectiveCamera, Vector2 } from 'three';
 
 export function makeRenderingPipeline({
     gl,
@@ -71,6 +70,8 @@ export function makeRenderingPipeline({
   let reprojectBuffer;
   let reprojectBackBuffer;
 
+  let gBuffer;
+
   let lastToneMappedScale;
   let lastToneMappedTexture;
 
@@ -86,14 +87,14 @@ export function makeRenderingPipeline({
     const floatTex = () => makeTexture(gl, { width, height, storage: 'float' });
 
     const makeHdrBuffer = () => makeFramebuffer(gl, {
-        attachments: {
+        color: {
           [rayTracePass.outputLocs.light]: floatTex(),
           [rayTracePass.outputLocs.position]: floatTex(),
         }
       });
 
     const makeReprojectBuffer = () => makeFramebuffer(gl, {
-        attachments: { 0: floatTex() }
+        color: { 0: floatTex() }
       });
 
     hdrBuffer = makeHdrBuffer();
@@ -103,7 +104,16 @@ export function makeRenderingPipeline({
     reprojectBackBuffer = makeReprojectBuffer();
 
     lastToneMappedScale = fullscreenScale;
-    lastToneMappedTexture = hdrBuffer.attachments[rayTracePass.outputLocs.light];
+    lastToneMappedTexture = hdrBuffer.color[rayTracePass.outputLocs.light];
+
+    gBuffer = makeFramebuffer(gl, {
+      color: {
+        [gBufferPass.outputLocs.position]: floatTex(),
+        [gBufferPass.outputLocs.normal]: floatTex(),
+        [gBufferPass.outputLocs.faceNormal]: floatTex(),
+      },
+      depth: makeDepthTarget(gl, width, height)
+    });
   }
 
   function swapReprojectBuffer() {
@@ -238,16 +248,16 @@ export function makeRenderingPipeline({
     gl.viewport(0, 0, previewWidth, previewHeight);
     reprojectPass.draw({
       blendAmount: 1.0,
-      light: hdrBuffer.attachments[rayTracePass.outputLocs.light],
-      position: hdrBuffer.attachments[rayTracePass.outputLocs.position],
+      light: hdrBuffer.color[rayTracePass.outputLocs.light],
+      position: hdrBuffer.color[rayTracePass.outputLocs.position],
       textureScale: previewScale,
       previousLight: lastToneMappedTexture,
-      previousPosition: hdrBackBuffer.attachments[rayTracePass.outputLocs.position],
+      previousPosition: hdrBackBuffer.color[rayTracePass.outputLocs.position],
       previousTextureScale: lastToneMappedScale,
     });
     reprojectBuffer.unbind();
 
-    toneMapToScreen(reprojectBuffer.attachments[0], previewScale);
+    toneMapToScreen(reprojectBuffer.color[0], previewScale);
 
     swapBuffers();
   }
@@ -279,18 +289,18 @@ export function makeRenderingPipeline({
         gl.viewport(0, 0, screenWidth, screenHeight);
         reprojectPass.draw({
           blendAmount,
-          light: hdrBuffer.attachments[rayTracePass.outputLocs.light],
-          position: hdrBuffer.attachments[rayTracePass.outputLocs.position],
+          light: hdrBuffer.color[rayTracePass.outputLocs.light],
+          position: hdrBuffer.color[rayTracePass.outputLocs.position],
           textureScale: fullscreenScale,
-          previousLight: reprojectBackBuffer.attachments[0],
-          previousPosition: hdrBackBuffer.attachments[rayTracePass.outputLocs.position],
+          previousLight: reprojectBackBuffer.color[0],
+          previousPosition: hdrBackBuffer.color[rayTracePass.outputLocs.position],
           previousTextureScale: previewScale,
         });
         reprojectBuffer.unbind();
 
-        toneMapToScreen(reprojectBuffer.attachments[0], fullscreenScale);
+        toneMapToScreen(reprojectBuffer.color[0], fullscreenScale);
       } else {
-        toneMapToScreen(hdrBuffer.attachments[rayTracePass.outputLocs.light], fullscreenScale);
+        toneMapToScreen(hdrBuffer.color[rayTracePass.outputLocs.light], fullscreenScale);
       }
 
       sampleRenderedCallback(sampleCount);
@@ -339,17 +349,17 @@ export function makeRenderingPipeline({
     gl.viewport(0, 0, screenWidth, screenHeight);
     reprojectPass.draw({
       blendAmount: 1.0,
-      light: hdrBuffer.attachments[rayTracePass.outputLocs.light],
-      position: hdrBuffer.attachments[rayTracePass.outputLocs.position],
-      previousLight: reprojectBackBuffer.attachments[0],
-      previousPosition: hdrBackBuffer.attachments[rayTracePass.outputLocs.position],
+      light: hdrBuffer.color[rayTracePass.outputLocs.light],
+      position: hdrBuffer.color[rayTracePass.outputLocs.position],
+      previousLight: reprojectBackBuffer.color[0],
+      previousPosition: hdrBackBuffer.color[rayTracePass.outputLocs.position],
       textureScale: fullscreenScale,
       previousTextureScale: fullscreenScale
 
     });
     reprojectBuffer.unbind();
 
-    toneMapToScreen(reprojectBuffer.attachments[0], fullscreenScale);
+    toneMapToScreen(reprojectBuffer.color[0], fullscreenScale);
 
     swapReprojectBuffer();
   }
@@ -357,12 +367,18 @@ export function makeRenderingPipeline({
   function drawTest(camera) {
     gl.viewport(0, 0, screenWidth, screenHeight);
     gBufferPass.setCamera(camera);
+
+    gBuffer.bind();
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     gBufferPass.draw();
+    gBuffer.unbind();
+
+    toneMapToScreen(gBuffer.color[gBufferPass.outputLocs.normal], fullscreenScale);
   }
 
   return {
     draw: drawTest,
-    drawFull,
+    drawFull: drawTest,
     restartTimer: tileRender.restartTimer,
     setSize,
     getTotalSamplesRendered() {
