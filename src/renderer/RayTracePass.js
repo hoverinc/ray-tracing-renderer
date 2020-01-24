@@ -46,7 +46,7 @@ export function makeRayTracePass(gl, {
       data: noiseImage,
       wrapS: gl.REPEAT,
       wrapT: gl.REPEAT,
-      storage: 'float'
+      storage: 'halfFloat',
     }));
   }
 
@@ -60,11 +60,12 @@ export function makeRayTracePass(gl, {
     renderPass.setUniform('jitter', x, y);
   }
 
-  function setGBuffers({ position, normal, faceNormal, color }) {
+  function setGBuffers({ position, normal, faceNormal, color, matProps }) {
     renderPass.setTexture('gPosition', position);
     renderPass.setTexture('gNormal', normal);
     renderPass.setTexture('gFaceNormal', faceNormal);
     renderPass.setTexture('gColor', color);
+    renderPass.setTexture('gMatProps', matProps);
   }
 
   function nextSeed() {
@@ -162,6 +163,7 @@ function makeRenderPassFromScene({
   const envImage = generateEnvMapFromSceneComponents(directionalLights, ambientLights, environmentLights);
   const envImageTextureObject = makeTexture(gl, {
     data: envImage.data,
+    storage: 'halfFloat',
     minFilter: OES_texture_float_linear ? gl.LINEAR : gl.NEAREST,
     magFilter: OES_texture_float_linear ? gl.LINEAR : gl.NEAREST,
     width: envImage.width,
@@ -175,6 +177,7 @@ function makeRenderPassFromScene({
     const backgroundImage = generateBackgroundMapFromSceneBackground(background);
     backgroundImageTextureObject = makeTexture(gl, {
       data: backgroundImage.data,
+      storage: 'halfFloat',
       minFilter: OES_texture_float_linear ? gl.LINEAR : gl.NEAREST,
       magFilter: OES_texture_float_linear ? gl.LINEAR : gl.NEAREST,
       width: backgroundImage.width,
@@ -190,6 +193,7 @@ function makeRenderPassFromScene({
 
   renderPass.setTexture('envmapDistribution', makeTexture(gl, {
     data: distribution.data,
+    storage: 'halfFloat',
     width: distribution.width,
     height: distribution.height,
   }));

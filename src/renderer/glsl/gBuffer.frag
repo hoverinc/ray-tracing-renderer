@@ -3,7 +3,7 @@ import materialBuffer from './chunks/materialBuffer.glsl';
 
 export default {
 
-outputs: ['position', 'normal', 'faceNormal', 'color'],
+outputs: ['position', 'normal', 'faceNormal', 'color', 'matProps'],
 includes: [
   constants,
   materialBuffer,
@@ -17,7 +17,7 @@ source: `
   vec3 faceNormals(vec3 pos) {
     vec3 fdx = dFdx(pos);
     vec3 fdy = dFdy(pos);
-    return normalize(cross(fdx, fdy));
+    return cross(fdx, fdy);
   }
 
   void main() {
@@ -32,7 +32,7 @@ source: `
     roughness = clamp(roughness, ROUGHNESS_MIN, 1.0);
     metalness = clamp(metalness, 0.0, 1.0);
 
-    vec3 normal = normalize(vNormal);
+    vec3 normal = vNormal;
     vec3 faceNormal = faceNormals(vPosition);
     normal *= sign(dot(normal, faceNormal));
 
@@ -45,9 +45,10 @@ source: `
     #endif
 
     out_position = vec4(vPosition, meshIndex);
-    out_normal = vec4(normal, roughness);
-    out_faceNormal = vec4(faceNormal, metalness);
-    out_color = vec4(color, materialType);
+    out_normal = vec4(normal, 0);
+    out_faceNormal = vec4(faceNormal, 0);
+    out_color = vec4(color, 0);
+    out_matProps = vec4(roughness, metalness, materialType, 0);
   }
 `
 

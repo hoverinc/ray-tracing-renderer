@@ -66,7 +66,6 @@ export function makeRenderingPipeline({
   const previewScale = new Vector2(1, 1);
   const fullscreenScale = new Vector2(1, 1);
 
-  let lastToneMappedScale;
   let lastToneMappedTexture;
 
   const lastCamera = new PerspectiveCamera();
@@ -86,14 +85,12 @@ export function makeRenderingPipeline({
   let gBufferBack;
 
   function initFrameBuffers(width, height) {
-    const floatTex = () => makeTexture(gl, { width, height, storage: 'float' });
-
     const makeHdrBuffer = () => makeFramebuffer(gl, {
-      color: { 0: floatTex() }
+      color: { 0: makeTexture(gl, { width, height, storage: 'float' }) }
     });
 
     const makeReprojectBuffer = () => makeFramebuffer(gl, {
-        color: { 0: floatTex() }
+        color: { 0: makeTexture(gl, { width, height, storage: 'halfFloat' }) }
       });
 
     hdrBuffer = makeHdrBuffer();
@@ -102,17 +99,19 @@ export function makeRenderingPipeline({
     reprojectBuffer = makeReprojectBuffer();
     reprojectBackBuffer = makeReprojectBuffer();
 
-    const normalBuffer = floatTex();
-    const faceNormalBuffer = floatTex();
-    const colorBuffer = floatTex();
+    const normalBuffer = makeTexture(gl, { width, height, storage: 'halfFloat' });
+    const faceNormalBuffer = makeTexture(gl, { width, height, storage: 'halfFloat' });
+    const colorBuffer = makeTexture(gl, { width, height, storage: 'byte' });
+    const matProps = makeTexture(gl, { width, height, storage: 'halfFloat' });
     const depthTarget = makeDepthTarget(gl, width, height);
 
     const makeGBuffer = () => makeFramebuffer(gl, {
       color: {
-        [gBufferPass.outputLocs.position]: floatTex(),
+        [gBufferPass.outputLocs.position]: makeTexture(gl, { width, height, storage: 'float' }),
         [gBufferPass.outputLocs.normal]: normalBuffer,
         [gBufferPass.outputLocs.faceNormal]: faceNormalBuffer,
         [gBufferPass.outputLocs.color]: colorBuffer,
+        [gBufferPass.outputLocs.matProps]: matProps,
       },
       depth: depthTarget
     });
@@ -120,7 +119,6 @@ export function makeRenderingPipeline({
     gBuffer = makeGBuffer();
     gBufferBack = makeGBuffer();
 
-    lastToneMappedScale = fullscreenScale;
     lastToneMappedTexture = hdrBuffer.color[rayTracePass.outputLocs.light];
   }
 
@@ -211,7 +209,6 @@ export function makeRenderingPipeline({
     });
 
     lastToneMappedTexture = lightTexture;
-    lastToneMappedScale = textureScale;
   }
 
   function renderGBuffer(camera) {
@@ -227,6 +224,7 @@ export function makeRenderingPipeline({
       normal: gBuffer.color[gBufferPass.outputLocs.normal],
       faceNormal: gBuffer.color[gBufferPass.outputLocs.faceNormal],
       color: gBuffer.color[gBufferPass.outputLocs.color],
+      matProps: gBuffer.color[gBufferPass.outputLocs.matProps]
     });
   }
 
@@ -358,7 +356,8 @@ export function makeRenderingPipeline({
       return;
     }
 
-    swapBuffers();
+    swapGBuffer();
+    swapReprojectBuffer();
 
     if (sampleCount === 0) {
       reprojectPass.setPreviousCamera(lastCamera);

@@ -64,45 +64,7 @@ export function makeTexture(gl, params) {
 
   channels = clamp(channels, 1, 4);
 
-  const format = [
-    gl.RED,
-    gl.RG,
-    gl.RGB,
-    gl.RGBA
-  ][channels - 1];
-
-  const isByteArray =
-    storage === 'byte' ||
-    data instanceof Uint8Array ||
-    data instanceof HTMLImageElement ||
-    data instanceof HTMLCanvasElement ||
-    data instanceof ImageData;
-
-  const isFloatArray =
-    storage === 'float' ||
-    data instanceof Float32Array;
-
-  let type;
-  let internalFormat;
-  if (isByteArray) {
-    type = gl.UNSIGNED_BYTE;
-    internalFormat = [
-      gl.R8,
-      gl.RG8,
-      gammaCorrection ? gl.SRGB8 : gl.RGB8,
-      gammaCorrection ? gl.SRGB8_ALPHA8 : gl.RGBA8
-    ][channels - 1];
-  } else if (isFloatArray) {
-    type = gl.FLOAT;
-    internalFormat = [
-      gl.R32F,
-      gl.RG32F,
-      gl.RGB32F,
-      gl.RGBA32F
-    ][channels - 1];
-  } else {
-    console.error('Texture of unknown type:', storage || data);
-  }
+  const { type, format, internalFormat } = getTextureFormat(gl, channels, storage, data, gammaCorrection);
 
   if (dataArray) {
     gl.texStorage3D(target, 1, internalFormat, width, height, dataArray.length);
@@ -147,5 +109,79 @@ export function makeDepthTarget(gl, width, height) {
   return {
     target,
     texture
+  };
+}
+
+function getFormat(gl, channels) {
+  const map = {
+    1: gl.RED,
+    2: gl.RG,
+    3: gl.RGB,
+    4: gl.RGBA
+  };
+  return map[channels];
+}
+
+function getTextureFormat(gl, channels, storage, data, gammaCorrection) {
+  let type;
+  let internalFormat;
+
+  const isByteArray =
+    data instanceof Uint8Array ||
+    data instanceof HTMLImageElement ||
+    data instanceof HTMLCanvasElement ||
+    data instanceof ImageData;
+
+  const isFloatArray = data instanceof Float32Array;
+
+  if (storage === 'byte' || (!storage && isByteArray)) {
+    internalFormat = {
+      1: gl.R8,
+      2: gl.RG8,
+      3: gammaCorrection ? gl.SRGB8 : gl.RGB8,
+      4: gammaCorrection ? gl.SRGB8_ALPHA8 : gl.RGBA8
+    }[channels];
+
+    type = gl.UNSIGNED_BYTE;
+  } else if (storage === 'float' || (!storage && isFloatArray)) {
+    internalFormat = {
+      1: gl.R32F,
+      2: gl.RG32F,
+      3: gl.RGB32F,
+      4: gl.RGBA32F
+    }[channels];
+
+    type = gl.FLOAT;
+  } else if (storage === 'halfFloat') {
+    internalFormat = {
+      1: gl.R16F,
+      2: gl.RG16F,
+      3: gl.RGB16F,
+      4: gl.RGBA16F
+    }[channels];
+
+    type = gl.FLOAT;
+  } else if (storage === 'snorm') {
+    internalFormat = {
+      1: gl.R8_SNORM,
+      2: gl.RG8_SNORM,
+      3: gl.RGB8_SNORM,
+      4: gl.RGBA8_SNORM,
+    }[channels];
+
+    type = gl.UNSIGNED_BYTE;
+  }
+
+  const format = {
+    1: gl.RED,
+    2: gl.RG,
+    3: gl.RGB,
+    4: gl.RGBA
+  }[channels];
+
+  return {
+    format,
+    internalFormat,
+    type
   };
 }

@@ -49,6 +49,8 @@ source: `
 
     if (sum > 0.0) {
       upscaledLight /= sum;
+    } else {
+      upscaledLight = texture(light, lightScale * coord);
     }
 
     return upscaledLight;
