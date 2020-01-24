@@ -45,10 +45,10 @@ source: `
     #endif
 
     out_position = vec4(vPosition, meshIndex);
-    out_normal = vec4(normal, 0);
+    out_normal = vec4(normal, materialType);
     out_faceNormal = vec4(faceNormal, 0);
     out_color = vec4(color, 0);
-    out_matProps = vec4(roughness, metalness, materialType, 0);
+    out_matProps = vec4(roughness, metalness, 0, 0);
   }
 `
 

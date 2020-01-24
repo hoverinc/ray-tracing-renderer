@@ -101,8 +101,8 @@ export function makeRenderingPipeline({
 
     const normalBuffer = makeTexture(gl, { width, height, storage: 'halfFloat' });
     const faceNormalBuffer = makeTexture(gl, { width, height, storage: 'halfFloat' });
-    const colorBuffer = makeTexture(gl, { width, height, storage: 'byte' });
-    const matProps = makeTexture(gl, { width, height, storage: 'halfFloat' });
+    const colorBuffer = makeTexture(gl, { width, height, storage: 'byte', channels: 3 });
+    const matProps = makeTexture(gl, { width, height, storage: 'byte', channels: 2 });
     const depthTarget = makeDepthTarget(gl, width, height);
 
     const makeGBuffer = () => makeFramebuffer(gl, {
