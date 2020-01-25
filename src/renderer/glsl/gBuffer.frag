@@ -24,9 +24,11 @@ source: `
     int materialIndex = int(EPS + vMaterialMeshIndex.x);
     float meshIndex = floor(EPS + vMaterialMeshIndex.y);
 
-    vec3 color = getMatColor(materialIndex, vUv);
-    float roughness = getMatRoughness(materialIndex, vUv);
-    float metalness = getMatMetalness(materialIndex, vUv);
+    vec2 uv = fract(vUv);
+
+    vec3 color = getMatColor(materialIndex, uv);
+    float roughness = getMatRoughness(materialIndex, uv);
+    float metalness = getMatMetalness(materialIndex, uv);
     float materialType = getMatType(materialIndex);
 
     roughness = clamp(roughness, ROUGHNESS_MIN, 1.0);
@@ -41,7 +43,7 @@ source: `
       vec3 dp2 = dFdy(vPosition);
       vec2 duv1 = dFdx(vUv);
       vec2 duv2 = dFdy(vUv);
-      normal = getMatNormal(materialIndex, vUv, normal, dp1, dp2, duv1, duv2);
+      normal = getMatNormal(materialIndex, uv, normal, dp1, dp2, duv1, duv2);
     #endif
 
     out_position = vec4(vPosition, meshIndex);
