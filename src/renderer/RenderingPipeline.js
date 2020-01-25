@@ -67,6 +67,7 @@ export function makeRenderingPipeline({
   const fullscreenScale = new Vector2(1, 1);
 
   let lastToneMappedTexture;
+  let lastToneMappedScale;
 
   const lastCamera = new PerspectiveCamera();
   lastCamera.position.set(1, 1, 1);
@@ -90,7 +91,7 @@ export function makeRenderingPipeline({
     });
 
     const makeReprojectBuffer = () => makeFramebuffer(gl, {
-        color: { 0: makeTexture(gl, { width, height, storage: 'float' }) }
+        color: { 0: makeTexture(gl, { width, height, storage: 'float', magFilter: gl.LINEAR, minFilter: gl.LINEAR }) }
       });
 
     hdrBuffer = makeHdrBuffer();
@@ -120,6 +121,7 @@ export function makeRenderingPipeline({
     gBufferBack = makeGBuffer();
 
     lastToneMappedTexture = hdrBuffer.color[rayTracePass.outputLocs.light];
+    lastToneMappedScale = fullscreenScale;
   }
 
   function swapReprojectBuffer() {
@@ -201,14 +203,16 @@ export function makeRenderingPipeline({
     buffer.unbind();
   }
 
-  function toneMapToScreen(lightTexture, textureScale) {
+  function toneMapToScreen(lightTexture, lightScale) {
     gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
     toneMapPass.draw({
       light: lightTexture,
-      textureScale
+      lightScale,
+      position: gBuffer.color[gBufferPass.outputLocs.position],
     });
 
     lastToneMappedTexture = lightTexture;
+    lastToneMappedScale = lightScale;
   }
 
   function renderGBuffer(camera) {
@@ -274,18 +278,19 @@ export function makeRenderingPipeline({
     newSampleToBuffer(hdrBuffer, previewWidth, previewHeight);
 
     reprojectBuffer.bind();
-    gl.viewport(0, 0, screenWidth, screenHeight);
+    gl.viewport(0, 0, previewWidth, previewHeight);
     reprojectPass.draw({
       blendAmount: 1.0,
       light: hdrBuffer.color[0],
       lightScale: previewScale,
       position: gBuffer.color[gBufferPass.outputLocs.position],
       previousLight: lastToneMappedTexture,
+      previousLightScale: lastToneMappedScale,
       previousPosition: gBufferBack.color[gBufferPass.outputLocs.position],
     });
     reprojectBuffer.unbind();
 
-    toneMapToScreen(reprojectBuffer.color[0], fullscreenScale);
+    toneMapToScreen(reprojectBuffer.color[0], previewScale);
 
     swapBuffers();
   }
@@ -323,6 +328,7 @@ export function makeRenderingPipeline({
           lightScale: fullscreenScale,
           position: gBuffer.color[gBufferPass.outputLocs.position],
           previousLight: reprojectBackBuffer.color[0],
+          previousLightScale: previewScale,
           previousPosition: gBufferBack.color[gBufferPass.outputLocs.position],
         });
         reprojectBuffer.unbind();
@@ -387,6 +393,7 @@ export function makeRenderingPipeline({
       lightScale: fullscreenScale,
       position: gBuffer.color[gBufferPass.outputLocs.position],
       previousLight: lastToneMappedTexture,
+      previousLightScale: lastToneMappedScale,
       previousPosition: gBufferBack.color[gBufferPass.outputLocs.position],
     });
     reprojectBuffer.unbind();

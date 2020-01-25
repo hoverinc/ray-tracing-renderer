@@ -32,12 +32,14 @@ export function makeToneMapPass(gl, params) {
   function draw(params) {
     const {
       light,
-      textureScale
+      lightScale,
+      position
     } = params;
 
-    renderPass.setUniform('textureScale', textureScale.x, textureScale.y);
+    renderPass.setUniform('lightScale', lightScale.x, lightScale.y);
 
     renderPass.setTexture('light', light);
+    renderPass.setTexture('position', position);
 
     renderPass.useProgram();
     fullscreenQuad.draw();
