@@ -112,7 +112,7 @@ source: `
       history += weight * texelFetch(previousLight, texel[i], 0);
       sum += weight;
     }
-    sum = 0.0;
+
     if (sum > 0.0) {
       history /= sum;
     } else {
