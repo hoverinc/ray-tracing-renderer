@@ -69,8 +69,10 @@ source: `
     vec3 currentPosition = positionTex.xyz;
     float currentMeshId = positionTex.w;
 
+    vec4 upscaledLight = getUpscaledLight(vCoord);
+
     if (currentMeshId == 0.0) {
-      out_light = texture(light, lightScale * vCoord);
+      out_light = upscaledLight;
       return;
     }
 
@@ -110,7 +112,7 @@ source: `
       history += weight * texelFetch(previousLight, texel[i], 0);
       sum += weight;
     }
-
+    sum = 0.0;
     if (sum > 0.0) {
       history /= sum;
     } else {
@@ -138,8 +140,6 @@ source: `
       history.xyz *= MAX_SAMPLES / history.w;
       history.w = MAX_SAMPLES;
     }
-
-    vec4 upscaledLight = getUpscaledLight(vCoord);
 
     out_light = blendAmount * history + upscaledLight;
   }
