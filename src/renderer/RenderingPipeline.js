@@ -127,7 +127,7 @@ export function makeRenderingPipeline({
   }
 
   function setPreviewBufferDimensions() {
-    const desiredTimeForPreview = 11;
+    const desiredTimeForPreview = 10;
     const numPixelsForPreview = desiredTimeForPreview / tileRender.getTimePerPixel();
 
     const aspectRatio = screenWidth / screenHeight;
