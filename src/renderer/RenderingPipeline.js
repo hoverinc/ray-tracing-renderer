@@ -86,11 +86,11 @@ export function makeRenderingPipeline({
 
   function initFrameBuffers(width, height) {
     const makeHdrBuffer = () => makeFramebuffer(gl, {
-      color: { 0: makeTexture(gl, { width, height, storage: 'float' }) }
+      color: { 0: makeTexture(gl, { width, height, storage: 'float', magFilter: gl.LINEAR, minFilter: gl.LINEAR }) }
     });
 
     const makeReprojectBuffer = () => makeFramebuffer(gl, {
-        color: { 0: makeTexture(gl, { width, height, storage: 'halfFloat' }) }
+        color: { 0: makeTexture(gl, { width, height, storage: 'float' }) }
       });
 
     hdrBuffer = makeHdrBuffer();
