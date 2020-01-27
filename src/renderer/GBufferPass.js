@@ -32,20 +32,25 @@ export function makeGBufferPass(gl, { materialBuffer, mergedMesh }) {
     jitterY = y;
   }
 
-  let projView = new Matrix4();
-
+  let currentCamera;
   function setCamera(camera) {
-    projView.copy(camera.projectionMatrix);
+    currentCamera = camera;
+  }
+
+  function calcCamera() {
+    projView.copy(currentCamera.projectionMatrix);
 
     projView.elements[8] += 2 * jitterX;
     projView.elements[9] += 2 * jitterY;
 
-    projView.multiply(camera.matrixWorldInverse);
-
+    projView.multiply(currentCamera.matrixWorldInverse);
     renderPass.setUniform('projView', projView.elements);
   }
 
+  let projView = new Matrix4();
+
   function draw() {
+    calcCamera();
     gl.bindVertexArray(vao);
     renderPass.useProgram();
     gl.enable(gl.DEPTH_TEST);

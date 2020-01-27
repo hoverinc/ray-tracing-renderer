@@ -57,6 +57,14 @@ export function makeRenderingPipeline({
     ready = true;
   };
 
+  let sampleCount = 0;
+
+  let sampleRenderedCallback = () => {};
+
+  const lastCamera = new PerspectiveCamera();
+  lastCamera.position.set(1, 1, 1);
+  lastCamera.updateMatrixWorld();
+
   let screenWidth = 0;
   let screenHeight = 0;
 
@@ -66,17 +74,6 @@ export function makeRenderingPipeline({
   const previewScale = new Vector2(1, 1);
   const fullscreenScale = new Vector2(1, 1);
 
-  let lastToneMappedTexture;
-  let lastToneMappedScale;
-
-  const lastCamera = new PerspectiveCamera();
-  lastCamera.position.set(1, 1, 1);
-  lastCamera.updateMatrixWorld();
-
-  let sampleCount = 0;
-
-  let sampleRenderedCallback = () => {};
-
   let hdrBuffer;
   let hdrBackBuffer;
   let reprojectBuffer;
@@ -84,6 +81,9 @@ export function makeRenderingPipeline({
 
   let gBuffer;
   let gBufferBack;
+
+  let lastToneMappedTexture;
+  let lastToneMappedScale;
 
   function initFrameBuffers(width, height) {
     const makeHdrBuffer = () => makeFramebuffer(gl, {
@@ -176,6 +176,24 @@ export function makeRenderingPipeline({
       cam1.focus === cam2.focus;
   }
 
+  function updateSeed(width, height, useJitter = true) {
+    rayTracePass.setSize(width, height);
+
+    const jitterX = useJitter ? (Math.random() - 0.5) / width : 0;
+    const jitterY = useJitter ? (Math.random() - 0.5) / height : 0;
+    gBufferPass.setJitter(jitterX, jitterY);
+    rayTracePass.setJitter(jitterX, jitterY);
+    reprojectPass.setJitter(jitterX, jitterY);
+
+    if (sampleCount === 0) {
+      rayTracePass.setStrataCount(1);
+    } else if (sampleCount === numUniformSamples) {
+      rayTracePass.setStrataCount(strataCount);
+    } else {
+      rayTracePass.nextSeed();
+    }
+  }
+
   function clearBuffer(buffer) {
     buffer.bind();
     gl.clear(gl.COLOR_BUFFER_BIT);
@@ -215,9 +233,8 @@ export function makeRenderingPipeline({
     lastToneMappedScale = lightScale;
   }
 
-  function renderGBuffer(camera) {
+  function renderGBuffer() {
     gBuffer.bind();
-    gBufferPass.setCamera(camera);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     gl.viewport(0, 0, screenWidth, screenHeight);
     gBufferPass.draw();
@@ -239,24 +256,6 @@ export function makeRenderingPipeline({
     gl.disable(gl.SCISSOR_TEST);
   }
 
-  function updateSeed(width, height) {
-    rayTracePass.setSize(width, height);
-
-    const jitterX = (Math.random() - 0.5) / width;
-    const jitterY = (Math.random() - 0.5) / height;
-    gBufferPass.setJitter(jitterX, jitterY);
-    rayTracePass.setJitter(jitterX, jitterY);
-    reprojectPass.setJitter(jitterX, jitterY);
-
-    if (sampleCount === 0) {
-      rayTracePass.setStrataCount(1);
-    } else if (sampleCount === numUniformSamples) {
-      rayTracePass.setStrataCount(strataCount);
-    } else {
-      rayTracePass.nextSeed();
-    }
-  }
-
   function drawPreview(camera, lastCamera) {
     if (sampleCount > 0) {
       swapBuffers();
@@ -266,13 +265,14 @@ export function makeRenderingPipeline({
     tileRender.reset();
     setPreviewBufferDimensions();
 
-    updateSeed(previewWidth, previewHeight);
+    updateSeed(previewWidth, previewHeight, false);
 
     rayTracePass.setCamera(camera);
+    gBufferPass.setCamera(camera);
     reprojectPass.setPreviousCamera(lastCamera);
     lastCamera.copy(camera);
 
-    renderGBuffer(camera);
+    renderGBuffer();
 
     rayTracePass.bindTextures();
     newSampleToBuffer(hdrBuffer, previewWidth, previewHeight);
@@ -295,7 +295,7 @@ export function makeRenderingPipeline({
     swapBuffers();
   }
 
-  function drawTile(camera) {
+  function drawTile() {
     const { x, y, tileWidth, tileHeight, isFirstTile, isLastTile } = tileRender.nextTile();
 
     if (isFirstTile) {
@@ -305,8 +305,8 @@ export function makeRenderingPipeline({
         reprojectPass.setPreviousCamera(lastCamera);
       }
 
-      updateSeed(screenWidth, screenHeight);
-      renderGBuffer(camera);
+      updateSeed(screenWidth, screenHeight, true);
+      renderGBuffer();
       rayTracePass.bindTextures();
     }
 
@@ -349,7 +349,7 @@ export function makeRenderingPipeline({
     if (!areCamerasEqual(camera, lastCamera)) {
       drawPreview(camera, lastCamera);
     } else {
-      drawTile(camera);
+      drawTile();
     }
   }
 
@@ -371,13 +371,14 @@ export function makeRenderingPipeline({
     if (!areCamerasEqual(camera, lastCamera)) {
       sampleCount = 0;
       rayTracePass.setCamera(camera);
+      gBufferPass.setCamera(camera);
       lastCamera.copy(camera);
       clearBuffer(hdrBuffer);
     } else {
       sampleCount++;
     }
 
-    updateSeed(screenWidth, screenHeight);
+    updateSeed(screenWidth, screenHeight, true);
 
     renderGBuffer(camera);
 
