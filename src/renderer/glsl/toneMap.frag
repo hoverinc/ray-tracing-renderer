@@ -38,6 +38,7 @@ source: `
     return clamp((color * (2.51 * color + 0.03)) / (color * (2.43 * color + 0.59) + 0.14), vec3(0.0), vec3(1.0));
   }
 
+  #ifdef EDGE_PRESERVING_UPSCALE
   vec4 getUpscaledLight(vec2 coord) {
     float meshId = texture(position, coord).w;
 
@@ -78,9 +79,14 @@ source: `
 
     return upscaledLight;
   }
+  #endif
 
   void main() {
-    vec4 upscaledLight = getUpscaledLight(vCoord);
+    #ifdef EDGE_PRESERVING_UPSCALE
+      vec4 upscaledLight = getUpscaledLight(vCoord);
+    #else
+      vec4 upscaledLight = texture(light, lightScale * vCoord);
+    #endif
 
     // alpha channel stores the number of samples progressively rendered
     // divide the sum of light by alpha to obtain average contribution of light
