@@ -104,7 +104,6 @@ source: `
     }
 
     out_light = blendAmount * history + currentLight;
-    // out_light = currentLight;
   }
 `
 }

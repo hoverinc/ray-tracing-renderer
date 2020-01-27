@@ -77,8 +77,12 @@ source: (defines) => `
 
     SurfaceInteraction si;
 
+    // first surface interaction from g-buffer
     surfaceInteractionDirect(vCoord, si);
+
+    // first surface interaction from ray interesction
     // intersectScene(path.ray, si);
+
     bounce(path, 1, si);
 
     // Manually unroll for loop.

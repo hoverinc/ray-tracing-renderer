@@ -26,7 +26,6 @@ export function makeGBufferPass(gl, { materialBuffer, mergedMesh }) {
 
   let jitterX = 0;
   let jitterY = 0;
-
   function setJitter(x, y) {
     jitterX = x;
     jitterY = y;

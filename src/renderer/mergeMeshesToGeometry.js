@@ -49,14 +49,14 @@ export function mergeMeshesToGeometry(meshes) {
 }
 
 function mergeGeometry(geometryAndMaterialIndex, vertexCount, indexCount) {
-  const possitionAttrib = new BufferAttribute(new Float32Array(3 * vertexCount), 3, false);
+  const positionAttrib = new BufferAttribute(new Float32Array(3 * vertexCount), 3, false);
   const normalAttrib = new BufferAttribute(new Float32Array(3 * vertexCount), 3, false);
   const uvAttrib = new BufferAttribute(new Float32Array(2 * vertexCount), 2, false);
   const materialMeshIndexAttrib = new BufferAttribute(new Float32Array(2 * vertexCount), 2, false);
   const indexAttrib = new BufferAttribute(new Uint32Array(indexCount), 1, false);
 
   const mergedGeometry = new BufferGeometry();
-  mergedGeometry.addAttribute('position', possitionAttrib);
+  mergedGeometry.addAttribute('position', positionAttrib);
   mergedGeometry.addAttribute('normal', normalAttrib);
   mergedGeometry.addAttribute('uv', uvAttrib);
   mergedGeometry.addAttribute('materialMeshIndex', materialMeshIndexAttrib);
