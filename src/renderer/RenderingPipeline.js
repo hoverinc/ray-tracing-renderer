@@ -298,7 +298,6 @@ export function makeRenderingPipeline({
   function drawTile(camera) {
     const { x, y, tileWidth, tileHeight, isFirstTile, isLastTile } = tileRender.nextTile();
 
-    // move to isLastTile?
     if (isFirstTile) {
 
       if (sampleCount === 0) { // previous rendered image was a preview image
@@ -404,7 +403,7 @@ export function makeRenderingPipeline({
   return {
     draw,
     drawFull,
-    restartTimer: tileRender.restartTimer,
+    restartTimer: tileRender.reset,
     setSize,
     getTotalSamplesRendered() {
       return sampleCount;
