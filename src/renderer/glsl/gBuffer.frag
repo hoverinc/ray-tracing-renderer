@@ -12,7 +12,7 @@ source: `
   in vec3 vPosition;
   in vec3 vNormal;
   in vec2 vUv;
-  in vec2 vMaterialMeshIndex;
+  flat in ivec2 vMaterialMeshIndex;
 
   vec3 faceNormals(vec3 pos) {
     vec3 fdx = dFdx(pos);
@@ -21,8 +21,8 @@ source: `
   }
 
   void main() {
-    int materialIndex = int(EPS + vMaterialMeshIndex.x);
-    float meshIndex = floor(EPS + vMaterialMeshIndex.y);
+    int materialIndex = vMaterialMeshIndex.x;
+    int meshIndex = vMaterialMeshIndex.y;
 
     vec2 uv = fract(vUv);
 
@@ -46,7 +46,7 @@ source: `
       normal = getMatNormal(materialIndex, uv, normal, dp1, dp2, duv1, duv2);
     #endif
 
-    out_position = vec4(vPosition, meshIndex);
+    out_position = vec4(vPosition, float(meshIndex) + EPS);
     out_normal = vec4(normal, materialType);
     out_faceNormal = vec4(faceNormal, 0);
     out_color = vec4(color, 0);

@@ -23,9 +23,13 @@ source: `
     return 0.5 * historyCoord.xy / historyCoord.w + 0.5;
   }
 
+  float getMeshId(sampler2D meshIdTex, vec2 vCoord) {
+    return floor(texture(meshIdTex, vCoord).w);
+  }
+
   void main() {
     vec3 currentPosition = textureLinear(position, vCoord).xyz;
-    float currentMeshId = texture(position, vCoord).w;
+    float currentMeshId = getMeshId(position, vCoord);
 
     vec4 currentLight = texture(light, lightScale * vCoord);
 
@@ -63,9 +67,9 @@ source: `
 
     // bilinear sampling, rejecting samples that don't have a matching mesh id
     for (int i = 0; i < 4; i++) {
-      vec2 pCoord = (vec2(texel[i]) + 0.5) * hSizeInv;
+      vec2 gCoord = (vec2(texel[i]) + 0.5) * hSizeInv;
 
-      float histMeshId = texture(previousPosition, pCoord).w;
+      float histMeshId = getMeshId(previousPosition, gCoord);
 
       float isValid = histMeshId != currentMeshId || any(greaterThanEqual(texel[i], hSize)) ? 0.0 : 1.0;
 
@@ -83,9 +87,9 @@ source: `
       for (int x = -1; x <= 1; x++) {
         for (int y = -1; y <= 1; y++) {
           ivec2 texel = hTexel + ivec2(x, y);
-          vec2 pCoord = (vec2(texel) + 0.5) * hSizeInv;
+          vec2 gCoord = (vec2(texel) + 0.5) * hSizeInv;
 
-          float histMeshId = texture(previousPosition, pCoord).w;
+          float histMeshId = getMeshId(previousPosition, gCoord);
 
           float isValid = histMeshId != currentMeshId || any(greaterThanEqual(texel, hSize)) ? 0.0 : 1.0;
 
