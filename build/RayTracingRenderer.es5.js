@@ -2657,7 +2657,6 @@
     var tileHeight;
     var columns;
     var rows;
-    var firstTileTime = 0;
     var width = 0;
     var height = 0; // initial number of pixels per rendered tile
     // based on correlation between system performance and max supported render buffer size
@@ -2667,14 +2666,21 @@
     var pixelsPerTileQuantized = pixelsPerTile;
     var desiredTimePerTile = 20;
     var timePerPixel = desiredTimePerTile / pixelsPerTile;
+    var lastTime = 0;
+    var timeElapsed = 0;
 
-    function restartTimer() {
-      firstTileTime = 0;
+    function updateTime(time) {
+      if (lastTime) {
+        timeElapsed = time - lastTime;
+      }
+
+      lastTime = time;
     }
 
     function reset() {
       currentTile = -1;
-      firstTileTime = 0;
+      timeElapsed = 0;
+      lastTime = 0;
     }
 
     function setSize(w, h) {
@@ -2695,8 +2701,7 @@
     }
 
     function initTiles() {
-      if (firstTileTime) {
-        var timeElapsed = Date.now() - firstTileTime;
+      if (timeElapsed) {
         var timePerTile = timeElapsed / numTiles;
         var expAvg = 0.5;
         var newPixelsPerTile = pixelsPerTile * desiredTimePerTile / timePerTile;
@@ -2705,7 +2710,6 @@
         timePerPixel = expAvg * timePerPixel + (1 - expAvg) * newTimePerPixel;
       }
 
-      firstTileTime = Date.now();
       pixelsPerTile = clamp(pixelsPerTile, 8192, width * height);
       setTileDimensions(pixelsPerTile);
     }
@@ -2716,6 +2720,13 @@
       if (currentTile % numTiles === 0) {
         initTiles();
         currentTile = 0;
+        timeElapsed = 0;
+      }
+
+      var isLastTile = currentTile === numTiles - 1;
+
+      if (isLastTile) {
+        requestAnimationFrame(updateTime);
       }
 
       var x = currentTile % columns;
@@ -2726,7 +2737,7 @@
         tileWidth: tileWidth,
         tileHeight: tileHeight,
         isFirstTile: currentTile === 0,
-        isLastTile: currentTile === numTiles - 1
+        isLastTile: isLastTile
       };
     }
 
@@ -2736,7 +2747,6 @@
       },
       nextTile: nextTile,
       reset: reset,
-      restartTimer: restartTimer,
       setSize: setSize
     };
   }
@@ -3034,8 +3044,7 @@
           tileWidth = _tileRender$nextTile.tileWidth,
           tileHeight = _tileRender$nextTile.tileHeight,
           isFirstTile = _tileRender$nextTile.isFirstTile,
-          isLastTile = _tileRender$nextTile.isLastTile; // move to isLastTile?
-
+          isLastTile = _tileRender$nextTile.isLastTile;
 
       if (isFirstTile) {
         if (sampleCount === 0) {
@@ -3131,7 +3140,7 @@
     return {
       draw: draw,
       drawFull: drawFull,
-      restartTimer: tileRender.restartTimer,
+      restartTimer: tileRender.reset,
       setSize: setSize,
       getTotalSamplesRendered: function getTotalSamplesRendered() {
         return sampleCount;
