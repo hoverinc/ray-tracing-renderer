@@ -3415,8 +3415,6 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
     let columns;
     let rows;
 
-    let firstTileTime = 0;
-
     let width = 0;
     let height = 0;
 
@@ -3431,13 +3429,21 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
 
     let timePerPixel = desiredTimePerTile / pixelsPerTile;
 
-    function restartTimer() {
-      firstTileTime = 0;
+    let lastTime = 0;
+    let timeElapsed = 0;
+
+    function updateTime(time) {
+      if (lastTime) {
+        timeElapsed = time - lastTime;
+      }
+
+      lastTime = time;
     }
 
     function reset() {
       currentTile = -1;
-      firstTileTime = 0;
+      timeElapsed = 0;
+      lastTime = 0;
     }
 
     function setSize(w, h) {
@@ -3460,8 +3466,7 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
     }
 
     function initTiles() {
-      if (firstTileTime) {
-        const timeElapsed = Date.now() - firstTileTime;
+      if (timeElapsed) {
         const timePerTile = timeElapsed / numTiles;
 
         const expAvg = 0.5;
@@ -3472,8 +3477,6 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
         const newTimePerPixel = timePerTile / pixelsPerTileQuantized;
         timePerPixel = expAvg * timePerPixel + (1 - expAvg) * newTimePerPixel;
       }
-
-      firstTileTime = Date.now();
 
       pixelsPerTile = clamp(pixelsPerTile, 8192, width * height);
 
@@ -3486,6 +3489,12 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
       if (currentTile % numTiles === 0) {
         initTiles();
         currentTile = 0;
+        timeElapsed = 0;
+      }
+
+      const isLastTile = currentTile === numTiles - 1;
+      if (isLastTile) {
+        requestAnimationFrame(updateTime);
       }
 
       const x = currentTile % columns;
@@ -3497,7 +3506,7 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
         tileWidth,
         tileHeight,
         isFirstTile: currentTile === 0,
-        isLastTile: currentTile === numTiles - 1
+        isLastTile,
       };
     }
 
@@ -3507,8 +3516,7 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
       },
       nextTile,
       reset,
-      restartTimer,
-      setSize
+      setSize,
     };
   }
 
@@ -3924,7 +3932,6 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
     function drawTile() {
       const { x, y, tileWidth, tileHeight, isFirstTile, isLastTile } = tileRender.nextTile();
 
-      // move to isLastTile?
       if (isFirstTile) {
 
         if (sampleCount === 0) { // previous rendered image was a preview image
@@ -4026,7 +4033,7 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
     return {
       draw,
       drawFull,
-      restartTimer: tileRender.restartTimer,
+      restartTimer: tileRender.reset,
       setSize,
       getTotalSamplesRendered() {
         return sampleCount;
