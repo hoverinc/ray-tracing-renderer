@@ -2256,7 +2256,7 @@ void surfaceInteractionFromBVH(inout SurfaceInteraction si, Triangle tri, vec3 b
     vec2 uv2 = texelFetch(uvs, i2, 0).xy;
     vec2 uv = fract(barycentric.x * uv0 + barycentric.y * uv1 + barycentric.z * uv2);
   #else
-    vec2 uv = vec2();
+    vec2 uv = vec2(0.0);
   #endif
 
   si.materialType = int(getMatType(materialIndex));
