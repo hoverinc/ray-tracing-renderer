@@ -6,9 +6,10 @@ outputs: ['color'],
 source: `
   in vec2 vCoord;
 
-  uniform mediump sampler2D light;
+  uniform sampler2D light;
+  uniform sampler2D position;
 
-  uniform vec2 textureScale;
+  uniform vec2 lightScale;
 
   // Tonemapping functions from THREE.js
 
@@ -37,15 +38,62 @@ source: `
     return clamp((color * (2.51 * color + 0.03)) / (color * (2.43 * color + 0.59) + 0.14), vec3(0.0), vec3(1.0));
   }
 
+  #ifdef EDGE_PRESERVING_UPSCALE
+  vec4 getUpscaledLight(vec2 coord) {
+    float meshId = texture(position, coord).w;
+
+    vec2 sizef = lightScale * vec2(textureSize(position, 0));
+    vec2 texelf = coord * sizef - 0.5;
+    ivec2 texel = ivec2(texelf);
+    vec2 f = fract(texelf);
+
+    ivec2 texels[] = ivec2[](
+      texel + ivec2(0, 0),
+      texel + ivec2(1, 0),
+      texel + ivec2(0, 1),
+      texel + ivec2(1, 1)
+    );
+
+    float weights[] = float[](
+      (1.0 - f.x) * (1.0 - f.y),
+      f.x * (1.0 - f.y),
+      (1.0 - f.x) * f.y,
+      f.x * f.y
+    );
+
+    vec4 upscaledLight;
+    float sum;
+    for (int i = 0; i < 4; i++) {
+      vec2 pCoord = (vec2(texels[i]) + 0.5) / sizef;
+      float isValid = texture(position, pCoord).w == meshId ? 1.0 : 0.0;
+      float weight = isValid * weights[i];
+      upscaledLight += weight * texelFetch(light, texels[i], 0);
+      sum += weight;
+    }
+
+    if (sum > 0.0) {
+      upscaledLight /= sum;
+    } else {
+      upscaledLight = texture(light, lightScale * coord);
+    }
+
+    return upscaledLight;
+  }
+  #endif
+
   void main() {
-    vec4 tex = texture(light, textureScale * vCoord);
+    #ifdef EDGE_PRESERVING_UPSCALE
+      vec4 upscaledLight = getUpscaledLight(vCoord);
+    #else
+      vec4 upscaledLight = texture(light, lightScale * vCoord);
+    #endif
 
     // alpha channel stores the number of samples progressively rendered
     // divide the sum of light by alpha to obtain average contribution of light
 
     // in addition, alpha contains a scale factor for the shadow catcher material
     // dividing by alpha normalizes the brightness of the shadow catcher to match the background envmap.
-    vec3 light = tex.rgb / tex.a;
+    vec3 light = upscaledLight.rgb / upscaledLight.a;
 
     light *= EXPOSURE;
 

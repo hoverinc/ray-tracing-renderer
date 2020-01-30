@@ -1,22 +1,19 @@
 import { bvhAccel, flattenBvh } from './bvhAccel';
-import { ThinMaterial, ThickMaterial, ShadowCatcherMaterial } from '../constants';
 import { generateEnvMapFromSceneComponents, generateBackgroundMapFromSceneBackground } from './envMapCreation';
 import { envmapDistribution } from './envmapDistribution';
 import fragment from './glsl/rayTrace.frag';
-import { mergeMeshesToGeometry } from './mergeMeshesToGeometry';
 import { makeRenderPass } from './RenderPass';
 import { makeStratifiedSamplerCombined } from './StratifiedSamplerCombined';
 import { makeTexture } from './Texture';
-import { getTexturesFromMaterials, mergeTexturesFromMaterials } from './texturesFromMaterials';
-import * as THREE from 'three';
-import { uploadBuffers } from './uploadBuffers';
 import { clamp } from './util';
 
 export function makeRayTracePass(gl, {
     bounces, // number of global illumination bounces
+    decomposedScene,
     fullscreenQuad,
+    materialBuffer,
+    mergedMesh,
     optionalExtensions,
-    scene,
   }) {
 
   bounces = clamp(bounces, 1, 6);
@@ -36,7 +33,7 @@ export function makeRayTracePass(gl, {
   let samples;
 
   const renderPass = makeRenderPassFromScene({
-    bounces, fullscreenQuad, gl, optionalExtensions, samplingDimensions, scene
+    bounces, decomposedScene, fullscreenQuad, gl, materialBuffer, mergedMesh, optionalExtensions, samplingDimensions,
   });
 
   function setSize(width, height) {
@@ -47,9 +44,9 @@ export function makeRayTracePass(gl, {
   function setNoise(noiseImage) {
     renderPass.setTexture('noise', makeTexture(gl, {
       data: noiseImage,
-      minFilter: gl.NEAREST,
-      magFilter: gl.NEAREST,
-      storage: 'float'
+      wrapS: gl.REPEAT,
+      wrapT: gl.REPEAT,
+      storage: 'halfFloat',
     }));
   }
 
@@ -63,12 +60,19 @@ export function makeRayTracePass(gl, {
     renderPass.setUniform('jitter', x, y);
   }
 
+  function setGBuffers({ position, normal, faceNormal, color, matProps }) {
+    renderPass.setTexture('gPosition', position);
+    renderPass.setTexture('gNormal', normal);
+    renderPass.setTexture('gFaceNormal', faceNormal);
+    renderPass.setTexture('gColor', color);
+    renderPass.setTexture('gMatProps', matProps);
+  }
+
   function nextSeed() {
     renderPass.setUniform('stratifiedSamples[0]', samples.next());
   }
 
   function setStrataCount(strataCount) {
-
     if (strataCount > 1 && strataCount !== samples.strataCount) {
       // reinitailizing random has a performance cost. we can skip it if
       // * strataCount is 1, since a strataCount of 1 works with any sized StratifiedRandomCombined
@@ -100,6 +104,7 @@ export function makeRayTracePass(gl, {
     outputLocs: renderPass.outputLocs,
     setCamera,
     setJitter,
+    setGBuffers,
     setNoise,
     setSize,
     setStrataCount,
@@ -107,33 +112,24 @@ export function makeRayTracePass(gl, {
 }
 function makeRenderPassFromScene({
     bounces,
+    decomposedScene,
     fullscreenQuad,
     gl,
+    materialBuffer,
+    mergedMesh,
     optionalExtensions,
     samplingDimensions,
-    scene,
   }) {
   const { OES_texture_float_linear } = optionalExtensions;
 
-  const { meshes, directionalLights, ambientLights, environmentLights } = decomposeScene(scene);
-  if (meshes.length === 0) {
-    throw 'RayTracingRenderer: Scene contains no renderable meshes.';
-  }
+  const { background, directionalLights, ambientLights, environmentLights } = decomposedScene;
 
-  // merge meshes in scene to a single, static geometry
-  const { geometry, materials, materialIndices } = mergeMeshesToGeometry(meshes);
-
-  // extract textures shared by meshes in scene
-  const maps = getTexturesFromMaterials(materials, ['map', 'normalMap']);
-  const pbrMap = mergeTexturesFromMaterials(materials, ['roughnessMap', 'metalnessMap']);
+  const { geometry, materials, materialIndices } = mergedMesh;
 
   // create bounding volume hierarchy from a static scene
   const bvh = bvhAccel(geometry, materialIndices);
   const flattenedBvh = flattenBvh(bvh);
   const numTris = geometry.index.count / 3;
-
-  const useGlass = materials.some(m => m.transparent);
-  const useShadowCatcher = materials.some(m => m.shadowCatcher);
 
   const renderPass = makeRenderPass(gl, {
     defines: {
@@ -142,60 +138,19 @@ function makeRenderPassFromScene({
       INDEX_COLUMNS: textureDimensionsFromArray(numTris).columnsLog,
       VERTEX_COLUMNS: textureDimensionsFromArray(geometry.attributes.position.count).columnsLog,
       STACK_SIZE: flattenedBvh.maxDepth,
-      NUM_TRIS: numTris,
-      NUM_MATERIALS: materials.length,
-      NUM_DIFFUSE_MAPS: maps.map.textures.length,
-      NUM_NORMAL_MAPS: maps.normalMap.textures.length,
-      NUM_DIFFUSE_NORMAL_MAPS: Math.max(maps.map.textures.length, maps.normalMap.textures.length),
-      NUM_PBR_MAPS: pbrMap.textures.length,
       BOUNCES: bounces,
-      USE_GLASS: useGlass,
-      USE_SHADOW_CATCHER: useShadowCatcher,
-      SAMPLING_DIMENSIONS: samplingDimensions.reduce((a, b) => a + b)
+      USE_GLASS: materials.some(m => m.transparent),
+      USE_SHADOW_CATCHER: materials.some(m => m.shadowCatcher),
+      SAMPLING_DIMENSIONS: samplingDimensions.reduce((a, b) => a + b),
+      ...materialBuffer.defines
     },
     fragment,
     vertex: fullscreenQuad.vertexShader
   });
 
-  const bufferData = {};
-
-  bufferData.color = materials.map(m => m.color);
-  bufferData.roughness = materials.map(m => m.roughness);
-  bufferData.metalness = materials.map(m => m.metalness);
-  bufferData.normalScale = materials.map(m => m.normalScale);
-
-  bufferData.type = materials.map(m => {
-    if (m.shadowCatcher) {
-      return ShadowCatcherMaterial;
-    }
-    if (m.transparent) {
-      return m.solid ? ThickMaterial : ThinMaterial;
-    }
-  });
-
-  if (maps.map.textures.length > 0) {
-    const { relativeSizes, texture } = makeTextureArray(gl, maps.map.textures, true);
-    renderPass.setTexture('diffuseMap', texture);
-    bufferData.diffuseMapSize = relativeSizes;
-    bufferData.diffuseMapIndex = maps.map.indices;
-  }
-
-  if (maps.normalMap.textures.length > 0) {
-    const { relativeSizes, texture } = makeTextureArray(gl, maps.normalMap.textures, false);
-    renderPass.setTexture('normalMap', texture);
-    bufferData.normalMapSize = relativeSizes;
-    bufferData.normalMapIndex = maps.normalMap.indices;
-  }
-
-  if (pbrMap.textures.length > 0) {
-    const { relativeSizes, texture } = makeTextureArray(gl, pbrMap.textures, false);
-    renderPass.setTexture('pbrMap', texture);
-    bufferData.pbrMapSize = relativeSizes;
-    bufferData.roughnessMapIndex = pbrMap.indices.roughnessMap;
-    bufferData.metalnessMapIndex = pbrMap.indices.metalnessMap;
-  }
-
-  uploadBuffers(gl, renderPass.program, bufferData);
+  renderPass.setTexture('diffuseMap', materialBuffer.textures.diffuseMap);
+  renderPass.setTexture('normalMap', materialBuffer.textures.normalMap);
+  renderPass.setTexture('pbrMap', materialBuffer.textures.pbrMap);
 
   renderPass.setTexture('positions', makeDataTexture(gl, geometry.getAttribute('position').array, 3));
 
@@ -208,6 +163,7 @@ function makeRenderPassFromScene({
   const envImage = generateEnvMapFromSceneComponents(directionalLights, ambientLights, environmentLights);
   const envImageTextureObject = makeTexture(gl, {
     data: envImage.data,
+    storage: 'halfFloat',
     minFilter: OES_texture_float_linear ? gl.LINEAR : gl.NEAREST,
     magFilter: OES_texture_float_linear ? gl.LINEAR : gl.NEAREST,
     width: envImage.width,
@@ -217,10 +173,11 @@ function makeRenderPassFromScene({
   renderPass.setTexture('envmap', envImageTextureObject);
 
   let backgroundImageTextureObject;
-  if (scene.background) {
-    const backgroundImage = generateBackgroundMapFromSceneBackground(scene.background);
+  if (background) {
+    const backgroundImage = generateBackgroundMapFromSceneBackground(background);
     backgroundImageTextureObject = makeTexture(gl, {
       data: backgroundImage.data,
+      storage: 'halfFloat',
       minFilter: OES_texture_float_linear ? gl.LINEAR : gl.NEAREST,
       magFilter: OES_texture_float_linear ? gl.LINEAR : gl.NEAREST,
       width: backgroundImage.width,
@@ -236,53 +193,12 @@ function makeRenderPassFromScene({
 
   renderPass.setTexture('envmapDistribution', makeTexture(gl, {
     data: distribution.data,
-    minFilter: gl.NEAREST,
-    magFilter: gl.NEAREST,
+    storage: 'halfFloat',
     width: distribution.width,
     height: distribution.height,
   }));
 
   return renderPass;
-}
-
-function decomposeScene(scene) {
-  const meshes = [];
-  const directionalLights = [];
-  const ambientLights = [];
-  const environmentLights = [];
-  scene.traverse(child => {
-    if (child.isMesh) {
-      if (!child.geometry || !child.geometry.getAttribute('position')) {
-        console.warn(child, 'must have a geometry property with a position attribute');
-      }
-      else if (!(child.material.isMeshStandardMaterial)) {
-        console.warn(child, 'must use MeshStandardMaterial in order to be rendered.');
-      } else {
-        meshes.push(child);
-      }
-    }
-    if (child.isDirectionalLight) {
-      directionalLights.push(child);
-    }
-    if (child.isAmbientLight) {
-      ambientLights.push(child);
-    }
-    if (child.isEnvironmentLight) {
-      if (environmentLights.length > 1) {
-        console.warn(environmentLights, 'only one environment light can be used per scene');
-      }
-      // Valid lights have HDR texture map in RGBEEncoding
-      if (isHDRTexture(child)) {
-        environmentLights.push(child);
-      } else {
-        console.warn(child, 'environment light does not use color value or map with THREE.RGBEEncoding');
-      }
-    }
-  });
-
-  return {
-    meshes, directionalLights, ambientLights, environmentLights
-  };
 }
 
 function textureDimensionsFromArray(count) {
@@ -301,52 +217,9 @@ function makeDataTexture(gl, dataArray, channels) {
   const textureDim = textureDimensionsFromArray(dataArray.length / channels);
   return makeTexture(gl, {
     data: padArray(dataArray, channels * textureDim.size),
-    minFilter: gl.NEAREST,
-    magFilter: gl.NEAREST,
     width: textureDim.columns,
     height: textureDim.rows,
   });
-}
-
-function makeTextureArray(gl, textures, gammaCorrection = false) {
-  const images = textures.map(t => t.image);
-  const flipY = textures.map(t => t.flipY);
-  const { maxSize, relativeSizes } = maxImageSize(images);
-
-  // create GL Array Texture from individual textures
-  const texture = makeTexture(gl, {
-    width: maxSize.width,
-    height: maxSize.height,
-    gammaCorrection,
-    data: images,
-    flipY,
-    channels: 3
-  });
-
-  return {
-   texture,
-   relativeSizes
-  };
-}
-
-function maxImageSize(images) {
-  const maxSize = {
-    width: 0,
-    height: 0
-  };
-
-  for (const image of images) {
-    maxSize.width = Math.max(maxSize.width, image.width);
-    maxSize.height = Math.max(maxSize.height, image.height);
-  }
-
-  const relativeSizes = [];
-  for (const image of images) {
-    relativeSizes.push(image.width / maxSize.width);
-    relativeSizes.push(image.height / maxSize.height);
-  }
-
-  return { maxSize, relativeSizes };
 }
 
 // expand array to the given length
@@ -354,10 +227,4 @@ function padArray(typedArray, length) {
   const newArray = new typedArray.constructor(length);
   newArray.set(typedArray);
   return newArray;
-}
-
-function isHDRTexture(texture) {
-  return texture.map
-    && texture.map.image
-    && (texture.map.encoding === THREE.RGBEEncoding || texture.map.encoding === THREE.LinearEncoding);
 }

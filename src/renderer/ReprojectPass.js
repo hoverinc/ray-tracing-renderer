@@ -32,16 +32,16 @@ export function makeReprojectPass(gl, params) {
     const {
       blendAmount,
       light,
+      lightScale,
       position,
       previousLight,
+      previousLightScale,
       previousPosition,
-      textureScale,
-      previousTextureScale,
     } = params;
 
     renderPass.setUniform('blendAmount', blendAmount);
-    renderPass.setUniform('textureScale', textureScale.x, textureScale.y);
-    renderPass.setUniform('previousTextureScale', previousTextureScale.x, previousTextureScale.y);
+    renderPass.setUniform('lightScale', lightScale.x, lightScale.y);
+    renderPass.setUniform('previousLightScale', previousLightScale.x, previousLightScale.y);
 
     renderPass.setTexture('light', light);
     renderPass.setTexture('position', position);

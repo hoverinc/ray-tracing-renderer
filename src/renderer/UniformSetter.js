@@ -7,7 +7,9 @@ export function makeUniformSetter(gl, program) {
   const uniforms = {};
   const needsUpload = [];
 
-  for (let { name, type, location } of uniformInfo) {
+  for (let name in uniformInfo) {
+    const { type, location } = uniformInfo[name];
+
     const uniform = {
       type,
       location,
@@ -28,10 +30,10 @@ export function makeUniformSetter(gl, program) {
     const uni = uniforms[name];
 
     if (!uni) {
-      if (!failedUnis.has(name)) {
-        console.warn(`Uniform "${name}" does not exist in shader`);
-        failedUnis.add(name);
-      }
+      // if (!failedUnis.has(name)) {
+      //   console.warn(`Uniform "${name}" does not exist in shader`);
+      //   failedUnis.add(name);
+      // }
 
       return;
     }

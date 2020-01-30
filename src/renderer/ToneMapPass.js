@@ -13,34 +13,41 @@ const toneMapFunctions = {
 export function makeToneMapPass(gl, params) {
   const {
     fullscreenQuad,
-    // optionalExtensions,
     toneMappingParams
   } = params;
 
-  // const { OES_texture_float_linear } = optionalExtensions;
-  const { toneMapping, whitePoint, exposure } = toneMappingParams;
-
-  const renderPass = makeRenderPass(gl, {
+  const renderPassConfig = {
     gl,
     defines: {
-      // OES_texture_float_linear,
-      TONE_MAPPING: toneMapFunctions[toneMapping] || 'linear',
-      WHITE_POINT: whitePoint.toExponential(), // toExponential allows integers to be represented as GLSL floats
-      EXPOSURE: exposure.toExponential()
+      TONE_MAPPING: toneMapFunctions[toneMappingParams.toneMapping] || 'linear',
+      WHITE_POINT: toneMappingParams.whitePoint.toExponential(), // toExponential allows integers to be represented as GLSL floats
+      EXPOSURE: toneMappingParams.exposure.toExponential()
     },
     vertex: fullscreenQuad.vertexShader,
     fragment,
-  });
+  };
+
+  renderPassConfig.defines.EDGE_PRESERVING_UPSCALE = true;
+  const renderPassUpscale = makeRenderPass(gl, renderPassConfig);
+
+  renderPassConfig.defines.EDGE_PRESERVING_UPSCALE = false;
+  const renderPassNative = makeRenderPass(gl, renderPassConfig);
 
   function draw(params) {
     const {
       light,
-      textureScale
+      lightScale,
+      position
     } = params;
 
-    renderPass.setUniform('textureScale', textureScale.x, textureScale.y);
+    const renderPass =
+      lightScale.x !== 1 && lightScale.y !== 1 ?
+      renderPassUpscale :
+      renderPassNative;
 
+    renderPass.setUniform('lightScale', lightScale.x, lightScale.y);
     renderPass.setTexture('light', light);
+    renderPass.setTexture('position', position);
 
     renderPass.useProgram();
     fullscreenQuad.draw();

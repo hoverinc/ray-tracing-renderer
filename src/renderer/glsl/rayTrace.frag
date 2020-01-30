@@ -1,7 +1,10 @@
 import { unrollLoop } from '../glslUtil';
-import core from './chunks/core.glsl';
+import constants from './chunks/constants.glsl';
+import rayTraceCore from './chunks/rayTraceCore.glsl';
 import textureLinear from './chunks/textureLinear.glsl';
+import materialBuffer from './chunks/materialBuffer.glsl';
 import intersect from './chunks/intersect.glsl';
+import surfaceInteractionDirect from './chunks/surfaceInteractionDirect.glsl';
 import random from './chunks/random.glsl';
 import envmap from './chunks/envmap.glsl';
 import bsdf from './chunks/bsdf.glsl';
@@ -9,13 +12,15 @@ import sample from './chunks/sample.glsl';
 import sampleMaterial from './chunks/sampleMaterial.glsl';
 import sampleShadowCatcher from './chunks/sampleShadowCatcher.glsl';
 import sampleGlass from './chunks/sampleGlassSpecular.glsl';
-// import sampleGlass from './chunks/sampleGlassMicrofacet.glsl';
 
 export default {
 includes: [
-  core,
+  constants,
+  rayTraceCore,
   textureLinear,
+  materialBuffer,
   intersect,
+  surfaceInteractionDirect,
   random,
   envmap,
   bsdf,
@@ -24,15 +29,9 @@ includes: [
   sampleGlass,
   sampleShadowCatcher,
 ],
-outputs: ['light', 'position'],
+outputs: ['light'],
 source: (defines) => `
   void bounce(inout Path path, int i, inout SurfaceInteraction si) {
-    if (path.abort) {
-      return;
-    }
-
-    si = intersectScene(path.ray);
-
     if (!si.hit) {
       if (path.specularBounce) {
         path.li += path.beta * sampleBackgroundFromDirection(path.ray.d);
@@ -67,7 +66,7 @@ source: (defines) => `
 
   // Path tracing integrator as described in
   // http://www.pbr-book.org/3ed-2018/Light_Transport_I_Surface_Reflection/Path_Tracing.html#
-  vec4 integrator(inout Ray ray, inout SurfaceInteraction si) {
+  vec4 integrator(inout Ray ray) {
     Path path;
     path.ray = ray;
     path.li = vec3(0);
@@ -76,16 +75,25 @@ source: (defines) => `
     path.specularBounce = true;
     path.abort = false;
 
+    SurfaceInteraction si;
+
+    // first surface interaction from g-buffer
+    surfaceInteractionDirect(vCoord, si);
+
+    // first surface interaction from ray interesction
+    // intersectScene(path.ray, si);
+
     bounce(path, 1, si);
 
-    SurfaceInteraction indirectSi;
-
     // Manually unroll for loop.
-    // Some hardware fails to interate over a GLSL loop, so we provide this workaround
+    // Some hardware fails to iterate over a GLSL loop, so we provide this workaround
     // for (int i = 1; i < defines.bounces + 1, i += 1)
     // equivelant to
     ${unrollLoop('i', 2, defines.BOUNCES + 1, 1, `
-      bounce(path, i, indirectSi);
+      if (!path.abort) {
+        intersectScene(path.ray, si);
+        bounce(path, i, si);
+      }
     `)}
 
     return vec4(path.li, path.alpha);
@@ -115,20 +123,13 @@ source: (defines) => `
     Ray cam;
     initRay(cam, origin, direction);
 
-    SurfaceInteraction si;
-
-    vec4 liAndAlpha = integrator(cam, si);
-
-    if (dot(si.position, si.position) == 0.0) {
-      si.position = origin + direction * RAY_MAX_DISTANCE;
-    }
+    vec4 liAndAlpha = integrator(cam);
 
     if (!(liAndAlpha.x < INF && liAndAlpha.x > -EPS)) {
       liAndAlpha = vec4(0, 0, 0, 1);
     }
 
     out_light = liAndAlpha;
-    out_position = vec4(si.position, si.meshId);
 
     // Stratified Sampling Sample Count Test
     // ---------------

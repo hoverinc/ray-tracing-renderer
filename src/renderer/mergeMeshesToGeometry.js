@@ -40,51 +40,51 @@ export function mergeMeshesToGeometry(meshes) {
     });
   }
 
-  const { geometry, materialIndices } = mergeGeometry(geometryAndMaterialIndex, vertexCount, indexCount);
+  const geometry = mergeGeometry(geometryAndMaterialIndex, vertexCount, indexCount);
 
   return {
     geometry,
-    materialIndices,
     materials: Array.from(materialIndexMap.keys())
   };
 }
 
 function mergeGeometry(geometryAndMaterialIndex, vertexCount, indexCount) {
-  const position = new BufferAttribute(new Float32Array(3 * vertexCount), 3, false);
-  const normal = new BufferAttribute(new Float32Array(3 * vertexCount), 3, false);
-  const uv = new BufferAttribute(new Float32Array(2 * vertexCount), 2, false);
-  const index = new BufferAttribute(new Uint32Array(indexCount), 1, false);
+  const positionAttrib = new BufferAttribute(new Float32Array(3 * vertexCount), 3, false);
+  const normalAttrib = new BufferAttribute(new Float32Array(3 * vertexCount), 3, false);
+  const uvAttrib = new BufferAttribute(new Float32Array(2 * vertexCount), 2, false);
+  const materialMeshIndexAttrib = new BufferAttribute(new Int32Array(2 * vertexCount), 2, false);
+  const indexAttrib = new BufferAttribute(new Uint32Array(indexCount), 1, false);
 
-  const materialIndices = [];
-
-  const bg = new BufferGeometry();
-  bg.addAttribute('position', position);
-  bg.addAttribute('normal', normal);
-  bg.addAttribute('uv', uv);
-  bg.setIndex(index);
+  const mergedGeometry = new BufferGeometry();
+  mergedGeometry.addAttribute('position', positionAttrib);
+  mergedGeometry.addAttribute('normal', normalAttrib);
+  mergedGeometry.addAttribute('uv', uvAttrib);
+  mergedGeometry.addAttribute('materialMeshIndex', materialMeshIndexAttrib);
+  mergedGeometry.setIndex(indexAttrib);
 
   let currentVertex = 0;
   let currentIndex = 0;
+  let currentMesh = 1;
 
   for (const { geometry, materialIndex } of geometryAndMaterialIndex) {
     const vertexCount = geometry.getAttribute('position').count;
-    bg.merge(geometry, currentVertex);
+    mergedGeometry.merge(geometry, currentVertex);
 
     const meshIndex = geometry.getIndex();
     for (let i = 0; i < meshIndex.count; i++) {
-      index.setX(currentIndex + i, currentVertex + meshIndex.getX(i));
+      indexAttrib.setX(currentIndex + i, currentVertex + meshIndex.getX(i));
     }
 
-    const triangleCount = meshIndex.count / 3;
-    for (let i = 0; i < triangleCount; i++) {
-      materialIndices.push(materialIndex);
+    for (let i = 0; i < vertexCount; i++) {
+      materialMeshIndexAttrib.setXY(currentVertex + i, materialIndex, currentMesh);
     }
 
     currentVertex += vertexCount;
     currentIndex += meshIndex.count;
+    currentMesh++;
   }
 
-  return { geometry: bg, materialIndices };
+  return mergedGeometry;
 }
 
 // Similar to buffergeometry.clone(), except we only copy
