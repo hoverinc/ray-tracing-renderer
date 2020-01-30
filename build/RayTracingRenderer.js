@@ -113,112 +113,130 @@
   }
 
   function getUniforms(gl, program) {
-    const uniforms = [];
+    const uniforms = {};
 
     const count = gl.getProgramParameter(program, gl.ACTIVE_UNIFORMS);
     for (let i = 0; i < count; i++) {
       const { name, type } = gl.getActiveUniform(program, i);
       const location = gl.getUniformLocation(program, name);
       if (location) {
-        uniforms.push({
-          name, type, location
-        });
+        uniforms[name] = {
+          type, location
+        };
       }
     }
 
     return uniforms;
   }
 
-  function makeUniformBuffer(gl, program, blockName) {
-    const blockIndex = gl.getUniformBlockIndex(program, blockName);
-    const blockSize = gl.getActiveUniformBlockParameter(program, blockIndex, gl.UNIFORM_BLOCK_DATA_SIZE);
+  function getAttributes(gl, program) {
+    const attributes = {};
 
-    const uniforms = getUniformBlockInfo(gl, program, blockIndex);
-
-    const buffer = gl.createBuffer();
-    gl.bindBuffer(gl.UNIFORM_BUFFER, buffer);
-    gl.bufferData(gl.UNIFORM_BUFFER, blockSize, gl.STATIC_DRAW);
-
-    const data = new DataView(new ArrayBuffer(blockSize));
-
-    function set(name, value) {
-      if (!uniforms[name]) {
-        // console.warn('No uniform property with name ', name);
-        return;
-      }
-
-      const { type, size, offset, stride } = uniforms[name];
-
-      switch(type) {
-        case gl.FLOAT:
-          setData(data, 'setFloat32', size, offset, stride, 1, value);
-          break;
-        case gl.FLOAT_VEC2:
-          setData(data, 'setFloat32', size, offset, stride, 2, value);
-          break;
-        case gl.FLOAT_VEC3:
-          setData(data, 'setFloat32', size, offset, stride, 3, value);
-          break;
-        case gl.FLOAT_VEC4:
-          setData(data, 'setFloat32', size, offset, stride, 4, value);
-          break;
-        case gl.INT:
-          setData(data, 'setInt32', size, offset, stride, 1, value);
-          break;
-        case gl.INT_VEC2:
-          setData(data, 'setInt32', size, offset, stride, 2, value);
-          break;
-        case gl.INT_VEC3:
-          setData(data, 'setInt32', size, offset, stride, 3, value);
-          break;
-        case gl.INT_VEC4:
-          setData(data, 'setInt32', size, offset, stride, 4, value);
-          break;
-        case gl.BOOL:
-          setData(data, 'setUint32', size, offset, stride, 1, value);
-          break;
-        default:
-          console.warn('UniformBuffer: Unsupported type');
+    const count = gl.getProgramParameter(program, gl.ACTIVE_ATTRIBUTES);
+    for (let i = 0; i < count; i++) {
+      const { name } = gl.getActiveAttrib(program, i);
+      if (name) {
+        attributes[name] = gl.getAttribLocation(program, name);
       }
     }
 
-    function bind(index) {
-      gl.bufferSubData(gl.UNIFORM_BUFFER, 0, data);
-      gl.bindBufferBase(gl.UNIFORM_BUFFER, index, buffer);
-    }
+    return attributes;
+  }
+
+  function decomposeScene(scene) {
+    const meshes = [];
+    const directionalLights = [];
+    const ambientLights = [];
+    const environmentLights = [];
+
+    scene.traverse(child => {
+      if (child.isMesh) {
+        if (!child.geometry || !child.geometry.getAttribute('position')) {
+          console.warn(child, 'must have a geometry property with a position attribute');
+        }
+        else if (!(child.material.isMeshStandardMaterial)) {
+          console.warn(child, 'must use MeshStandardMaterial in order to be rendered.');
+        } else {
+          meshes.push(child);
+        }
+      }
+      if (child.isDirectionalLight) {
+        directionalLights.push(child);
+      }
+      if (child.isAmbientLight) {
+        ambientLights.push(child);
+      }
+      if (child.isEnvironmentLight) {
+        if (environmentLights.length > 1) {
+          console.warn(environmentLights, 'only one environment light can be used per scene');
+        }
+        // Valid lights have HDR texture map in RGBEEncoding
+        if (isHDRTexture(child)) {
+          environmentLights.push(child);
+        } else {
+          console.warn(child, 'environment light does not use color value or map with THREE.RGBEEncoding');
+        }
+      }
+    });
+
+    const background = scene.background;
 
     return {
-      set,
-      bind
+      background, meshes, directionalLights, ambientLights, environmentLights
     };
   }
 
-  function getUniformBlockInfo(gl, program, blockIndex) {
-    const indices = gl.getActiveUniformBlockParameter(program, blockIndex, gl.UNIFORM_BLOCK_ACTIVE_UNIFORM_INDICES);
-    const offset = gl.getActiveUniforms(program, indices, gl.UNIFORM_OFFSET);
-    const stride = gl.getActiveUniforms(program, indices, gl.UNIFORM_ARRAY_STRIDE);
-
-    const uniforms = {};
-    for (let i = 0; i < indices.length; i++) {
-      const { name, type, size } = gl.getActiveUniform(program, indices[i]);
-      uniforms[name] = {
-        type,
-        size,
-        offset: offset[i],
-        stride: stride[i]
-      };
-    }
-
-    return uniforms;
+  function isHDRTexture(texture) {
+    return texture.map
+      && texture.map.image
+      && (texture.map.encoding === THREE$1.RGBEEncoding || texture.map.encoding === THREE$1.LinearEncoding);
   }
 
-  function setData(dataView, setter, size, offset, stride, components, value) {
-    const l = Math.min(value.length / components, size);
-    for (let i = 0; i < l; i++) {
-      for (let k = 0; k < components; k++) {
-        dataView[setter](offset + i * stride + k * 4, value[components * i + k], true);
-      }
+  function makeFramebuffer(gl, { color, depth }) {
+
+    const framebuffer = gl.createFramebuffer();
+
+    function bind() {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
     }
+
+    function unbind() {
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    }
+
+    function init() {
+      bind();
+
+      const drawBuffers = [];
+
+      for (let location in color) {
+        location = Number(location);
+
+        if (location === undefined) {
+          console.error('invalid location');
+        }
+
+        const tex = color[location];
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0 + location, tex.target, tex.texture, 0);
+        drawBuffers.push(gl.COLOR_ATTACHMENT0 + location);
+      }
+
+      gl.drawBuffers(drawBuffers);
+
+      if (depth) {
+        gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, depth.target, depth.texture);
+      }
+
+      unbind();
+    }
+
+    init();
+
+    return {
+      color,
+      bind,
+      unbind
+    };
   }
 
   var vertex = {
@@ -241,7 +259,9 @@
     const uniforms = {};
     const needsUpload = [];
 
-    for (let { name, type, location } of uniformInfo) {
+    for (let name in uniformInfo) {
+      const { type, location } = uniformInfo[name];
+
       const uniform = {
         type,
         location,
@@ -254,18 +274,16 @@
       uniforms[name] = uniform;
     }
 
-    const failedUnis = new Set();
-
     function setUniform(name, v0, v1, v2, v3) {
       // v0 - v4 are the values to be passed to the uniform
       // v0 can either be a number or an array, and v1-v3 are optional
       const uni = uniforms[name];
 
       if (!uni) {
-        if (!failedUnis.has(name)) {
-          console.warn(`Uniform "${name}" does not exist in shader`);
-          failedUnis.add(name);
-        }
+        // if (!failedUnis.has(name)) {
+        //   console.warn(`Uniform "${name}" does not exist in shader`);
+        //   failedUnis.add(name);
+        // }
 
         return;
       }
@@ -365,7 +383,6 @@
     return makeShaderStage(gl, gl.FRAGMENT_SHADER, fragment, defines);
   }
 
-
   function makeRenderPassFromProgram(gl, program) {
 
     const uniformSetter = makeUniformSetter(gl, program);
@@ -375,19 +392,22 @@
     let nextTexUnit = 1;
 
     function setTexture(name, texture) {
-      let cachedTex = textures[name];
+      if (!texture) {
+        return;
+      }
 
-      if (!cachedTex) {
+      if (!textures[name]) {
         const unit = nextTexUnit++;
 
         uniformSetter.setUniform(name, unit);
 
-        cachedTex = { unit };
-
-        textures[name] = cachedTex;
+        textures[name] = {
+          unit,
+          tex: texture
+        };
+      } else {
+        textures[name].tex = texture;
       }
-
-      cachedTex.tex = texture;
     }
 
     function bindTextures() {
@@ -407,6 +427,7 @@
     }
 
     return {
+      attribLocs: getAttributes(gl, program),
       bindTextures,
       program,
       setTexture,
@@ -423,7 +444,7 @@
       str += addDefines(defines);
     }
 
-    if (type === gl.FRAGMENT_SHADER) {
+    if (type === gl.FRAGMENT_SHADER && shader.outputs) {
       str += addOutputs(shader.outputs);
     }
 
@@ -494,7 +515,10 @@
   }
 
   function makeFullscreenQuad(gl) {
-    // TODO: use VAOs
+    const vao = gl.createVertexArray();
+
+    gl.bindVertexArray(vao);
+
     gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([0, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 1]), gl.STATIC_DRAW);
 
@@ -504,9 +528,12 @@
     gl.enableVertexAttribArray(posLoc);
     gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0);
 
+    gl.bindVertexArray(null);
+
     const vertexShader = makeVertexShader(gl, { vertex });
 
     function draw() {
+      gl.bindVertexArray(vao);
       gl.drawArrays(gl.TRIANGLES, 0, 6);
     }
 
@@ -514,6 +541,929 @@
       draw,
       vertexShader
     };
+  }
+
+  var vertex$1 = {
+
+  source: `
+  in vec3 aPosition;
+  in vec3 aNormal;
+  in vec2 aUv;
+  in ivec2 aMaterialMeshIndex;
+
+  uniform mat4 projView;
+
+  out vec3 vPosition;
+  out vec3 vNormal;
+  out vec2 vUv;
+  flat out ivec2 vMaterialMeshIndex;
+
+  void main() {
+    vPosition = aPosition;
+    vNormal = aNormal;
+    vUv = aUv;
+    vMaterialMeshIndex = aMaterialMeshIndex;
+    gl_Position = projView * vec4(aPosition, 1);
+  }
+`
+  };
+
+  var constants$1 = `
+  #define PI 3.14159265359
+  #define TWOPI 6.28318530718
+  #define INVPI 0.31830988618
+  #define INVPI2 0.10132118364
+  #define EPS 0.0005
+  #define INF 1.0e999
+
+  #define ROUGHNESS_MIN 0.03
+`;
+
+  var materialBuffer = `
+
+uniform Materials {
+  vec4 colorAndMaterialType[NUM_MATERIALS];
+  vec4 roughnessMetalnessNormalScale[NUM_MATERIALS];
+
+  #if defined(NUM_DIFFUSE_MAPS) || defined(NUM_NORMAL_MAPS) || defined(NUM_PBR_MAPS)
+    ivec4 diffuseNormalRoughnessMetalnessMapIndex[NUM_MATERIALS];
+  #endif
+
+  #if defined(NUM_DIFFUSE_MAPS) || defined(NUM_NORMAL_MAPS)
+    vec4 diffuseNormalMapSize[NUM_DIFFUSE_NORMAL_MAPS];
+  #endif
+
+  #if defined(NUM_PBR_MAPS)
+    vec2 pbrMapSize[NUM_PBR_MAPS];
+  #endif
+} materials;
+
+#ifdef NUM_DIFFUSE_MAPS
+  uniform mediump sampler2DArray diffuseMap;
+#endif
+
+#ifdef NUM_NORMAL_MAPS
+  uniform mediump sampler2DArray normalMap;
+#endif
+
+#ifdef NUM_PBR_MAPS
+  uniform mediump sampler2DArray pbrMap;
+#endif
+
+float getMatType(int materialIndex) {
+  return materials.colorAndMaterialType[materialIndex].w;
+}
+
+vec3 getMatColor(int materialIndex, vec2 uv) {
+  vec3 color = materials.colorAndMaterialType[materialIndex].rgb;
+
+  #ifdef NUM_DIFFUSE_MAPS
+    int diffuseMapIndex = materials.diffuseNormalRoughnessMetalnessMapIndex[materialIndex].x;
+    if (diffuseMapIndex >= 0) {
+      color *= texture(diffuseMap, vec3(uv * materials.diffuseNormalMapSize[diffuseMapIndex].xy, diffuseMapIndex)).rgb;
+    }
+  #endif
+
+  return color;
+}
+
+float getMatRoughness(int materialIndex, vec2 uv) {
+  float roughness = materials.roughnessMetalnessNormalScale[materialIndex].x;
+
+  #ifdef NUM_PBR_MAPS
+    int roughnessMapIndex = materials.diffuseNormalRoughnessMetalnessMapIndex[materialIndex].z;
+    if (roughnessMapIndex >= 0) {
+      roughness *= texture(pbrMap, vec3(uv * materials.pbrMapSize[roughnessMapIndex].xy, roughnessMapIndex)).g;
+    }
+  #endif
+
+  return roughness;
+}
+
+float getMatMetalness(int materialIndex, vec2 uv) {
+  float metalness = materials.roughnessMetalnessNormalScale[materialIndex].y;
+
+  #ifdef NUM_PBR_MAPS
+    int metalnessMapIndex = materials.diffuseNormalRoughnessMetalnessMapIndex[materialIndex].w;
+    if (metalnessMapIndex >= 0) {
+      metalness *= texture(pbrMap, vec3(uv * materials.pbrMapSize[metalnessMapIndex].xy, metalnessMapIndex)).b;
+    }
+  #endif
+
+  return metalness;
+}
+
+#ifdef NUM_NORMAL_MAPS
+vec3 getMatNormal(int materialIndex, vec2 uv, vec3 normal, vec3 dp1, vec3 dp2, vec2 duv1, vec2 duv2) {
+  int normalMapIndex = materials.diffuseNormalRoughnessMetalnessMapIndex[materialIndex].y;
+  if (normalMapIndex >= 0) {
+    // http://www.thetenthplanet.de/archives/1180
+    // Compute co-tangent and co-bitangent vectors
+    vec3 dp2perp = cross(dp2, normal);
+    vec3 dp1perp = cross(normal, dp1);
+    vec3 dpdu = dp2perp * duv1.x + dp1perp * duv2.x;
+    vec3 dpdv = dp2perp * duv1.y + dp1perp * duv2.y;
+    float invmax = inversesqrt(max(dot(dpdu, dpdu), dot(dpdv, dpdv)));
+    dpdu *= invmax;
+    dpdv *= invmax;
+
+    vec3 n = 2.0 * texture(normalMap, vec3(uv * materials.diffuseNormalMapSize[normalMapIndex].zw, normalMapIndex)).rgb - 1.0;
+    n.xy *= materials.roughnessMetalnessNormalScale[materialIndex].zw;
+
+    mat3 tbn = mat3(dpdu, dpdv, normal);
+
+    return normalize(tbn * n);
+  } else {
+    return normal;
+  }
+}
+#endif
+`;
+
+  var fragment = {
+
+  outputs: ['position', 'normal', 'faceNormal', 'color', 'matProps'],
+  includes: [
+    constants$1,
+    materialBuffer,
+  ],
+  source: `
+  in vec3 vPosition;
+  in vec3 vNormal;
+  in vec2 vUv;
+  flat in ivec2 vMaterialMeshIndex;
+
+  vec3 faceNormals(vec3 pos) {
+    vec3 fdx = dFdx(pos);
+    vec3 fdy = dFdy(pos);
+    return cross(fdx, fdy);
+  }
+
+  void main() {
+    int materialIndex = vMaterialMeshIndex.x;
+    int meshIndex = vMaterialMeshIndex.y;
+
+    vec2 uv = fract(vUv);
+
+    vec3 color = getMatColor(materialIndex, uv);
+    float roughness = getMatRoughness(materialIndex, uv);
+    float metalness = getMatMetalness(materialIndex, uv);
+    float materialType = getMatType(materialIndex);
+
+    roughness = clamp(roughness, ROUGHNESS_MIN, 1.0);
+    metalness = clamp(metalness, 0.0, 1.0);
+
+    vec3 normal = vNormal;
+    vec3 faceNormal = faceNormals(vPosition);
+    normal *= sign(dot(normal, faceNormal));
+
+    #ifdef NUM_NORMAL_MAPS
+      vec3 dp1 = dFdx(vPosition);
+      vec3 dp2 = dFdy(vPosition);
+      vec2 duv1 = dFdx(vUv);
+      vec2 duv2 = dFdy(vUv);
+      normal = getMatNormal(materialIndex, uv, normal, dp1, dp2, duv1, duv2);
+    #endif
+
+    out_position = vec4(vPosition, float(meshIndex) + EPS);
+    out_normal = vec4(normal, materialType);
+    out_faceNormal = vec4(faceNormal, 0);
+    out_color = vec4(color, 0);
+    out_matProps = vec4(roughness, metalness, 0, 0);
+  }
+`
+
+  };
+
+  function makeGBufferPass(gl, { materialBuffer, mergedMesh }) {
+    const renderPass = makeRenderPass(gl, {
+      defines: materialBuffer.defines,
+      vertex: vertex$1,
+      fragment
+    });
+
+    renderPass.setTexture('diffuseMap', materialBuffer.textures.diffuseMap);
+    renderPass.setTexture('normalMap', materialBuffer.textures.normalMap);
+    renderPass.setTexture('pbrMap', materialBuffer.textures.pbrMap);
+
+    const geometry = mergedMesh.geometry;
+
+    const elementCount = geometry.getIndex().count;
+
+    const vao = gl.createVertexArray();
+
+    gl.bindVertexArray(vao);
+    uploadAttributes(gl, renderPass, geometry);
+    gl.bindVertexArray(null);
+
+    let jitterX = 0;
+    let jitterY = 0;
+    function setJitter(x, y) {
+      jitterX = x;
+      jitterY = y;
+    }
+
+    let currentCamera;
+    function setCamera(camera) {
+      currentCamera = camera;
+    }
+
+    function calcCamera() {
+      projView.copy(currentCamera.projectionMatrix);
+
+      projView.elements[8] += 2 * jitterX;
+      projView.elements[9] += 2 * jitterY;
+
+      projView.multiply(currentCamera.matrixWorldInverse);
+      renderPass.setUniform('projView', projView.elements);
+    }
+
+    let projView = new THREE$1.Matrix4();
+
+    function draw() {
+      calcCamera();
+      gl.bindVertexArray(vao);
+      renderPass.useProgram();
+      gl.enable(gl.DEPTH_TEST);
+      gl.drawElements(gl.TRIANGLES, elementCount, gl.UNSIGNED_INT, 0);
+      gl.disable(gl.DEPTH_TEST);
+    }
+
+    return {
+      draw,
+      outputLocs: renderPass.outputLocs,
+      setCamera,
+      setJitter
+    };
+  }
+
+  function uploadAttributes(gl, renderPass, geometry) {
+    setAttribute(gl, renderPass.attribLocs.aPosition, geometry.getAttribute('position'));
+    setAttribute(gl, renderPass.attribLocs.aNormal, geometry.getAttribute('normal'));
+    setAttribute(gl, renderPass.attribLocs.aUv, geometry.getAttribute('uv'));
+    setAttribute(gl, renderPass.attribLocs.aMaterialMeshIndex, geometry.getAttribute('materialMeshIndex'));
+
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, gl.createBuffer());
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, geometry.getIndex().array, gl.STATIC_DRAW);
+  }
+
+  function setAttribute(gl, location, bufferAttribute) {
+    const { itemSize, array } = bufferAttribute;
+
+    gl.enableVertexAttribArray(location);
+    gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
+    gl.bufferData(gl.ARRAY_BUFFER, array, gl.STATIC_DRAW);
+
+    if (array instanceof Float32Array) {
+      gl.vertexAttribPointer(location, itemSize, gl.FLOAT, false, 0, 0);
+    } else if (array instanceof Int32Array) {
+      gl.vertexAttribIPointer(location, itemSize, gl.INT, 0, 0);
+    } else {
+      throw 'Unsupported buffer type';
+    }
+  }
+
+  function makeUniformBuffer(gl, program, blockName) {
+    const blockIndex = gl.getUniformBlockIndex(program, blockName);
+    const blockSize = gl.getActiveUniformBlockParameter(program, blockIndex, gl.UNIFORM_BLOCK_DATA_SIZE);
+
+    const uniforms = getUniformBlockInfo(gl, program, blockIndex);
+
+    const buffer = gl.createBuffer();
+    gl.bindBuffer(gl.UNIFORM_BUFFER, buffer);
+    gl.bufferData(gl.UNIFORM_BUFFER, blockSize, gl.STATIC_DRAW);
+
+    const data = new DataView(new ArrayBuffer(blockSize));
+
+    function set(name, value) {
+      if (!uniforms[name]) {
+        // console.warn('No uniform property with name ', name);
+        return;
+      }
+
+      const { type, size, offset, stride } = uniforms[name];
+
+      switch(type) {
+        case gl.FLOAT:
+          setData(data, 'setFloat32', size, offset, stride, 1, value);
+          break;
+        case gl.FLOAT_VEC2:
+          setData(data, 'setFloat32', size, offset, stride, 2, value);
+          break;
+        case gl.FLOAT_VEC3:
+          setData(data, 'setFloat32', size, offset, stride, 3, value);
+          break;
+        case gl.FLOAT_VEC4:
+          setData(data, 'setFloat32', size, offset, stride, 4, value);
+          break;
+        case gl.INT:
+          setData(data, 'setInt32', size, offset, stride, 1, value);
+          break;
+        case gl.INT_VEC2:
+          setData(data, 'setInt32', size, offset, stride, 2, value);
+          break;
+        case gl.INT_VEC3:
+          setData(data, 'setInt32', size, offset, stride, 3, value);
+          break;
+        case gl.INT_VEC4:
+          setData(data, 'setInt32', size, offset, stride, 4, value);
+          break;
+        case gl.BOOL:
+          setData(data, 'setUint32', size, offset, stride, 1, value);
+          break;
+        default:
+          console.warn('UniformBuffer: Unsupported type');
+      }
+    }
+
+    function bind(index) {
+      gl.bindBuffer(gl.UNIFORM_BUFFER, buffer);
+      gl.bufferSubData(gl.UNIFORM_BUFFER, 0, data);
+      gl.bindBufferBase(gl.UNIFORM_BUFFER, index, buffer);
+    }
+
+    return {
+      set,
+      bind
+    };
+  }
+
+  function getUniformBlockInfo(gl, program, blockIndex) {
+    const indices = gl.getActiveUniformBlockParameter(program, blockIndex, gl.UNIFORM_BLOCK_ACTIVE_UNIFORM_INDICES);
+    const offset = gl.getActiveUniforms(program, indices, gl.UNIFORM_OFFSET);
+    const stride = gl.getActiveUniforms(program, indices, gl.UNIFORM_ARRAY_STRIDE);
+
+    const uniforms = {};
+    for (let i = 0; i < indices.length; i++) {
+      const { name, type, size } = gl.getActiveUniform(program, indices[i]);
+      uniforms[name] = {
+        type,
+        size,
+        offset: offset[i],
+        stride: stride[i]
+      };
+    }
+
+    return uniforms;
+  }
+
+  function setData(dataView, setter, size, offset, stride, components, value) {
+    const l = Math.min(value.length / components, size);
+    for (let i = 0; i < l; i++) {
+      for (let k = 0; k < components; k++) {
+        dataView[setter](offset + i * stride + k * 4, value[components * i + k], true);
+      }
+    }
+  }
+
+  function clamp(x, min, max) {
+    return Math.min(Math.max(x, min), max);
+  }
+
+  function shuffle(arr) {
+    for (let i = arr.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      const x = arr[i];
+      arr[i] = arr[j];
+      arr[j] = x;
+    }
+    return arr;
+  }
+
+  function numberArraysEqual(a, b, eps = 1e-4) {
+    for (let i = 0; i < a.length; i++) {
+      if (Math.abs(a[i] - b[i]) > eps) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  function makeTexture(gl, params) {
+    let {
+      width = null,
+      height = null,
+
+      // A single HTMLImageElement, ImageData, or TypedArray,
+      // Or an array of any of these objects. In this case an Array Texture will be created
+      data = null,
+
+      // If greater than 1, create an Array Texture of this length
+      length = 1,
+
+      // Number of channels, [1-4]. If left blank, the the function will decide the number of channels automatically from the data
+      channels = null,
+
+      // Either 'byte' or 'float'
+      // If left empty, the function will decide the format automatically from the data
+      storage = null,
+
+      // Reverse the texture across the y-axis.
+      flipY = false,
+
+      // sampling properties
+      gammaCorrection = false,
+      wrapS = gl.CLAMP_TO_EDGE,
+      wrapT = gl.CLAMP_TO_EDGE,
+      minFilter = gl.NEAREST,
+      magFilter = gl.NEAREST,
+    } = params;
+
+    width = width || data.width || 0;
+    height = height || data.height || 0;
+
+    const texture = gl.createTexture();
+
+    let target;
+    let dataArray;
+
+    // if data is a JS array but not a TypedArray, assume data is an array of images and create a GL Array Texture
+    if (Array.isArray(data)) {
+      dataArray = data;
+      data = dataArray[0];
+    }
+
+    target = dataArray || length > 1 ? gl.TEXTURE_2D_ARRAY : gl.TEXTURE_2D;
+
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(target, texture);
+
+    gl.texParameteri(target, gl.TEXTURE_WRAP_S, wrapS);
+    gl.texParameteri(target, gl.TEXTURE_WRAP_T, wrapT);
+    gl.texParameteri(target, gl.TEXTURE_MIN_FILTER, minFilter);
+    gl.texParameteri(target, gl.TEXTURE_MAG_FILTER, magFilter);
+
+    if (!channels) {
+      if (data && data.length) {
+        channels = data.length / (width * height); // infer number of channels from data size
+      } else {
+        channels = 4;
+      }
+    }
+
+    channels = clamp(channels, 1, 4);
+
+    const { type, format, internalFormat } = getTextureFormat(gl, channels, storage, data, gammaCorrection);
+
+    if (dataArray) {
+      gl.texStorage3D(target, 1, internalFormat, width, height, dataArray.length);
+      for (let i = 0; i < dataArray.length; i++) {
+        // if layer is an HTMLImageElement, use the .width and .height properties of each layer
+        // otherwise use the max size of the array texture
+        const layerWidth = dataArray[i].width || width;
+        const layerHeight = dataArray[i].height || height;
+
+        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, Array.isArray(flipY) ? flipY[i] : flipY);
+
+        gl.texSubImage3D(target, 0, 0, 0, i, layerWidth, layerHeight, 1, format, type, dataArray[i]);
+      }
+    } else if (length > 1) {
+      // create empty array texture
+      gl.texStorage3D(target, 1, internalFormat, width, height, length);
+    } else {
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, flipY);
+      gl.texStorage2D(target, 1, internalFormat, width, height);
+      if (data) {
+        gl.texSubImage2D(target, 0, 0, 0, width, height, format, type, data);
+      }
+    }
+
+    // return state to default
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+
+    return {
+      target,
+      texture
+    };
+  }
+
+  function makeDepthTarget(gl, width, height) {
+    const texture = gl.createRenderbuffer();
+    const target = gl.RENDERBUFFER;
+
+    gl.bindRenderbuffer(target, texture);
+    gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT24, width, height);
+    gl.bindRenderbuffer(target, null);
+
+    return {
+      target,
+      texture
+    };
+  }
+
+  function getTextureFormat(gl, channels, storage, data, gammaCorrection) {
+    let type;
+    let internalFormat;
+
+    const isByteArray =
+      data instanceof Uint8Array ||
+      data instanceof HTMLImageElement ||
+      data instanceof HTMLCanvasElement ||
+      data instanceof ImageData;
+
+    const isFloatArray = data instanceof Float32Array;
+
+    if (storage === 'byte' || (!storage && isByteArray)) {
+      internalFormat = {
+        1: gl.R8,
+        2: gl.RG8,
+        3: gammaCorrection ? gl.SRGB8 : gl.RGB8,
+        4: gammaCorrection ? gl.SRGB8_ALPHA8 : gl.RGBA8
+      }[channels];
+
+      type = gl.UNSIGNED_BYTE;
+    } else if (storage === 'float' || (!storage && isFloatArray)) {
+      internalFormat = {
+        1: gl.R32F,
+        2: gl.RG32F,
+        3: gl.RGB32F,
+        4: gl.RGBA32F
+      }[channels];
+
+      type = gl.FLOAT;
+    } else if (storage === 'halfFloat') {
+      internalFormat = {
+        1: gl.R16F,
+        2: gl.RG16F,
+        3: gl.RGB16F,
+        4: gl.RGBA16F
+      }[channels];
+
+      type = gl.FLOAT;
+    } else if (storage === 'snorm') {
+      internalFormat = {
+        1: gl.R8_SNORM,
+        2: gl.RG8_SNORM,
+        3: gl.RGB8_SNORM,
+        4: gl.RGBA8_SNORM,
+      }[channels];
+
+      type = gl.UNSIGNED_BYTE;
+    }
+
+    const format = {
+      1: gl.RED,
+      2: gl.RG,
+      3: gl.RGB,
+      4: gl.RGBA
+    }[channels];
+
+    return {
+      format,
+      internalFormat,
+      type
+    };
+  }
+
+  // retrieve textures used by meshes, grouping textures from meshes shared by *the same* mesh property
+  function getTexturesFromMaterials(meshes, textureNames) {
+    const textureMap = {};
+
+    for (const name of textureNames) {
+      const textures = [];
+      textureMap[name] = {
+        indices: texturesFromMaterials(meshes, name, textures),
+        textures
+      };
+    }
+
+    return textureMap;
+  }
+
+  // retrieve textures used by meshes, grouping textures from meshes shared *across all* mesh properties
+  function mergeTexturesFromMaterials(meshes, textureNames) {
+    const textureMap = {
+      textures: [],
+      indices: {}
+    };
+
+    for (const name of textureNames) {
+      textureMap.indices[name] = texturesFromMaterials(meshes, name, textureMap.textures);
+    }
+
+    return textureMap;
+  }
+
+  function texturesFromMaterials(materials, textureName, textures) {
+    const indices = [];
+
+    for (const material of materials) {
+      if (!material[textureName]) {
+        indices.push(-1);
+      } else {
+        let index = textures.length;
+        for (let i = 0; i < textures.length; i++) {
+          if (textures[i] === material[textureName]) {
+            // Reuse existing duplicate texture.
+            index = i;
+            break;
+          }
+        }
+        if (index === textures.length) {
+          // New texture. Add texture to list.
+          textures.push(material[textureName]);
+        }
+        indices.push(index);
+      }
+    }
+
+    return indices;
+  }
+
+  function makeMaterialBuffer(gl, materials) {
+    const maps = getTexturesFromMaterials(materials, ['map', 'normalMap']);
+    const pbrMap = mergeTexturesFromMaterials(materials, ['roughnessMap', 'metalnessMap']);
+
+    const textures = {};
+
+    const bufferData = {};
+
+    bufferData.color = materials.map(m => m.color);
+    bufferData.roughness = materials.map(m => m.roughness);
+    bufferData.metalness = materials.map(m => m.metalness);
+    bufferData.normalScale = materials.map(m => m.normalScale);
+
+    bufferData.type = materials.map(m => {
+      if (m.shadowCatcher) {
+        return ShadowCatcherMaterial;
+      }
+      if (m.transparent) {
+        return m.solid ? ThickMaterial : ThinMaterial;
+      }
+    });
+
+    if (maps.map.textures.length > 0) {
+      const { relativeSizes, texture } = makeTextureArray(gl, maps.map.textures, true);
+      textures.diffuseMap = texture;
+      bufferData.diffuseMapSize = relativeSizes;
+      bufferData.diffuseMapIndex = maps.map.indices;
+    }
+
+    if (maps.normalMap.textures.length > 0) {
+      const { relativeSizes, texture } = makeTextureArray(gl, maps.normalMap.textures, false);
+      textures.normalMap = texture;
+      bufferData.normalMapSize = relativeSizes;
+      bufferData.normalMapIndex = maps.normalMap.indices;
+    }
+
+    if (pbrMap.textures.length > 0) {
+      const { relativeSizes, texture } = makeTextureArray(gl, pbrMap.textures, false);
+      textures.pbrMap = texture;
+      bufferData.pbrMapSize = relativeSizes;
+      bufferData.roughnessMapIndex = pbrMap.indices.roughnessMap;
+      bufferData.metalnessMapIndex = pbrMap.indices.metalnessMap;
+    }
+
+    const defines = {
+      NUM_MATERIALS: materials.length,
+      NUM_DIFFUSE_MAPS: maps.map.textures.length,
+      NUM_NORMAL_MAPS: maps.normalMap.textures.length,
+      NUM_DIFFUSE_NORMAL_MAPS: Math.max(maps.map.textures.length, maps.normalMap.textures.length),
+      NUM_PBR_MAPS: pbrMap.textures.length,
+    };
+
+    // create temporary shader program including the Material uniform buffer
+    // used to query the compiled structure of the uniform buffer
+    const renderPass = makeRenderPass(gl, {
+      vertex: {
+        source: `void main() {}`
+      },
+      fragment: {
+        includes: [ materialBuffer ],
+        source: `void main() {}`
+      },
+      defines
+    });
+
+    uploadToUniformBuffer(gl, renderPass.program, bufferData);
+
+    return { defines, textures };
+  }
+
+  function makeTextureArray(gl, textures, gammaCorrection = false) {
+    const images = textures.map(t => t.image);
+    const flipY = textures.map(t => t.flipY);
+    const { maxSize, relativeSizes } = maxImageSize(images);
+
+    // create GL Array Texture from individual textures
+    const texture = makeTexture(gl, {
+      width: maxSize.width,
+      height: maxSize.height,
+      gammaCorrection,
+      data: images,
+      flipY,
+      channels: 3,
+      minFilter: gl.LINEAR,
+      magFilter: gl.LINEAR,
+    });
+
+    return {
+     texture,
+     relativeSizes
+    };
+  }
+
+  function maxImageSize(images) {
+    const maxSize = {
+      width: 0,
+      height: 0
+    };
+
+    for (const image of images) {
+      maxSize.width = Math.max(maxSize.width, image.width);
+      maxSize.height = Math.max(maxSize.height, image.height);
+    }
+
+    const relativeSizes = [];
+    for (const image of images) {
+      relativeSizes.push(image.width / maxSize.width);
+      relativeSizes.push(image.height / maxSize.height);
+    }
+
+    return { maxSize, relativeSizes };
+  }
+
+
+  // Upload arrays to uniform buffer objects
+  // Packs different arrays into vec4's to take advantage of GLSL's std140 memory layout
+
+  function uploadToUniformBuffer(gl, program, bufferData) {
+    const materialBuffer = makeUniformBuffer(gl, program, 'Materials');
+
+    materialBuffer.set('Materials.colorAndMaterialType[0]', interleave(
+      { data: [].concat(...bufferData.color.map(d => d.toArray())), channels: 3 },
+      { data: bufferData.type, channels: 1}
+    ));
+
+    materialBuffer.set('Materials.roughnessMetalnessNormalScale[0]', interleave(
+      { data: bufferData.roughness, channels: 1 },
+      { data: bufferData.metalness, channels: 1 },
+      { data: [].concat(...bufferData.normalScale.map(d => d.toArray())), channels: 2 }
+    ));
+
+    materialBuffer.set('Materials.diffuseNormalRoughnessMetalnessMapIndex[0]', interleave(
+      { data: bufferData.diffuseMapIndex, channels: 1 },
+      { data: bufferData.normalMapIndex, channels: 1 },
+      { data: bufferData.roughnessMapIndex, channels: 1 },
+      { data: bufferData.metalnessMapIndex, channels: 1 }
+    ));
+
+    materialBuffer.set('Materials.diffuseNormalMapSize[0]', interleave(
+      { data: bufferData.diffuseMapSize, channels: 2 },
+      { data: bufferData.normalMapSize, channels: 2 }
+    ));
+
+    materialBuffer.set('Materials.pbrMapSize[0]', bufferData.pbrMapSize);
+
+    materialBuffer.bind(0);
+  }
+
+  function interleave(...arrays) {
+    let maxLength = 0;
+    for (let i = 0; i < arrays.length; i++) {
+      const a = arrays[i];
+      const l = a.data ? a.data.length / a.channels : 0;
+      maxLength = Math.max(maxLength, l);
+    }
+
+    const interleaved = [];
+    for (let i = 0; i < maxLength; i++) {
+      for (let j = 0; j < arrays.length; j++) {
+        const { data = [], channels } = arrays[j];
+        for (let c = 0; c < channels; c++) {
+          interleaved.push(data[i * channels + c]);
+        }
+      }
+    }
+
+    return interleaved;
+  }
+
+  function mergeMeshesToGeometry(meshes) {
+
+    let vertexCount = 0;
+    let indexCount = 0;
+
+    const geometryAndMaterialIndex = [];
+    const materialIndexMap = new Map();
+
+    for (const mesh of meshes) {
+      const geometry = cloneBufferGeometry(mesh.geometry, ['position', 'normal', 'uv']);
+
+      const index = geometry.getIndex();
+      if (!index) {
+        addFlatGeometryIndices(geometry);
+      }
+
+      geometry.applyMatrix(mesh.matrixWorld);
+
+      if (!geometry.getAttribute('normal')) {
+        geometry.computeVertexNormals();
+      } else {
+        geometry.normalizeNormals();
+      }
+
+      vertexCount += geometry.getAttribute('position').count;
+      indexCount += geometry.getIndex().count;
+
+      const material = mesh.material;
+      let materialIndex = materialIndexMap.get(material);
+      if (materialIndex === undefined) {
+        materialIndex = materialIndexMap.size;
+        materialIndexMap.set(material, materialIndex);
+      }
+
+      geometryAndMaterialIndex.push({
+        geometry,
+        materialIndex
+      });
+    }
+
+    const geometry = mergeGeometry(geometryAndMaterialIndex, vertexCount, indexCount);
+
+    return {
+      geometry,
+      materials: Array.from(materialIndexMap.keys())
+    };
+  }
+
+  function mergeGeometry(geometryAndMaterialIndex, vertexCount, indexCount) {
+    const positionAttrib = new THREE$1.BufferAttribute(new Float32Array(3 * vertexCount), 3, false);
+    const normalAttrib = new THREE$1.BufferAttribute(new Float32Array(3 * vertexCount), 3, false);
+    const uvAttrib = new THREE$1.BufferAttribute(new Float32Array(2 * vertexCount), 2, false);
+    const materialMeshIndexAttrib = new THREE$1.BufferAttribute(new Int32Array(2 * vertexCount), 2, false);
+    const indexAttrib = new THREE$1.BufferAttribute(new Uint32Array(indexCount), 1, false);
+
+    const mergedGeometry = new THREE$1.BufferGeometry();
+    mergedGeometry.addAttribute('position', positionAttrib);
+    mergedGeometry.addAttribute('normal', normalAttrib);
+    mergedGeometry.addAttribute('uv', uvAttrib);
+    mergedGeometry.addAttribute('materialMeshIndex', materialMeshIndexAttrib);
+    mergedGeometry.setIndex(indexAttrib);
+
+    let currentVertex = 0;
+    let currentIndex = 0;
+    let currentMesh = 1;
+
+    for (const { geometry, materialIndex } of geometryAndMaterialIndex) {
+      const vertexCount = geometry.getAttribute('position').count;
+      mergedGeometry.merge(geometry, currentVertex);
+
+      const meshIndex = geometry.getIndex();
+      for (let i = 0; i < meshIndex.count; i++) {
+        indexAttrib.setX(currentIndex + i, currentVertex + meshIndex.getX(i));
+      }
+
+      for (let i = 0; i < vertexCount; i++) {
+        materialMeshIndexAttrib.setXY(currentVertex + i, materialIndex, currentMesh);
+      }
+
+      currentVertex += vertexCount;
+      currentIndex += meshIndex.count;
+      currentMesh++;
+    }
+
+    return mergedGeometry;
+  }
+
+  // Similar to buffergeometry.clone(), except we only copy
+  // specific attributes instead of everything
+  function cloneBufferGeometry(bufferGeometry, attributes) {
+    const newGeometry = new THREE$1.BufferGeometry();
+
+    for (const name of attributes) {
+      const attrib = bufferGeometry.getAttribute(name);
+      if (attrib) {
+        newGeometry.addAttribute(name, attrib.clone());
+      }
+    }
+
+    const index = bufferGeometry.getIndex();
+    if (index) {
+      newGeometry.setIndex(index);
+    }
+
+    return newGeometry;
+  }
+
+  function addFlatGeometryIndices(geometry) {
+    const position = geometry.getAttribute('position');
+
+    if (!position) {
+      console.warn('No position attribute');
+      return;
+    }
+
+    const index = new Uint32Array(position.count);
+
+    for (let i = 0; i < index.length; i++) {
+      index[i] = i;
+    }
+
+    geometry.setIndex(new THREE$1.BufferAttribute(index, 1, false));
+
+    return geometry;
   }
 
   // Reorders the elements in the range [first, last) in such a way that
@@ -568,8 +1518,8 @@
 
   const size = new THREE$1.Vector3();
 
-  function bvhAccel(geometry, materialIndices) {
-    const primitiveInfo = makePrimitiveInfo(geometry, materialIndices);
+  function bvhAccel(geometry) {
+    const primitiveInfo = makePrimitiveInfo(geometry);
     const node = recursiveBuild(primitiveInfo, 0, primitiveInfo.length);
 
     return node;
@@ -650,10 +1600,12 @@
     };
   }
 
-  function makePrimitiveInfo(geometry, materialIndices) {
+  function makePrimitiveInfo(geometry) {
     const primitiveInfo = [];
     const indices = geometry.getIndex().array;
     const position = geometry.getAttribute('position');
+    const materialMeshIndex = geometry.getAttribute('materialMeshIndex');
+
     const v0 = new THREE$1.Vector3();
     const v1 = new THREE$1.Vector3();
     const v2 = new THREE$1.Vector3();
@@ -661,11 +1613,15 @@
     const e1 = new THREE$1.Vector3();
 
     for (let i = 0; i < indices.length; i += 3) {
+      const i0 = indices[i];
+      const i1 = indices[i + 1];
+      const i2 = indices[i + 2];
+
       const bounds = new THREE$1.Box3();
 
-      v0.fromBufferAttribute(position, indices[i]);
-      v1.fromBufferAttribute(position, indices[i + 1]);
-      v2.fromBufferAttribute(position, indices[i + 2]);
+      v0.fromBufferAttribute(position, i0);
+      v1.fromBufferAttribute(position, i1);
+      v2.fromBufferAttribute(position, i2);
       e0.subVectors(v2, v0);
       e1.subVectors(v1, v0);
 
@@ -676,9 +1632,9 @@
       const info = {
         bounds: bounds,
         center: bounds.getCenter(new THREE$1.Vector3()),
-        indices: [indices[i], indices[i + 1], indices[i + 2]],
+        indices: [i0, i1, i2],
         faceNormal: new THREE$1.Vector3().crossVectors(e1, e0).normalize(),
-        materialIndex: materialIndices[i / 3]
+        materialIndex: materialMeshIndex.getX(i0)
       };
 
       primitiveInfo.push(info);
@@ -846,30 +1802,6 @@
     }
 
     return floatBuffer;
-  }
-
-  function clamp(x, min, max) {
-    return Math.min(Math.max(x, min), max);
-  }
-
-  function shuffle(arr) {
-    for (let i = arr.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      const x = arr[i];
-      arr[i] = arr[j];
-      arr[j] = x;
-    }
-    return arr;
-  }
-
-  function numberArraysEqual(a, b, eps = 1e-4) {
-    for (let i = 0; i < a.length; i++) {
-      if (Math.abs(a[i] - b[i]) > eps) {
-        return false;
-      }
-    }
-
-    return true;
   }
 
   // Convert image data from the RGBE format to a 32-bit floating point format
@@ -1115,7 +2047,7 @@
       height: image.height + 1
     };
 
-    const cdf = makeTextureArray(cdfImage.width, cdfImage.height, 2);
+    const cdf = makeTextureArray$1(cdfImage.width, cdfImage.height, 2);
 
     for (let y = 0; y < image.height; y++) {
       const sinTheta = Math.sin(Math.PI * (y + 0.5) / image.height);
@@ -1153,7 +2085,7 @@
   }
 
 
-  function makeTextureArray(width, height, channels) {
+  function makeTextureArray$1(width, height, channels) {
     const array = new Float32Array(channels * width * height);
 
     return {
@@ -1181,15 +2113,7 @@
     return unrolled;
   }
 
-  var core = `
-  #define PI 3.14159265359
-  #define TWOPI 6.28318530718
-  #define INVPI 0.31830988618
-  #define INVPI2 0.10132118364
-  #define EPS 0.0005
-  #define INF 1.0e999
-  #define RAY_MAX_DISTANCE 9999.0
-
+  var rayTraceCore = `
   #define STANDARD 0
   #define THIN_GLASS 1
   #define THICK_GLASS 2
@@ -1208,6 +2132,8 @@
   // https://www.w3.org/WAI/GL/wiki/Relative_luminance
   const vec3 luminance = vec3(0.2126, 0.7152, 0.0722);
 
+  #define RAY_MAX_DISTANCE 9999.0
+
   struct Ray {
     vec3 o;
     vec3 d;
@@ -1224,7 +2150,6 @@
     float roughness;
     float metalness;
     int materialType;
-    int meshId;
   };
 
   struct Camera {
@@ -1301,40 +2226,10 @@ vec4 textureLinear(sampler2D map, vec2 uv) {
 
   var intersect = `
 
-uniform highp isampler2D indices;
 uniform sampler2D positions;
 uniform sampler2D normals;
 uniform sampler2D uvs;
 uniform sampler2D bvh;
-
-uniform Materials {
-  vec4 colorAndMaterialType[NUM_MATERIALS];
-  vec4 roughnessMetalnessNormalScale[NUM_MATERIALS];
-
-  #if defined(NUM_DIFFUSE_MAPS) || defined(NUM_NORMAL_MAPS) || defined(NUM_PBR_MAPS)
-    ivec4 diffuseNormalRoughnessMetalnessMapIndex[NUM_MATERIALS];
-  #endif
-
-  #if defined(NUM_DIFFUSE_MAPS) || defined(NUM_NORMAL_MAPS)
-    vec4 diffuseNormalMapSize[NUM_DIFFUSE_NORMAL_MAPS];
-  #endif
-
-  #if defined(NUM_PBR_MAPS)
-    vec2 pbrMapSize[NUM_PBR_MAPS];
-  #endif
-} materials;
-
-#ifdef NUM_DIFFUSE_MAPS
-  uniform mediump sampler2DArray diffuseMap;
-#endif
-
-#ifdef NUM_NORMAL_MAPS
-  uniform mediump sampler2DArray normalMap;
-#endif
-
-#ifdef NUM_PBR_MAPS
-  uniform mediump sampler2DArray pbrMap;
-#endif
 
 struct Triangle {
   vec3 p0;
@@ -1342,7 +2237,7 @@ struct Triangle {
   vec3 p2;
 };
 
-void surfaceInteractionFromIntersection(inout SurfaceInteraction si, Triangle tri, vec3 barycentric, ivec3 index, vec3 faceNormal, int materialIndex) {
+void surfaceInteractionFromBVH(inout SurfaceInteraction si, Triangle tri, vec3 barycentric, ivec3 index, vec3 faceNormal, int materialIndex) {
   si.hit = true;
   si.faceNormal = faceNormal;
   si.position = barycentric.x * tri.p0 + barycentric.y * tri.p1 + barycentric.z * tri.p2;
@@ -1353,90 +2248,30 @@ void surfaceInteractionFromIntersection(inout SurfaceInteraction si, Triangle tr
   vec3 n0 = texelFetch(normals, i0, 0).xyz;
   vec3 n1 = texelFetch(normals, i1, 0).xyz;
   vec3 n2 = texelFetch(normals, i2, 0).xyz;
-  si.normal = normalize(barycentric.x * n0 + barycentric.y * n1 + barycentric.z * n2);
-
-  si.color = materials.colorAndMaterialType[materialIndex].xyz;
-  si.roughness = materials.roughnessMetalnessNormalScale[materialIndex].x;
-  si.metalness = materials.roughnessMetalnessNormalScale[materialIndex].y;
-
-  si.materialType = int(materials.colorAndMaterialType[materialIndex].w);
-
-  // TODO: meshId should be the actual mesh id instead of the material id, which can be shared amoung meshes.
-  // This will involve storing the mesh id AND the material id in the BVH texture
-  si.meshId = materialIndex + 1; // +1 so that the mesh id is never 0
+  vec3 normal = normalize(barycentric.x * n0 + barycentric.y * n1 + barycentric.z * n2);
 
   #if defined(NUM_DIFFUSE_MAPS) || defined(NUM_NORMAL_MAPS) || defined(NUM_PBR_MAPS)
     vec2 uv0 = texelFetch(uvs, i0, 0).xy;
     vec2 uv1 = texelFetch(uvs, i1, 0).xy;
     vec2 uv2 = texelFetch(uvs, i2, 0).xy;
     vec2 uv = fract(barycentric.x * uv0 + barycentric.y * uv1 + barycentric.z * uv2);
+  #else
+    vec2 uv = vec2();
   #endif
 
-  #ifdef NUM_DIFFUSE_MAPS
-    int diffuseMapIndex = materials.diffuseNormalRoughnessMetalnessMapIndex[materialIndex].x;
-    if (diffuseMapIndex >= 0) {
-      si.color *= texture(diffuseMap, vec3(uv * materials.diffuseNormalMapSize[diffuseMapIndex].xy, diffuseMapIndex)).rgb;
-    }
-  #endif
+  si.materialType = int(getMatType(materialIndex));
+  si.color = getMatColor(materialIndex, uv);
+  si.roughness = getMatRoughness(materialIndex, uv);
+  si.metalness = getMatMetalness(materialIndex, uv);
 
   #ifdef NUM_NORMAL_MAPS
-    int normalMapIndex = materials.diffuseNormalRoughnessMetalnessMapIndex[materialIndex].y;
-    if (normalMapIndex >= 0) {
-      vec2 duv02 = uv0 - uv2;
-      vec2 duv12 = uv1 - uv2;
-      vec3 dp02 = tri.p0 - tri.p2;
-      vec3 dp12 = tri.p1 - tri.p2;
-
-      // Method One
-      // http://www.pbr-book.org/3ed-2018/Shapes/Triangle_Meshes.html#fragment-Computetrianglepartialderivatives-0
-      // Compute tangent vectors relative to the face normal. These vectors won't necessarily be orthogonal to the smoothed normal
-      // This means the TBN matrix won't be orthogonal which is technically incorrect.
-      // This is Three.js's method (https://github.com/mrdoob/three.js/blob/dev/src/renderers/shaders/ShaderChunk/normalmap_pars_fragment.glsl.js)
-      // --------------
-      // float scale = sign(duv02.x * duv12.y - duv02.y * duv12.x);
-      // vec3 dpdu = normalize((duv12.y * dp02 - duv02.y * dp12) * scale);
-      // vec3 dpdv = normalize((-duv12.x * dp02 + duv02.x * dp12) * scale);
-
-      // Method Two
-      // Compute tangent vectors as in Method One but apply Gram-Schmidt process to make vectors orthogonal to smooth normal
-      // This might inadvertently flip coordinate space orientation
-      // --------------
-      // float scale = sign(duv02.x * duv12.y - duv02.y * duv12.x);
-      // vec3 dpdu = normalize((duv12.y * dp02 - duv02.y * dp12) * scale);
-      // dpdu = (dpdu - dot(dpdu, si.normal) * si.normal); // Gram-Schmidt process
-      // vec3 dpdv = cross(si.normal, dpdu) * scale;
-
-      // Method Three
-      // http://www.thetenthplanet.de/archives/1180
-      // Compute co-tangent and co-bitangent vectors
-      // These vectors are orthongal and maintain a consistent coordinate space
-      // --------------
-      vec3 dp12perp = cross(dp12, si.normal);
-      vec3 dp02perp = cross(si.normal, dp02);
-      vec3 dpdu = dp12perp * duv02.x + dp02perp * duv12.x;
-      vec3 dpdv = dp12perp * duv02.y + dp02perp * duv12.y;
-      float invmax = inversesqrt(max(dot(dpdu, dpdu), dot(dpdv, dpdv)));
-      dpdu *= invmax;
-      dpdv *= invmax;
-
-      vec3 n = 2.0 * texture(normalMap, vec3(uv * materials.diffuseNormalMapSize[normalMapIndex].zw, normalMapIndex)).rgb - 1.0;
-      n.xy *= materials.roughnessMetalnessNormalScale[materialIndex].zw;
-
-      mat3 tbn = mat3(dpdu, dpdv, si.normal);
-
-      si.normal = normalize(tbn * n);
-    }
-  #endif
-
-  #ifdef NUM_PBR_MAPS
-    int roughnessMapIndex = materials.diffuseNormalRoughnessMetalnessMapIndex[materialIndex].z;
-    int metalnessMapIndex = materials.diffuseNormalRoughnessMetalnessMapIndex[materialIndex].w;
-    if (roughnessMapIndex >= 0) {
-      si.roughness *= texture(pbrMap, vec3(uv * materials.pbrMapSize[roughnessMapIndex].xy, roughnessMapIndex)).g;
-    }
-    if (metalnessMapIndex >= 0) {
-      si.metalness *= texture(pbrMap, vec3(uv * materials.pbrMapSize[metalnessMapIndex].xy, metalnessMapIndex)).b;
-    }
+    vec3 dp1 = tri.p0 - tri.p2;
+    vec3 dp2 = tri.p1 - tri.p2;
+    vec2 duv1 = uv0 - uv2;
+    vec2 duv2 = uv1 - uv2;
+    si.normal = getMatNormal(materialIndex, uv, normal, dp1, dp2, duv1, duv2);
+  #else
+    si.normal = normal;
   #endif
 }
 
@@ -1537,8 +2372,8 @@ int maxDimension(vec3 v) {
 }
 
 // Traverse BVH, find closest triangle intersection, and return surface information
-SurfaceInteraction intersectScene(inout Ray ray) {
-  SurfaceInteraction si;
+void intersectScene(inout Ray ray, inout SurfaceInteraction si) {
+  si.hit = false;
 
   int maxDim = maxDimension(abs(ray.d));
 
@@ -1595,16 +2430,14 @@ SurfaceInteraction intersectScene(inout Ray ray) {
         ray.tMax = hit.t;
         int materialIndex = floatBitsToInt(r2.w);
         vec3 faceNormal = r2.xyz;
-        surfaceInteractionFromIntersection(si, tri, hit.barycentric, index, faceNormal, materialIndex);
+        surfaceInteractionFromBVH(si, tri, hit.barycentric, index, faceNormal, materialIndex);
       }
     }
   }
 
   // Values must be clamped outside of intersection loop. Clamping inside the loop produces incorrect numbers on some devices.
-  si.roughness = clamp(si.roughness, 0.03, 1.0);
+  si.roughness = clamp(si.roughness, ROUGHNESS_MIN, 1.0);
   si.metalness = clamp(si.metalness, 0.0, 1.0);
-
-  return si;
 }
 
 bool intersectSceneShadow(inout Ray ray) {
@@ -1667,6 +2500,34 @@ bool intersectSceneShadow(inout Ray ray) {
 
 `;
 
+  var surfaceInteractionDirect = `
+
+  uniform sampler2D gPosition;
+  uniform sampler2D gNormal;
+  uniform sampler2D gFaceNormal;
+  uniform sampler2D gColor;
+  uniform sampler2D gMatProps;
+
+  void surfaceInteractionDirect(vec2 coord, inout SurfaceInteraction si) {
+    si.position = texture(gPosition, coord).xyz;
+
+    vec4 normalMaterialType = texture(gNormal, coord);
+
+    si.normal = normalize(normalMaterialType.xyz);
+    si.materialType = int(normalMaterialType.w);
+
+    si.faceNormal = normalize(texture(gFaceNormal, coord).xyz);
+
+    si.color = texture(gColor, coord).rgb;
+
+    vec4 matProps = texture(gMatProps, coord);
+    si.roughness = matProps.x;
+    si.metalness = matProps.y;
+
+    si.hit = dot(si.normal, si.normal) > 0.0 ? true : false;
+  }
+`;
+
   var random = `
 
 // Noise texture used to generate a different random number for each pixel.
@@ -1680,8 +2541,6 @@ uniform float strataSize;
 // we want that specific bit of the shader to fetch a sample from the same position in stratifiedSamples
 // This allows us to use stratified sampling for each random variable in our path tracing
 int sampleIndex = 0;
-
-const highp float maxUint = 1.0 / 4294967295.0;
 
 float pixelSeed;
 
@@ -2071,6 +2930,10 @@ void sampleMaterial(SurfaceInteraction si, int bounce, inout Path path) {
 
   // Get new path direction
 
+  if (lastBounce) {
+    return;
+  }
+
   lightDir = diffuseOrSpecular.y < mix(0.5, 0.0, si.metalness) ?
     lightDirDiffuse(si.faceNormal, viewDir, basis, randomSampleVec2()) :
     lightDirSpecular(si.faceNormal, viewDir, basis, si.roughness, randomSampleVec2());
@@ -2266,13 +3129,14 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
 
 `;
 
-  // import sampleGlass from './chunks/sampleGlassMicrofacet.glsl';
-
-  var fragment = {
+  var fragment$1 = {
   includes: [
-    core,
+    constants$1,
+    rayTraceCore,
     textureLinear,
+    materialBuffer,
     intersect,
+    surfaceInteractionDirect,
     random,
     envmap,
     bsdf,
@@ -2281,15 +3145,9 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
     sampleGlass,
     sampleShadowCatcher,
   ],
-  outputs: ['light', 'position'],
+  outputs: ['light'],
   source: (defines) => `
   void bounce(inout Path path, int i, inout SurfaceInteraction si) {
-    if (path.abort) {
-      return;
-    }
-
-    si = intersectScene(path.ray);
-
     if (!si.hit) {
       if (path.specularBounce) {
         path.li += path.beta * sampleBackgroundFromDirection(path.ray.d);
@@ -2324,7 +3182,7 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
 
   // Path tracing integrator as described in
   // http://www.pbr-book.org/3ed-2018/Light_Transport_I_Surface_Reflection/Path_Tracing.html#
-  vec4 integrator(inout Ray ray, inout SurfaceInteraction si) {
+  vec4 integrator(inout Ray ray) {
     Path path;
     path.ray = ray;
     path.li = vec3(0);
@@ -2333,16 +3191,25 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
     path.specularBounce = true;
     path.abort = false;
 
+    SurfaceInteraction si;
+
+    // first surface interaction from g-buffer
+    surfaceInteractionDirect(vCoord, si);
+
+    // first surface interaction from ray interesction
+    // intersectScene(path.ray, si);
+
     bounce(path, 1, si);
 
-    SurfaceInteraction indirectSi;
-
     // Manually unroll for loop.
-    // Some hardware fails to interate over a GLSL loop, so we provide this workaround
+    // Some hardware fails to iterate over a GLSL loop, so we provide this workaround
     // for (int i = 1; i < defines.bounces + 1, i += 1)
     // equivelant to
     ${unrollLoop('i', 2, defines.BOUNCES + 1, 1, `
-      bounce(path, i, indirectSi);
+      if (!path.abort) {
+        intersectScene(path.ray, si);
+        bounce(path, i, si);
+      }
     `)}
 
     return vec4(path.li, path.alpha);
@@ -2372,20 +3239,13 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
     Ray cam;
     initRay(cam, origin, direction);
 
-    SurfaceInteraction si;
-
-    vec4 liAndAlpha = integrator(cam, si);
-
-    if (dot(si.position, si.position) == 0.0) {
-      si.position = origin + direction * RAY_MAX_DISTANCE;
-    }
+    vec4 liAndAlpha = integrator(cam);
 
     if (!(liAndAlpha.x < INF && liAndAlpha.x > -EPS)) {
       liAndAlpha = vec4(0, 0, 0, 1);
     }
 
     out_light = liAndAlpha;
-    out_position = vec4(si.position, si.meshId);
 
     // Stratified Sampling Sample Count Test
     // ---------------
@@ -2408,132 +3268,6 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
 }
 `
   };
-
-  function mergeMeshesToGeometry(meshes) {
-
-    let vertexCount = 0;
-    let indexCount = 0;
-
-    const geometryAndMaterialIndex = [];
-    const materialIndexMap = new Map();
-
-    for (const mesh of meshes) {
-      const geometry = cloneBufferGeometry(mesh.geometry, ['position', 'normal', 'uv']);
-
-      const index = geometry.getIndex();
-      if (!index) {
-        addFlatGeometryIndices(geometry);
-      }
-
-      geometry.applyMatrix(mesh.matrixWorld);
-
-      if (!geometry.getAttribute('normal')) {
-        geometry.computeVertexNormals();
-      } else {
-        geometry.normalizeNormals();
-      }
-
-      vertexCount += geometry.getAttribute('position').count;
-      indexCount += geometry.getIndex().count;
-
-      const material = mesh.material;
-      let materialIndex = materialIndexMap.get(material);
-      if (materialIndex === undefined) {
-        materialIndex = materialIndexMap.size;
-        materialIndexMap.set(material, materialIndex);
-      }
-
-      geometryAndMaterialIndex.push({
-        geometry,
-        materialIndex
-      });
-    }
-
-    const { geometry, materialIndices } = mergeGeometry(geometryAndMaterialIndex, vertexCount, indexCount);
-
-    return {
-      geometry,
-      materialIndices,
-      materials: Array.from(materialIndexMap.keys())
-    };
-  }
-
-  function mergeGeometry(geometryAndMaterialIndex, vertexCount, indexCount) {
-    const position = new THREE$1.BufferAttribute(new Float32Array(3 * vertexCount), 3, false);
-    const normal = new THREE$1.BufferAttribute(new Float32Array(3 * vertexCount), 3, false);
-    const uv = new THREE$1.BufferAttribute(new Float32Array(2 * vertexCount), 2, false);
-    const index = new THREE$1.BufferAttribute(new Uint32Array(indexCount), 1, false);
-
-    const materialIndices = [];
-
-    const bg = new THREE$1.BufferGeometry();
-    bg.addAttribute('position', position);
-    bg.addAttribute('normal', normal);
-    bg.addAttribute('uv', uv);
-    bg.setIndex(index);
-
-    let currentVertex = 0;
-    let currentIndex = 0;
-
-    for (const { geometry, materialIndex } of geometryAndMaterialIndex) {
-      const vertexCount = geometry.getAttribute('position').count;
-      bg.merge(geometry, currentVertex);
-
-      const meshIndex = geometry.getIndex();
-      for (let i = 0; i < meshIndex.count; i++) {
-        index.setX(currentIndex + i, currentVertex + meshIndex.getX(i));
-      }
-
-      const triangleCount = meshIndex.count / 3;
-      for (let i = 0; i < triangleCount; i++) {
-        materialIndices.push(materialIndex);
-      }
-
-      currentVertex += vertexCount;
-      currentIndex += meshIndex.count;
-    }
-
-    return { geometry: bg, materialIndices };
-  }
-
-  // Similar to buffergeometry.clone(), except we only copy
-  // specific attributes instead of everything
-  function cloneBufferGeometry(bufferGeometry, attributes) {
-    const newGeometry = new THREE$1.BufferGeometry();
-
-    for (const name of attributes) {
-      const attrib = bufferGeometry.getAttribute(name);
-      if (attrib) {
-        newGeometry.addAttribute(name, attrib.clone());
-      }
-    }
-
-    const index = bufferGeometry.getIndex();
-    if (index) {
-      newGeometry.setIndex(index);
-    }
-
-    return newGeometry;
-  }
-
-  function addFlatGeometryIndices(geometry) {
-    const position = geometry.getAttribute('position');
-
-    if (!position) {
-      console.warn('No position attribute');
-      return;
-    }
-
-    const index = new Uint32Array(position.count);
-
-    for (let i = 0; i < index.length; i++) {
-      index[i] = i;
-    }
-
-    geometry.setIndex(new THREE$1.BufferAttribute(index, 1, false));
-
-    return geometry;
-  }
 
   /*
   Stratified Sampling
@@ -2638,269 +3372,13 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
     };
   }
 
-  function makeTexture(gl, params) {
-    let {
-      width = null,
-      height = null,
-
-      // A single HTMLImageElement, ImageData, or TypedArray,
-      // Or an array of any of these objects. In this case an Array Texture will be created
-      data = null,
-
-      // If greater than 1, create an Array Texture of this length
-      length = 1,
-
-      // Number of channels, [1-4]. If left blank, the the function will decide the number of channels automatically from the data
-      channels = null,
-
-      // Either 'byte' or 'float'
-      // If left empty, the function will decide the format automatically from the data
-      storage = null,
-
-      // Reverse the texture across the y-axis.
-      flipY = false,
-
-      // sampling properties
-      gammaCorrection = false,
-      wrapS = gl.REPEAT,
-      wrapT = gl.REPEAT,
-      minFilter = gl.LINEAR,
-      magFilter = gl.LINEAR,
-    } = params;
-
-    width = width || data.width || 0;
-    height = height || data.height || 0;
-
-    const texture = gl.createTexture();
-
-    let target;
-    let dataArray;
-
-    // if data is a JS array but not a TypedArray, assume data is an array of images and create a GL Array Texture
-    if (Array.isArray(data)) {
-      dataArray = data;
-      data = dataArray[0];
-    }
-
-    target = dataArray || length > 1 ? gl.TEXTURE_2D_ARRAY : gl.TEXTURE_2D;
-
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(target, texture);
-
-    gl.texParameteri(target, gl.TEXTURE_WRAP_S, wrapS);
-    gl.texParameteri(target, gl.TEXTURE_WRAP_T, wrapT);
-    gl.texParameteri(target, gl.TEXTURE_MIN_FILTER, minFilter);
-    gl.texParameteri(target, gl.TEXTURE_MAG_FILTER, magFilter);
-
-    if (!channels) {
-      if (data && data.length) {
-        channels = data.length / (width * height); // infer number of channels from data size
-      } else {
-        channels = 4;
-      }
-    }
-
-    channels = clamp(channels, 1, 4);
-
-    const format = [
-      gl.RED,
-      gl.RG,
-      gl.RGB,
-      gl.RGBA
-    ][channels - 1];
-
-    const isByteArray =
-      storage === 'byte' ||
-      data instanceof Uint8Array ||
-      data instanceof HTMLImageElement ||
-      data instanceof HTMLCanvasElement ||
-      data instanceof ImageData;
-
-    const isFloatArray =
-      storage === 'float' ||
-      data instanceof Float32Array;
-
-    let type;
-    let internalFormat;
-    if (isByteArray) {
-      type = gl.UNSIGNED_BYTE;
-      internalFormat = [
-        gl.R8,
-        gl.RG8,
-        gammaCorrection ? gl.SRGB8 : gl.RGB8,
-        gammaCorrection ? gl.SRGB8_ALPHA8 : gl.RGBA8
-      ][channels - 1];
-    } else if (isFloatArray) {
-      type = gl.FLOAT;
-      internalFormat = [
-        gl.R32F,
-        gl.RG32F,
-        gl.RGB32F,
-        gl.RGBA32F
-      ][channels - 1];
-    } else {
-      console.error('Texture of unknown type:', storage || data);
-    }
-
-    if (dataArray) {
-      gl.texStorage3D(target, 1, internalFormat, width, height, dataArray.length);
-      for (let i = 0; i < dataArray.length; i++) {
-        // if layer is an HTMLImageElement, use the .width and .height properties of each layer
-        // otherwise use the max size of the array texture
-        const layerWidth = dataArray[i].width || width;
-        const layerHeight = dataArray[i].height || height;
-
-        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, Array.isArray(flipY) ? flipY[i] : flipY);
-
-        gl.texSubImage3D(target, 0, 0, 0, i, layerWidth, layerHeight, 1, format, type, dataArray[i]);
-      }
-    } else if (length > 1) {
-      // create empty array texture
-      gl.texStorage3D(target, 1, internalFormat, width, height, length);
-    } else {
-      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, flipY);
-      gl.texStorage2D(target, 1, internalFormat, width, height);
-      if (data) {
-        gl.texSubImage2D(target, 0, 0, 0, width, height, format, type, data);
-      }
-    }
-
-    // return state to default
-    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
-
-    return {
-      target,
-      texture
-    };
-  }
-
-  // retrieve textures used by meshes, grouping textures from meshes shared by *the same* mesh property
-  function getTexturesFromMaterials(meshes, textureNames) {
-    const textureMap = {};
-
-    for (const name of textureNames) {
-      const textures = [];
-      textureMap[name] = {
-        indices: texturesFromMaterials(meshes, name, textures),
-        textures
-      };
-    }
-
-    return textureMap;
-  }
-
-  // retrieve textures used by meshes, grouping textures from meshes shared *across all* mesh properties
-  function mergeTexturesFromMaterials(meshes, textureNames) {
-    const textureMap = {
-      textures: [],
-      indices: {}
-    };
-
-    for (const name of textureNames) {
-      textureMap.indices[name] = texturesFromMaterials(meshes, name, textureMap.textures);
-    }
-
-    return textureMap;
-  }
-
-  function texturesFromMaterials(materials, textureName, textures) {
-    const indices = [];
-
-    for (const material of materials) {
-      if (!material[textureName]) {
-        indices.push(-1);
-      } else {
-        let index = textures.length;
-        for (let i = 0; i < textures.length; i++) {
-          if (textures[i] === material[textureName]) {
-            // Reuse existing duplicate texture.
-            index = i;
-            break;
-          }
-        }
-        if (index === textures.length) {
-          // New texture. Add texture to list.
-          textures.push(material[textureName]);
-        }
-        indices.push(index);
-      }
-    }
-
-    return indices;
-  }
-
-  // Upload arrays to uniform buffer objects
-  // Packs different arrays into vec4's to take advantage of GLSL's std140 memory layout
-
-  function uploadBuffers(gl, program, bufferData) {
-    const materialBuffer = makeUniformBuffer(gl, program, 'Materials');
-
-    const {
-      color = [],
-      roughness = [],
-      metalness = [],
-      normalScale = [],
-      type = [],
-      diffuseMapIndex = [],
-      diffuseMapSize = [],
-      normalMapIndex = [],
-      normalMapSize = [],
-      roughnessMapIndex = [],
-      metalnessMapIndex = [],
-      pbrMapSize = [],
-    } = bufferData;
-
-    materialBuffer.set('Materials.colorAndMaterialType[0]', interleave(
-      { data: [].concat(...color.map(d => d.toArray())), channels: 3 },
-      { data: type, channels: 1}
-    ));
-
-    materialBuffer.set('Materials.roughnessMetalnessNormalScale[0]', interleave(
-      { data: roughness, channels: 1 },
-      { data: metalness, channels: 1 },
-      { data: [].concat(...normalScale.map(d => d.toArray())), channels: 2 }
-    ));
-
-    materialBuffer.set('Materials.diffuseNormalRoughnessMetalnessMapIndex[0]', interleave(
-      { data: diffuseMapIndex, channels: 1 },
-      { data: normalMapIndex, channels: 1 },
-      { data: roughnessMapIndex, channels: 1 },
-      { data: metalnessMapIndex, channels: 1 }
-    ));
-
-    materialBuffer.set('Materials.diffuseNormalMapSize[0]', interleave(
-      { data: diffuseMapSize, channels: 2 },
-      { data: normalMapSize, channels: 2 }
-    ));
-
-    materialBuffer.set('Materials.pbrMapSize[0]', pbrMapSize);
-
-    materialBuffer.bind(0);
-  }
-
-  function interleave(...arrays) {
-    const maxLength = arrays.reduce((m, a) => {
-      return Math.max(m, a.data.length / a.channels);
-    }, 0);
-
-    const interleaved = [];
-    for (let i = 0; i < maxLength; i++) {
-      for (let j = 0; j < arrays.length; j++) {
-        const { data, channels } = arrays[j];
-        for (let c = 0; c < channels; c++) {
-          interleaved.push(data[i * channels + c]);
-        }
-      }
-    }
-
-    return interleaved;
-  }
-
   function makeRayTracePass(gl, {
       bounces, // number of global illumination bounces
+      decomposedScene,
       fullscreenQuad,
+      materialBuffer,
+      mergedMesh,
       optionalExtensions,
-      scene,
     }) {
 
     bounces = clamp(bounces, 1, 6);
@@ -2920,7 +3398,7 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
     let samples;
 
     const renderPass = makeRenderPassFromScene({
-      bounces, fullscreenQuad, gl, optionalExtensions, samplingDimensions, scene
+      bounces, decomposedScene, fullscreenQuad, gl, materialBuffer, mergedMesh, optionalExtensions, samplingDimensions,
     });
 
     function setSize(width, height) {
@@ -2931,9 +3409,9 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
     function setNoise(noiseImage) {
       renderPass.setTexture('noise', makeTexture(gl, {
         data: noiseImage,
-        minFilter: gl.NEAREST,
-        magFilter: gl.NEAREST,
-        storage: 'float'
+        wrapS: gl.REPEAT,
+        wrapT: gl.REPEAT,
+        storage: 'halfFloat',
       }));
     }
 
@@ -2947,12 +3425,19 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
       renderPass.setUniform('jitter', x, y);
     }
 
+    function setGBuffers({ position, normal, faceNormal, color, matProps }) {
+      renderPass.setTexture('gPosition', position);
+      renderPass.setTexture('gNormal', normal);
+      renderPass.setTexture('gFaceNormal', faceNormal);
+      renderPass.setTexture('gColor', color);
+      renderPass.setTexture('gMatProps', matProps);
+    }
+
     function nextSeed() {
       renderPass.setUniform('stratifiedSamples[0]', samples.next());
     }
 
     function setStrataCount(strataCount) {
-
       if (strataCount > 1 && strataCount !== samples.strataCount) {
         // reinitailizing random has a performance cost. we can skip it if
         // * strataCount is 1, since a strataCount of 1 works with any sized StratifiedRandomCombined
@@ -2984,6 +3469,7 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
       outputLocs: renderPass.outputLocs,
       setCamera,
       setJitter,
+      setGBuffers,
       setNoise,
       setSize,
       setStrataCount,
@@ -2991,33 +3477,24 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
   }
   function makeRenderPassFromScene({
       bounces,
+      decomposedScene,
       fullscreenQuad,
       gl,
+      materialBuffer,
+      mergedMesh,
       optionalExtensions,
       samplingDimensions,
-      scene,
     }) {
     const { OES_texture_float_linear } = optionalExtensions;
 
-    const { meshes, directionalLights, ambientLights, environmentLights } = decomposeScene(scene);
-    if (meshes.length === 0) {
-      throw 'RayTracingRenderer: Scene contains no renderable meshes.';
-    }
+    const { background, directionalLights, ambientLights, environmentLights } = decomposedScene;
 
-    // merge meshes in scene to a single, static geometry
-    const { geometry, materials, materialIndices } = mergeMeshesToGeometry(meshes);
-
-    // extract textures shared by meshes in scene
-    const maps = getTexturesFromMaterials(materials, ['map', 'normalMap']);
-    const pbrMap = mergeTexturesFromMaterials(materials, ['roughnessMap', 'metalnessMap']);
+    const { geometry, materials, materialIndices } = mergedMesh;
 
     // create bounding volume hierarchy from a static scene
-    const bvh = bvhAccel(geometry, materialIndices);
+    const bvh = bvhAccel(geometry);
     const flattenedBvh = flattenBvh(bvh);
     const numTris = geometry.index.count / 3;
-
-    const useGlass = materials.some(m => m.transparent);
-    const useShadowCatcher = materials.some(m => m.shadowCatcher);
 
     const renderPass = makeRenderPass(gl, {
       defines: {
@@ -3026,60 +3503,19 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
         INDEX_COLUMNS: textureDimensionsFromArray(numTris).columnsLog,
         VERTEX_COLUMNS: textureDimensionsFromArray(geometry.attributes.position.count).columnsLog,
         STACK_SIZE: flattenedBvh.maxDepth,
-        NUM_TRIS: numTris,
-        NUM_MATERIALS: materials.length,
-        NUM_DIFFUSE_MAPS: maps.map.textures.length,
-        NUM_NORMAL_MAPS: maps.normalMap.textures.length,
-        NUM_DIFFUSE_NORMAL_MAPS: Math.max(maps.map.textures.length, maps.normalMap.textures.length),
-        NUM_PBR_MAPS: pbrMap.textures.length,
         BOUNCES: bounces,
-        USE_GLASS: useGlass,
-        USE_SHADOW_CATCHER: useShadowCatcher,
-        SAMPLING_DIMENSIONS: samplingDimensions.reduce((a, b) => a + b)
+        USE_GLASS: materials.some(m => m.transparent),
+        USE_SHADOW_CATCHER: materials.some(m => m.shadowCatcher),
+        SAMPLING_DIMENSIONS: samplingDimensions.reduce((a, b) => a + b),
+        ...materialBuffer.defines
       },
-      fragment,
+      fragment: fragment$1,
       vertex: fullscreenQuad.vertexShader
     });
 
-    const bufferData = {};
-
-    bufferData.color = materials.map(m => m.color);
-    bufferData.roughness = materials.map(m => m.roughness);
-    bufferData.metalness = materials.map(m => m.metalness);
-    bufferData.normalScale = materials.map(m => m.normalScale);
-
-    bufferData.type = materials.map(m => {
-      if (m.shadowCatcher) {
-        return ShadowCatcherMaterial;
-      }
-      if (m.transparent) {
-        return m.solid ? ThickMaterial : ThinMaterial;
-      }
-    });
-
-    if (maps.map.textures.length > 0) {
-      const { relativeSizes, texture } = makeTextureArray$1(gl, maps.map.textures, true);
-      renderPass.setTexture('diffuseMap', texture);
-      bufferData.diffuseMapSize = relativeSizes;
-      bufferData.diffuseMapIndex = maps.map.indices;
-    }
-
-    if (maps.normalMap.textures.length > 0) {
-      const { relativeSizes, texture } = makeTextureArray$1(gl, maps.normalMap.textures, false);
-      renderPass.setTexture('normalMap', texture);
-      bufferData.normalMapSize = relativeSizes;
-      bufferData.normalMapIndex = maps.normalMap.indices;
-    }
-
-    if (pbrMap.textures.length > 0) {
-      const { relativeSizes, texture } = makeTextureArray$1(gl, pbrMap.textures, false);
-      renderPass.setTexture('pbrMap', texture);
-      bufferData.pbrMapSize = relativeSizes;
-      bufferData.roughnessMapIndex = pbrMap.indices.roughnessMap;
-      bufferData.metalnessMapIndex = pbrMap.indices.metalnessMap;
-    }
-
-    uploadBuffers(gl, renderPass.program, bufferData);
+    renderPass.setTexture('diffuseMap', materialBuffer.textures.diffuseMap);
+    renderPass.setTexture('normalMap', materialBuffer.textures.normalMap);
+    renderPass.setTexture('pbrMap', materialBuffer.textures.pbrMap);
 
     renderPass.setTexture('positions', makeDataTexture(gl, geometry.getAttribute('position').array, 3));
 
@@ -3092,6 +3528,7 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
     const envImage = generateEnvMapFromSceneComponents(directionalLights, ambientLights, environmentLights);
     const envImageTextureObject = makeTexture(gl, {
       data: envImage.data,
+      storage: 'halfFloat',
       minFilter: OES_texture_float_linear ? gl.LINEAR : gl.NEAREST,
       magFilter: OES_texture_float_linear ? gl.LINEAR : gl.NEAREST,
       width: envImage.width,
@@ -3101,10 +3538,11 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
     renderPass.setTexture('envmap', envImageTextureObject);
 
     let backgroundImageTextureObject;
-    if (scene.background) {
-      const backgroundImage = generateBackgroundMapFromSceneBackground(scene.background);
+    if (background) {
+      const backgroundImage = generateBackgroundMapFromSceneBackground(background);
       backgroundImageTextureObject = makeTexture(gl, {
         data: backgroundImage.data,
+        storage: 'halfFloat',
         minFilter: OES_texture_float_linear ? gl.LINEAR : gl.NEAREST,
         magFilter: OES_texture_float_linear ? gl.LINEAR : gl.NEAREST,
         width: backgroundImage.width,
@@ -3120,53 +3558,12 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
 
     renderPass.setTexture('envmapDistribution', makeTexture(gl, {
       data: distribution.data,
-      minFilter: gl.NEAREST,
-      magFilter: gl.NEAREST,
+      storage: 'halfFloat',
       width: distribution.width,
       height: distribution.height,
     }));
 
     return renderPass;
-  }
-
-  function decomposeScene(scene) {
-    const meshes = [];
-    const directionalLights = [];
-    const ambientLights = [];
-    const environmentLights = [];
-    scene.traverse(child => {
-      if (child.isMesh) {
-        if (!child.geometry || !child.geometry.getAttribute('position')) {
-          console.warn(child, 'must have a geometry property with a position attribute');
-        }
-        else if (!(child.material.isMeshStandardMaterial)) {
-          console.warn(child, 'must use MeshStandardMaterial in order to be rendered.');
-        } else {
-          meshes.push(child);
-        }
-      }
-      if (child.isDirectionalLight) {
-        directionalLights.push(child);
-      }
-      if (child.isAmbientLight) {
-        ambientLights.push(child);
-      }
-      if (child.isEnvironmentLight) {
-        if (environmentLights.length > 1) {
-          console.warn(environmentLights, 'only one environment light can be used per scene');
-        }
-        // Valid lights have HDR texture map in RGBEEncoding
-        if (isHDRTexture(child)) {
-          environmentLights.push(child);
-        } else {
-          console.warn(child, 'environment light does not use color value or map with THREE.RGBEEncoding');
-        }
-      }
-    });
-
-    return {
-      meshes, directionalLights, ambientLights, environmentLights
-    };
   }
 
   function textureDimensionsFromArray(count) {
@@ -3185,52 +3582,9 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
     const textureDim = textureDimensionsFromArray(dataArray.length / channels);
     return makeTexture(gl, {
       data: padArray(dataArray, channels * textureDim.size),
-      minFilter: gl.NEAREST,
-      magFilter: gl.NEAREST,
       width: textureDim.columns,
       height: textureDim.rows,
     });
-  }
-
-  function makeTextureArray$1(gl, textures, gammaCorrection = false) {
-    const images = textures.map(t => t.image);
-    const flipY = textures.map(t => t.flipY);
-    const { maxSize, relativeSizes } = maxImageSize(images);
-
-    // create GL Array Texture from individual textures
-    const texture = makeTexture(gl, {
-      width: maxSize.width,
-      height: maxSize.height,
-      gammaCorrection,
-      data: images,
-      flipY,
-      channels: 3
-    });
-
-    return {
-     texture,
-     relativeSizes
-    };
-  }
-
-  function maxImageSize(images) {
-    const maxSize = {
-      width: 0,
-      height: 0
-    };
-
-    for (const image of images) {
-      maxSize.width = Math.max(maxSize.width, image.width);
-      maxSize.height = Math.max(maxSize.height, image.height);
-    }
-
-    const relativeSizes = [];
-    for (const image of images) {
-      relativeSizes.push(image.width / maxSize.width);
-      relativeSizes.push(image.height / maxSize.height);
-    }
-
-    return { maxSize, relativeSizes };
   }
 
   // expand array to the given length
@@ -3240,21 +3594,185 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
     return newArray;
   }
 
-  function isHDRTexture(texture) {
-    return texture.map
-      && texture.map.image
-      && (texture.map.encoding === THREE$1.RGBEEncoding || texture.map.encoding === THREE$1.LinearEncoding);
+  var fragment$2 = {
+  outputs: ['light'],
+  includes: [textureLinear],
+  source: `
+  in vec2 vCoord;
+
+  uniform mediump sampler2D light;
+  uniform mediump sampler2D position;
+  uniform vec2 lightScale;
+  uniform vec2 previousLightScale;
+
+  uniform mediump sampler2D previousLight;
+  uniform mediump sampler2D previousPosition;
+
+  uniform mat4 historyCamera;
+  uniform float blendAmount;
+  uniform vec2 jitter;
+
+  vec2 reproject(vec3 position) {
+    vec4 historyCoord = historyCamera * vec4(position, 1.0);
+    return 0.5 * historyCoord.xy / historyCoord.w + 0.5;
   }
 
-  var fragment$1 = {
+  float getMeshId(sampler2D meshIdTex, vec2 vCoord) {
+    return floor(texture(meshIdTex, vCoord).w);
+  }
+
+  void main() {
+    vec3 currentPosition = textureLinear(position, vCoord).xyz;
+    float currentMeshId = getMeshId(position, vCoord);
+
+    vec4 currentLight = texture(light, lightScale * vCoord);
+
+    if (currentMeshId == 0.0) {
+      out_light = currentLight;
+      return;
+    }
+
+    vec2 hCoord = reproject(currentPosition) - jitter;
+
+    vec2 hSizef = previousLightScale * vec2(textureSize(previousLight, 0));
+    vec2 hSizeInv = 1.0 / hSizef;
+    ivec2 hSize = ivec2(hSizef);
+
+    vec2 hTexelf = hCoord * hSizef - 0.5;
+    ivec2 hTexel = ivec2(hTexelf);
+    vec2 f = fract(hTexelf);
+
+    ivec2 texel[] = ivec2[](
+      hTexel + ivec2(0, 0),
+      hTexel + ivec2(1, 0),
+      hTexel + ivec2(0, 1),
+      hTexel + ivec2(1, 1)
+    );
+
+    float weights[] = float[](
+      (1.0 - f.x) * (1.0 - f.y),
+      f.x * (1.0 - f.y),
+      (1.0 - f.x) * f.y,
+      f.x * f.y
+    );
+
+    vec4 history;
+    float sum;
+
+    // bilinear sampling, rejecting samples that don't have a matching mesh id
+    for (int i = 0; i < 4; i++) {
+      vec2 gCoord = (vec2(texel[i]) + 0.5) * hSizeInv;
+
+      float histMeshId = getMeshId(previousPosition, gCoord);
+
+      float isValid = histMeshId != currentMeshId || any(greaterThanEqual(texel[i], hSize)) ? 0.0 : 1.0;
+
+      float weight = isValid * weights[i];
+      history += weight * texelFetch(previousLight, texel[i], 0);
+      sum += weight;
+    }
+
+    if (sum > 0.0) {
+      history /= sum;
+    } else {
+      // If all samples of bilinear fail, try a 3x3 box filter
+      hTexel = ivec2(hTexelf + 0.5);
+
+      for (int x = -1; x <= 1; x++) {
+        for (int y = -1; y <= 1; y++) {
+          ivec2 texel = hTexel + ivec2(x, y);
+          vec2 gCoord = (vec2(texel) + 0.5) * hSizeInv;
+
+          float histMeshId = getMeshId(previousPosition, gCoord);
+
+          float isValid = histMeshId != currentMeshId || any(greaterThanEqual(texel, hSize)) ? 0.0 : 1.0;
+
+          float weight = isValid;
+          vec4 h = texelFetch(previousLight, texel, 0);
+          history += weight * h;
+          sum += weight;
+        }
+      }
+      history = sum > 0.0 ? history / sum : history;
+    }
+
+    if (history.w > MAX_SAMPLES) {
+      history.xyz *= MAX_SAMPLES / history.w;
+      history.w = MAX_SAMPLES;
+    }
+
+    out_light = blendAmount * history + currentLight;
+  }
+`
+  };
+
+  function makeReprojectPass(gl, params) {
+    const {
+      fullscreenQuad,
+      maxReprojectedSamples,
+    } = params;
+
+    const renderPass = makeRenderPass(gl, {
+        defines: {
+          MAX_SAMPLES: maxReprojectedSamples.toFixed(1)
+        },
+        vertex: fullscreenQuad.vertexShader,
+        fragment: fragment$2
+      });
+
+    const historyCamera = new THREE$1.Matrix4();
+
+    function setPreviousCamera(camera) {
+      historyCamera.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+
+      renderPass.setUniform('historyCamera', historyCamera.elements);
+    }
+
+    function setJitter(x, y) {
+      renderPass.setUniform('jitter', x, y);
+    }
+
+    function draw(params) {
+      const {
+        blendAmount,
+        light,
+        lightScale,
+        position,
+        previousLight,
+        previousLightScale,
+        previousPosition,
+      } = params;
+
+      renderPass.setUniform('blendAmount', blendAmount);
+      renderPass.setUniform('lightScale', lightScale.x, lightScale.y);
+      renderPass.setUniform('previousLightScale', previousLightScale.x, previousLightScale.y);
+
+      renderPass.setTexture('light', light);
+      renderPass.setTexture('position', position);
+      renderPass.setTexture('previousLight', previousLight);
+      renderPass.setTexture('previousPosition', previousPosition);
+
+      renderPass.useProgram();
+      fullscreenQuad.draw();
+    }
+
+    return {
+      draw,
+      setJitter,
+      setPreviousCamera,
+    };
+  }
+
+  var fragment$3 = {
   includes: [textureLinear],
   outputs: ['color'],
   source: `
   in vec2 vCoord;
 
-  uniform mediump sampler2D light;
+  uniform sampler2D light;
+  uniform sampler2D position;
 
-  uniform vec2 textureScale;
+  uniform vec2 lightScale;
 
   // Tonemapping functions from THREE.js
 
@@ -3283,15 +3801,62 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
     return clamp((color * (2.51 * color + 0.03)) / (color * (2.43 * color + 0.59) + 0.14), vec3(0.0), vec3(1.0));
   }
 
+  #ifdef EDGE_PRESERVING_UPSCALE
+  vec4 getUpscaledLight(vec2 coord) {
+    float meshId = texture(position, coord).w;
+
+    vec2 sizef = lightScale * vec2(textureSize(position, 0));
+    vec2 texelf = coord * sizef - 0.5;
+    ivec2 texel = ivec2(texelf);
+    vec2 f = fract(texelf);
+
+    ivec2 texels[] = ivec2[](
+      texel + ivec2(0, 0),
+      texel + ivec2(1, 0),
+      texel + ivec2(0, 1),
+      texel + ivec2(1, 1)
+    );
+
+    float weights[] = float[](
+      (1.0 - f.x) * (1.0 - f.y),
+      f.x * (1.0 - f.y),
+      (1.0 - f.x) * f.y,
+      f.x * f.y
+    );
+
+    vec4 upscaledLight;
+    float sum;
+    for (int i = 0; i < 4; i++) {
+      vec2 pCoord = (vec2(texels[i]) + 0.5) / sizef;
+      float isValid = texture(position, pCoord).w == meshId ? 1.0 : 0.0;
+      float weight = isValid * weights[i];
+      upscaledLight += weight * texelFetch(light, texels[i], 0);
+      sum += weight;
+    }
+
+    if (sum > 0.0) {
+      upscaledLight /= sum;
+    } else {
+      upscaledLight = texture(light, lightScale * coord);
+    }
+
+    return upscaledLight;
+  }
+  #endif
+
   void main() {
-    vec4 tex = texture(light, textureScale * vCoord);
+    #ifdef EDGE_PRESERVING_UPSCALE
+      vec4 upscaledLight = getUpscaledLight(vCoord);
+    #else
+      vec4 upscaledLight = texture(light, lightScale * vCoord);
+    #endif
 
     // alpha channel stores the number of samples progressively rendered
     // divide the sum of light by alpha to obtain average contribution of light
 
     // in addition, alpha contains a scale factor for the shadow catcher material
     // dividing by alpha normalizes the brightness of the shadow catcher to match the background envmap.
-    vec3 light = tex.rgb / tex.a;
+    vec3 light = upscaledLight.rgb / upscaledLight.a;
 
     light *= EXPOSURE;
 
@@ -3315,34 +3880,41 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
   function makeToneMapPass(gl, params) {
     const {
       fullscreenQuad,
-      // optionalExtensions,
       toneMappingParams
     } = params;
 
-    // const { OES_texture_float_linear } = optionalExtensions;
-    const { toneMapping, whitePoint, exposure } = toneMappingParams;
-
-    const renderPass = makeRenderPass(gl, {
+    const renderPassConfig = {
       gl,
       defines: {
-        // OES_texture_float_linear,
-        TONE_MAPPING: toneMapFunctions[toneMapping] || 'linear',
-        WHITE_POINT: whitePoint.toExponential(), // toExponential allows integers to be represented as GLSL floats
-        EXPOSURE: exposure.toExponential()
+        TONE_MAPPING: toneMapFunctions[toneMappingParams.toneMapping] || 'linear',
+        WHITE_POINT: toneMappingParams.whitePoint.toExponential(), // toExponential allows integers to be represented as GLSL floats
+        EXPOSURE: toneMappingParams.exposure.toExponential()
       },
       vertex: fullscreenQuad.vertexShader,
-      fragment: fragment$1,
-    });
+      fragment: fragment$3,
+    };
+
+    renderPassConfig.defines.EDGE_PRESERVING_UPSCALE = true;
+    const renderPassUpscale = makeRenderPass(gl, renderPassConfig);
+
+    renderPassConfig.defines.EDGE_PRESERVING_UPSCALE = false;
+    const renderPassNative = makeRenderPass(gl, renderPassConfig);
 
     function draw(params) {
       const {
         light,
-        textureScale
+        lightScale,
+        position
       } = params;
 
-      renderPass.setUniform('textureScale', textureScale.x, textureScale.y);
+      const renderPass =
+        lightScale.x !== 1 && lightScale.y !== 1 ?
+        renderPassUpscale :
+        renderPassNative;
 
+      renderPass.setUniform('lightScale', lightScale.x, lightScale.y);
       renderPass.setTexture('light', light);
+      renderPass.setTexture('position', position);
 
       renderPass.useProgram();
       fullscreenQuad.draw();
@@ -3350,49 +3922,6 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
 
     return {
       draw
-    };
-  }
-
-  function makeFramebuffer(gl, { attachments }) {
-
-    const framebuffer = gl.createFramebuffer();
-
-    function bind() {
-      gl.bindFramebuffer(gl.FRAMEBUFFER, framebuffer);
-    }
-
-    function unbind() {
-      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    }
-
-    function init() {
-      bind();
-
-      const drawBuffers = [];
-
-      for (let location in attachments) {
-        location = Number(location);
-
-        if (location === undefined) {
-          console.error('invalid location');
-        }
-
-        const tex = attachments[location];
-        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0 + location, tex.target, tex.texture, 0);
-        drawBuffers.push(gl.COLOR_ATTACHMENT0 + location);
-      }
-
-      gl.drawBuffers(drawBuffers);
-
-      unbind();
-    }
-
-    init();
-
-    return {
-      attachments,
-      bind,
-      unbind
     };
   }
 
@@ -3532,166 +4061,6 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
     }
   }
 
-  var fragment$2 = {
-  outputs: ['light'],
-  source: `
-  in vec2 vCoord;
-
-  uniform mediump sampler2D light;
-  uniform mediump sampler2D position;
-  uniform vec2 textureScale;
-
-  uniform mediump sampler2D previousLight;
-  uniform mediump sampler2D previousPosition;
-  uniform vec2 previousTextureScale;
-
-  uniform mat4 historyCamera;
-  uniform float blendAmount;
-  uniform vec2 jitter;
-
-  vec2 reproject(vec3 position) {
-    vec4 historyCoord = historyCamera * vec4(position, 1.0);
-    return 0.5 * historyCoord.xy / historyCoord.w + 0.5;
-  }
-
-  void main() {
-    vec2 scaledCoord = textureScale * vCoord;
-
-    vec4 positionTex = texture(position, scaledCoord);
-    vec4 lightTex = texture(light, scaledCoord);
-
-    vec3 currentPosition = positionTex.xyz;
-    float currentMeshId = positionTex.w;
-
-    vec2 hCoord = reproject(currentPosition) - jitter;
-
-    vec2 hSizef = previousTextureScale * vec2(textureSize(previousPosition, 0));
-    ivec2 hSize = ivec2(hSizef);
-
-    vec2 hTexelf = hCoord * hSizef - 0.5;
-    ivec2 hTexel = ivec2(hTexelf);
-    vec2 f = fract(hTexelf);
-
-    ivec2 texel[] = ivec2[](
-      hTexel + ivec2(0, 0),
-      hTexel + ivec2(1, 0),
-      hTexel + ivec2(0, 1),
-      hTexel + ivec2(1, 1)
-    );
-
-    float weights[] = float[](
-      (1.0 - f.x) * (1.0 - f.y),
-      f.x * (1.0 - f.y),
-      (1.0 - f.x) * f.y,
-      f.x * f.y
-    );
-
-    vec4 history;
-    float sum;
-
-    // bilinear sampling, rejecting samples that don't have a matching mesh id
-    for (int i = 0; i < 4; i++) {
-      float histMeshId = texelFetch(previousPosition, texel[i], 0).w;
-
-      float isValid = histMeshId != currentMeshId || any(greaterThanEqual(texel[i], hSize)) ? 0.0 : 1.0;
-      // float isValid = 0.0;
-
-      float weight = isValid * weights[i];
-      history += weight * texelFetch(previousLight, texel[i], 0);
-      sum += weight;
-    }
-
-    if (sum > 0.0) {
-      history /= sum;
-    } else {
-      // If all samples of bilinear fail, try a 3x3 box filter
-      hTexel = ivec2(hTexelf + 0.5);
-
-      for (int x = -1; x <= 1; x++) {
-        for (int y = -1; y <= 1; y++) {
-          ivec2 texel = hTexel + ivec2(x, y);
-
-          float histMeshId = texelFetch(previousPosition, texel, 0).w;
-
-          float isValid = histMeshId != currentMeshId || any(greaterThanEqual(texel, hSize)) ? 0.0 : 1.0;
-
-          float weight = isValid;
-          vec4 h = texelFetch(previousLight, texel, 0);
-          history += weight * h;
-          sum += weight;
-        }
-      }
-      history = sum > 0.0 ? history / sum : history;
-    }
-
-    if (history.w > MAX_SAMPLES) {
-      history.xyz *= MAX_SAMPLES / history.w;
-      history.w = MAX_SAMPLES;
-    }
-
-    out_light = blendAmount * history + lightTex;
-
-  }
-`
-  };
-
-  function makeReprojectPass(gl, params) {
-    const {
-      fullscreenQuad,
-      maxReprojectedSamples,
-    } = params;
-
-    const renderPass = makeRenderPass(gl, {
-        defines: {
-          MAX_SAMPLES: maxReprojectedSamples.toFixed(1)
-        },
-        vertex: fullscreenQuad.vertexShader,
-        fragment: fragment$2
-      });
-
-    const historyCamera = new THREE$1.Matrix4();
-
-    function setPreviousCamera(camera) {
-      historyCamera.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
-
-      renderPass.setUniform('historyCamera', historyCamera.elements);
-    }
-
-    function setJitter(x, y) {
-      renderPass.setUniform('jitter', x, y);
-    }
-
-    function draw(params) {
-      const {
-        blendAmount,
-        light,
-        position,
-        previousLight,
-        previousPosition,
-        textureScale,
-        previousTextureScale,
-      } = params;
-
-      renderPass.setUniform('blendAmount', blendAmount);
-      renderPass.setUniform('textureScale', textureScale.x, textureScale.y);
-      renderPass.setUniform('previousTextureScale', previousTextureScale.x, previousTextureScale.y);
-
-      renderPass.setTexture('light', light);
-      renderPass.setTexture('position', position);
-      renderPass.setTexture('previousLight', previousLight);
-      renderPass.setTexture('previousPosition', previousPosition);
-
-      renderPass.useProgram();
-      fullscreenQuad.draw();
-    }
-
-    return {
-      draw,
-      setJitter,
-      setPreviousCamera,
-    };
-  }
-
   var noiseBase64 = 'data:image/png;base64,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';
 
   function makeRenderingPipeline({
@@ -3711,20 +4080,24 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
     // higher number results in faster convergence over time, but with lower quality initial samples
     const strataCount = 6;
 
+    const decomposedScene = decomposeScene(scene);
+
+    const mergedMesh = mergeMeshesToGeometry(decomposedScene.meshes);
+
+    const materialBuffer = makeMaterialBuffer(gl, mergedMesh.materials);
+
     const fullscreenQuad = makeFullscreenQuad(gl);
 
-    const rayTracePass = makeRayTracePass(gl, { bounces, fullscreenQuad, optionalExtensions, scene });
+    const rayTracePass = makeRayTracePass(gl, { bounces, decomposedScene, fullscreenQuad, materialBuffer, mergedMesh, optionalExtensions, scene });
 
     const reprojectPass = makeReprojectPass(gl, { fullscreenQuad, maxReprojectedSamples });
 
-    const toneMapPass = makeToneMapPass(gl, {
-      fullscreenQuad, optionalExtensions, toneMappingParams
-    });
+    const toneMapPass = makeToneMapPass(gl, { fullscreenQuad, toneMappingParams });
+
+    const gBufferPass = makeGBufferPass(gl, { materialBuffer, mergedMesh });
 
     // used to sample only a portion of the scene to the HDR Buffer to prevent the GPU from locking up from excessive computation
     const tileRender = makeTileRender(gl);
-
-    const clearToBlack = new Float32Array([0, 0, 0, 0]);
 
     let ready = false;
     const noiseImage = new Image();
@@ -3733,6 +4106,14 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
       rayTracePass.setNoise(noiseImage);
       ready = true;
     };
+
+    let sampleCount = 0;
+
+    let sampleRenderedCallback = () => {};
+
+    const lastCamera = new THREE$1.PerspectiveCamera();
+    lastCamera.position.set(1, 1, 1);
+    lastCamera.updateMatrixWorld();
 
     let screenWidth = 0;
     let screenHeight = 0;
@@ -3748,29 +4129,19 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
     let reprojectBuffer;
     let reprojectBackBuffer;
 
-    let lastToneMappedScale;
+    let gBuffer;
+    let gBufferBack;
+
     let lastToneMappedTexture;
-
-    const lastCamera = new THREE$1.PerspectiveCamera();
-    lastCamera.position.set(1, 1, 1);
-    lastCamera.updateMatrixWorld();
-
-    let sampleCount = 0;
-
-    let sampleRenderedCallback = () => {};
+    let lastToneMappedScale;
 
     function initFrameBuffers(width, height) {
-      const floatTex = () => makeTexture(gl, { width, height, storage: 'float' });
-
       const makeHdrBuffer = () => makeFramebuffer(gl, {
-          attachments: {
-            [rayTracePass.outputLocs.light]: floatTex(),
-            [rayTracePass.outputLocs.position]: floatTex(),
-          }
-        });
+        color: { 0: makeTexture(gl, { width, height, storage: 'float', magFilter: gl.LINEAR, minFilter: gl.LINEAR }) }
+      });
 
       const makeReprojectBuffer = () => makeFramebuffer(gl, {
-          attachments: { 0: floatTex() }
+          color: { 0: makeTexture(gl, { width, height, storage: 'float', magFilter: gl.LINEAR, minFilter: gl.LINEAR }) }
         });
 
       hdrBuffer = makeHdrBuffer();
@@ -3779,14 +4150,40 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
       reprojectBuffer = makeReprojectBuffer();
       reprojectBackBuffer = makeReprojectBuffer();
 
+      const normalBuffer = makeTexture(gl, { width, height, storage: 'halfFloat' });
+      const faceNormalBuffer = makeTexture(gl, { width, height, storage: 'halfFloat' });
+      const colorBuffer = makeTexture(gl, { width, height, storage: 'byte', channels: 3 });
+      const matProps = makeTexture(gl, { width, height, storage: 'byte', channels: 2 });
+      const depthTarget = makeDepthTarget(gl, width, height);
+
+      const makeGBuffer = () => makeFramebuffer(gl, {
+        color: {
+          [gBufferPass.outputLocs.position]: makeTexture(gl, { width, height, storage: 'float' }),
+          [gBufferPass.outputLocs.normal]: normalBuffer,
+          [gBufferPass.outputLocs.faceNormal]: faceNormalBuffer,
+          [gBufferPass.outputLocs.color]: colorBuffer,
+          [gBufferPass.outputLocs.matProps]: matProps,
+        },
+        depth: depthTarget
+      });
+
+      gBuffer = makeGBuffer();
+      gBufferBack = makeGBuffer();
+
+      lastToneMappedTexture = hdrBuffer.color[rayTracePass.outputLocs.light];
       lastToneMappedScale = fullscreenScale;
-      lastToneMappedTexture = hdrBuffer.attachments[rayTracePass.outputLocs.light];
     }
 
     function swapReprojectBuffer() {
       let temp = reprojectBuffer;
       reprojectBuffer = reprojectBackBuffer;
       reprojectBackBuffer = temp;
+    }
+
+    function swapGBuffer() {
+      let temp = gBuffer;
+      gBuffer = gBufferBack;
+      gBufferBack = temp;
     }
 
     function swapHdrBuffer() {
@@ -3798,8 +4195,9 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
     // Shaders will read from the back buffer and draw to the front buffer
     // Buffers are swapped after every render
     function swapBuffers() {
-      swapHdrBuffer();
       swapReprojectBuffer();
+      swapGBuffer();
+      swapHdrBuffer();
     }
 
     function setSize(w, h) {
@@ -3828,6 +4226,24 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
         cam1.focus === cam2.focus;
     }
 
+    function updateSeed(width, height, useJitter = true) {
+      rayTracePass.setSize(width, height);
+
+      const jitterX = useJitter ? (Math.random() - 0.5) / width : 0;
+      const jitterY = useJitter ? (Math.random() - 0.5) / height : 0;
+      gBufferPass.setJitter(jitterX, jitterY);
+      rayTracePass.setJitter(jitterX, jitterY);
+      reprojectPass.setJitter(jitterX, jitterY);
+
+      if (sampleCount === 0) {
+        rayTracePass.setStrataCount(1);
+      } else if (sampleCount === numUniformSamples) {
+        rayTracePass.setStrataCount(strataCount);
+      } else {
+        rayTracePass.nextSeed();
+      }
+    }
+
     function clearBuffer(buffer) {
       buffer.bind();
       gl.clear(gl.COLOR_BUFFER_BIT);
@@ -3840,8 +4256,6 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
       gl.blendEquation(gl.FUNC_ADD);
       gl.blendFunc(gl.ONE, gl.ONE);
       gl.enable(gl.BLEND);
-
-      gl.clearBufferfv(gl.COLOR, rayTracePass.outputLocs.position, clearToBlack);
 
       gl.viewport(0, 0, width, height);
       rayTracePass.draw();
@@ -3857,15 +4271,32 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
       buffer.unbind();
     }
 
-    function toneMapToScreen(lightTexture, textureScale) {
+    function toneMapToScreen(lightTexture, lightScale) {
       gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
       toneMapPass.draw({
         light: lightTexture,
-        textureScale
+        lightScale,
+        position: gBuffer.color[gBufferPass.outputLocs.position],
       });
 
       lastToneMappedTexture = lightTexture;
-      lastToneMappedScale = textureScale;
+      lastToneMappedScale = lightScale;
+    }
+
+    function renderGBuffer() {
+      gBuffer.bind();
+      gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+      gl.viewport(0, 0, screenWidth, screenHeight);
+      gBufferPass.draw();
+      gBuffer.unbind();
+
+      rayTracePass.setGBuffers({
+        position: gBuffer.color[gBufferPass.outputLocs.position],
+        normal: gBuffer.color[gBufferPass.outputLocs.normal],
+        faceNormal: gBuffer.color[gBufferPass.outputLocs.faceNormal],
+        color: gBuffer.color[gBufferPass.outputLocs.color],
+        matProps: gBuffer.color[gBufferPass.outputLocs.matProps]
+      });
     }
 
     function renderTile(buffer, x, y, width, height) {
@@ -3874,26 +4305,6 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
       addSampleToBuffer(buffer, screenWidth, screenHeight);
       gl.disable(gl.SCISSOR_TEST);
     }
-
-    function updateSeed(width, height) {
-      rayTracePass.setSize(width, height);
-
-      const jitterX = (Math.random() - 0.5) / width;
-      const jitterY = (Math.random() - 0.5) / height;
-      rayTracePass.setJitter(jitterX, jitterY);
-      reprojectPass.setJitter(jitterX, jitterY);
-
-      if (sampleCount === 0) {
-        rayTracePass.setStrataCount(1);
-      } else if (sampleCount === numUniformSamples) {
-        rayTracePass.setStrataCount(strataCount);
-      } else {
-        rayTracePass.nextSeed();
-      }
-
-      rayTracePass.bindTextures();
-    }
-
 
     function drawPreview(camera, lastCamera) {
       if (sampleCount > 0) {
@@ -3904,27 +4315,32 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
       tileRender.reset();
       setPreviewBufferDimensions();
 
+      updateSeed(previewWidth, previewHeight, false);
+
       rayTracePass.setCamera(camera);
+      gBufferPass.setCamera(camera);
       reprojectPass.setPreviousCamera(lastCamera);
       lastCamera.copy(camera);
 
-      updateSeed(previewWidth, previewHeight);
+      renderGBuffer();
+
+      rayTracePass.bindTextures();
       newSampleToBuffer(hdrBuffer, previewWidth, previewHeight);
 
       reprojectBuffer.bind();
       gl.viewport(0, 0, previewWidth, previewHeight);
       reprojectPass.draw({
         blendAmount: 1.0,
-        light: hdrBuffer.attachments[rayTracePass.outputLocs.light],
-        position: hdrBuffer.attachments[rayTracePass.outputLocs.position],
-        textureScale: previewScale,
+        light: hdrBuffer.color[0],
+        lightScale: previewScale,
+        position: gBuffer.color[gBufferPass.outputLocs.position],
         previousLight: lastToneMappedTexture,
-        previousPosition: hdrBackBuffer.attachments[rayTracePass.outputLocs.position],
-        previousTextureScale: lastToneMappedScale,
+        previousLightScale: lastToneMappedScale,
+        previousPosition: gBufferBack.color[gBufferPass.outputLocs.position],
       });
       reprojectBuffer.unbind();
 
-      toneMapToScreen(reprojectBuffer.attachments[0], previewScale);
+      toneMapToScreen(reprojectBuffer.color[0], previewScale);
 
       swapBuffers();
     }
@@ -3939,7 +4355,9 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
           reprojectPass.setPreviousCamera(lastCamera);
         }
 
-        updateSeed(screenWidth, screenHeight);
+        updateSeed(screenWidth, screenHeight, true);
+        renderGBuffer();
+        rayTracePass.bindTextures();
       }
 
       renderTile(hdrBuffer, x, y, tileWidth, tileHeight);
@@ -3955,18 +4373,18 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
           gl.viewport(0, 0, screenWidth, screenHeight);
           reprojectPass.draw({
             blendAmount,
-            light: hdrBuffer.attachments[rayTracePass.outputLocs.light],
-            position: hdrBuffer.attachments[rayTracePass.outputLocs.position],
-            textureScale: fullscreenScale,
-            previousLight: reprojectBackBuffer.attachments[0],
-            previousPosition: hdrBackBuffer.attachments[rayTracePass.outputLocs.position],
-            previousTextureScale: previewScale,
+            light: hdrBuffer.color[0],
+            lightScale: fullscreenScale,
+            position: gBuffer.color[gBufferPass.outputLocs.position],
+            previousLight: reprojectBackBuffer.color[0],
+            previousLightScale: previewScale,
+            previousPosition: gBufferBack.color[gBufferPass.outputLocs.position],
           });
           reprojectBuffer.unbind();
 
-          toneMapToScreen(reprojectBuffer.attachments[0], fullscreenScale);
+          toneMapToScreen(reprojectBuffer.color[0], fullscreenScale);
         } else {
-          toneMapToScreen(hdrBuffer.attachments[rayTracePass.outputLocs.light], fullscreenScale);
+          toneMapToScreen(hdrBuffer.color[0], fullscreenScale);
         }
 
         sampleRenderedCallback(sampleCount);
@@ -3993,6 +4411,9 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
         return;
       }
 
+      swapGBuffer();
+      swapReprojectBuffer();
+
       if (sampleCount === 0) {
         reprojectPass.setPreviousCamera(lastCamera);
       }
@@ -4000,34 +4421,34 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
       if (!areCamerasEqual(camera, lastCamera)) {
         sampleCount = 0;
         rayTracePass.setCamera(camera);
+        gBufferPass.setCamera(camera);
         lastCamera.copy(camera);
-        swapHdrBuffer();
         clearBuffer(hdrBuffer);
       } else {
         sampleCount++;
       }
 
-      updateSeed(screenWidth, screenHeight);
+      updateSeed(screenWidth, screenHeight, true);
 
+      renderGBuffer();
+
+      rayTracePass.bindTextures();
       addSampleToBuffer(hdrBuffer, screenWidth, screenHeight);
 
       reprojectBuffer.bind();
       gl.viewport(0, 0, screenWidth, screenHeight);
       reprojectPass.draw({
         blendAmount: 1.0,
-        light: hdrBuffer.attachments[rayTracePass.outputLocs.light],
-        position: hdrBuffer.attachments[rayTracePass.outputLocs.position],
-        previousLight: reprojectBackBuffer.attachments[0],
-        previousPosition: hdrBackBuffer.attachments[rayTracePass.outputLocs.position],
-        textureScale: fullscreenScale,
-        previousTextureScale: fullscreenScale
-
+        light: hdrBuffer.color[0],
+        lightScale: fullscreenScale,
+        position: gBuffer.color[gBufferPass.outputLocs.position],
+        previousLight: lastToneMappedTexture,
+        previousLightScale: lastToneMappedScale,
+        previousPosition: gBufferBack.color[gBufferPass.outputLocs.position],
       });
       reprojectBuffer.unbind();
 
-      toneMapToScreen(reprojectBuffer.attachments[0], fullscreenScale);
-
-      swapReprojectBuffer();
+      toneMapToScreen(reprojectBuffer.color[0], fullscreenScale);
     }
 
     return {
@@ -4061,7 +4482,7 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
 
     const gl = canvas.getContext('webgl2', {
       alpha: false,
-      depth: false,
+      depth: true,
       stencil: false,
       antialias: false,
       powerPreference: 'high-performance',
