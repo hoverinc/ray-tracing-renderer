@@ -8,7 +8,8 @@ export default `
 
   void surfaceInteractionDirect(vec2 coord, inout SurfaceInteraction si) {
     vec4 positionAndMeshIndex = texture(gPosition, coord);
-    si.position = texture(gPosition, coord).xyz;
+
+    si.position = positionAndMeshIndex.xyz;
 
     float meshIndex = positionAndMeshIndex.w;
 
