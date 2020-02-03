@@ -34,8 +34,8 @@ source: `
     roughness = clamp(roughness, ROUGHNESS_MIN, 1.0);
     metalness = clamp(metalness, 0.0, 1.0);
 
-    vec3 normal = vNormal;
-    vec3 faceNormal = faceNormals(vPosition);
+    vec3 normal = normalize(vNormal);
+    vec3 faceNormal = normalize(faceNormals(vPosition));
     normal *= sign(dot(normal, faceNormal));
 
     #ifdef NUM_NORMAL_MAPS

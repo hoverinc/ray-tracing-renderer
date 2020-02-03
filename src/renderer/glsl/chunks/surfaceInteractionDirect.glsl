@@ -7,7 +7,11 @@ export default `
   uniform sampler2D gMatProps;
 
   void surfaceInteractionDirect(vec2 coord, inout SurfaceInteraction si) {
-    si.position = texture(gPosition, coord).xyz;
+    vec4 positionAndMeshIndex = texture(gPosition, coord);
+
+    si.position = positionAndMeshIndex.xyz;
+
+    float meshIndex = positionAndMeshIndex.w;
 
     vec4 normalMaterialType = texture(gNormal, coord);
 
@@ -22,6 +26,6 @@ export default `
     si.roughness = matProps.x;
     si.metalness = matProps.y;
 
-    si.hit = dot(si.normal, si.normal) > 0.0 ? true : false;
+    si.hit = meshIndex > 0.0 ? true : false;
   }
 `;

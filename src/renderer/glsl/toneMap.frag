@@ -39,8 +39,13 @@ source: `
   }
 
   #ifdef EDGE_PRESERVING_UPSCALE
+
+  float getMeshId(sampler2D meshIdTex, vec2 vCoord) {
+    return floor(texture(meshIdTex, vCoord).w);
+  }
+
   vec4 getUpscaledLight(vec2 coord) {
-    float meshId = texture(position, coord).w;
+    float meshId = getMeshId(position, coord);
 
     vec2 sizef = lightScale * vec2(textureSize(position, 0));
     vec2 texelf = coord * sizef - 0.5;
@@ -65,7 +70,7 @@ source: `
     float sum;
     for (int i = 0; i < 4; i++) {
       vec2 pCoord = (vec2(texels[i]) + 0.5) / sizef;
-      float isValid = texture(position, pCoord).w == meshId ? 1.0 : 0.0;
+      float isValid = getMeshId(position, pCoord) == meshId ? 1.0 : 0.0;
       float weight = isValid * weights[i];
       upscaledLight += weight * texelFetch(light, texels[i], 0);
       sum += weight;

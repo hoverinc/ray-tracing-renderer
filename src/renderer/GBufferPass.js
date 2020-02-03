@@ -76,6 +76,10 @@ function uploadAttributes(gl, renderPass, geometry) {
 }
 
 function setAttribute(gl, location, bufferAttribute) {
+  if (location === undefined) {
+    return;
+  }
+
   const { itemSize, array } = bufferAttribute;
 
   gl.enableVertexAttribArray(location);
