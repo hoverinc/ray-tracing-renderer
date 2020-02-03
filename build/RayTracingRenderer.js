@@ -713,8 +713,8 @@ vec3 getMatNormal(int materialIndex, vec2 uv, vec3 normal, vec3 dp1, vec3 dp2, v
     roughness = clamp(roughness, ROUGHNESS_MIN, 1.0);
     metalness = clamp(metalness, 0.0, 1.0);
 
-    vec3 normal = vNormal;
-    vec3 faceNormal = faceNormals(vPosition);
+    vec3 normal = normalize(vNormal);
+    vec3 faceNormal = normalize(faceNormals(vPosition));
     normal *= sign(dot(normal, faceNormal));
 
     #ifdef NUM_NORMAL_MAPS
@@ -808,6 +808,10 @@ vec3 getMatNormal(int materialIndex, vec2 uv, vec3 normal, vec3 dp1, vec3 dp2, v
   }
 
   function setAttribute(gl, location, bufferAttribute) {
+    if (location === undefined) {
+      return;
+    }
+
     const { itemSize, array } = bufferAttribute;
 
     gl.enableVertexAttribArray(location);
@@ -2509,7 +2513,11 @@ bool intersectSceneShadow(inout Ray ray) {
   uniform sampler2D gMatProps;
 
   void surfaceInteractionDirect(vec2 coord, inout SurfaceInteraction si) {
-    si.position = texture(gPosition, coord).xyz;
+    vec4 positionAndMeshIndex = texture(gPosition, coord);
+
+    si.position = positionAndMeshIndex.xyz;
+
+    float meshIndex = positionAndMeshIndex.w;
 
     vec4 normalMaterialType = texture(gNormal, coord);
 
@@ -2524,7 +2532,7 @@ bool intersectSceneShadow(inout Ray ray) {
     si.roughness = matProps.x;
     si.metalness = matProps.y;
 
-    si.hit = dot(si.normal, si.normal) > 0.0 ? true : false;
+    si.hit = meshIndex > 0.0 ? true : false;
   }
 `;
 
@@ -3802,8 +3810,13 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
   }
 
   #ifdef EDGE_PRESERVING_UPSCALE
+
+  float getMeshId(sampler2D meshIdTex, vec2 vCoord) {
+    return floor(texture(meshIdTex, vCoord).w);
+  }
+
   vec4 getUpscaledLight(vec2 coord) {
-    float meshId = texture(position, coord).w;
+    float meshId = getMeshId(position, coord);
 
     vec2 sizef = lightScale * vec2(textureSize(position, 0));
     vec2 texelf = coord * sizef - 0.5;
@@ -3828,7 +3841,7 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
     float sum;
     for (int i = 0; i < 4; i++) {
       vec2 pCoord = (vec2(texels[i]) + 0.5) / sizef;
-      float isValid = texture(position, pCoord).w == meshId ? 1.0 : 0.0;
+      float isValid = getMeshId(position, pCoord) == meshId ? 1.0 : 0.0;
       float weight = isValid * weights[i];
       upscaledLight += weight * texelFetch(light, texels[i], 0);
       sum += weight;
