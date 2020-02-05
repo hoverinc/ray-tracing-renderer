@@ -76,6 +76,7 @@ export default `
     vec3 beta;
     bool specularBounce;
     bool abort;
+    float misWeight;
   };
 
   uniform Camera camera;

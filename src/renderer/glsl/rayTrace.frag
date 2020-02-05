@@ -36,6 +36,7 @@ source: (defines) => `
       if (path.specularBounce) {
         path.li += path.beta * sampleBackgroundFromDirection(path.ray.d);
       }
+      // path.li += path.misWeight * path.beta * sampleEnvmapFromDirection(path.ray.d);
 
       path.abort = true;
     } else {
@@ -54,13 +55,13 @@ source: (defines) => `
       }
 
       // Russian Roulette sampling
-      if (i >= 2) {
-        float q = 1.0 - dot(path.beta, luminance);
-        if (randomSample() < q) {
-          path.abort = true;
-        }
-        path.beta /= 1.0 - q;
-      }
+      // if (i >= 2) {
+      //   float q = 1.0 - dot(path.beta, luminance);
+      //   if (randomSample() < q) {
+      //     path.abort = true;
+      //   }
+      //   path.beta /= 1.0 - q;
+      // }
     }
   }
 
@@ -74,6 +75,7 @@ source: (defines) => `
     path.beta = vec3(1.0);
     path.specularBounce = true;
     path.abort = false;
+    path.misWeight = 1.0;
 
     SurfaceInteraction si;
 

@@ -26,7 +26,7 @@ export function makeRayTracePass(gl, {
     if (i >= 2) {
       // russian roulette sampling
       // this step is skipped on the first bounce
-      samplingDimensions.push(1);
+      // samplingDimensions.push(1);
     }
   }
 
