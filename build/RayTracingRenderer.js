@@ -3214,10 +3214,11 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
     // for (int i = 1; i < defines.bounces + 1, i += 1)
     // equivelant to
     ${unrollLoop('i', 2, defines.BOUNCES + 1, 1, `
-      if (!path.abort) {
-        intersectScene(path.ray, si);
-        bounce(path, i, si);
+      if (path.abort) {
+        return vec4(path.li, path.alpha);
       }
+      intersectScene(path.ray, si);
+      bounce(path, i, si);
     `)}
 
     return vec4(path.li, path.alpha);
