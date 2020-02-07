@@ -4,37 +4,37 @@
 export default `
 
 void sampleMaterial(SurfaceInteraction si, int bounce, inout Path path) {
+  bool lastBounce = bounce == BOUNCES;
+
   mat3 basis = orthonormalBasis(si.normal);
   vec3 viewDir = -path.ray.d;
 
   vec2 diffuseOrSpecular = randomSampleVec2();
-  vec2 randomSample = randomSampleVec2();
+  vec2 lightRand = randomSampleVec2();
+  vec2 bounceRand = randomSampleVec2();
 
-  bool lastBounce = bounce == BOUNCES;
-
+  vec3 lightDir;
   float cosThetaL;
-  float scatteringPdf;
   vec3 brdf;
   vec2 uv;
   float lightPdf;
+  float scatteringPdf;
   float orientation;
-  vec3 lightDir;
 
   // Add path contribution
   float liContrib = 1.0;
 
   bool brdfSample = false;
   if (lastBounce && diffuseOrSpecular.x < 0.5) {
-    diffuseOrSpecular.x *= 2.0;
-    lightDir = diffuseOrSpecular.x < mix(0.5, 0.0, si.metalness) ?
-      lightDirDiffuse(si.faceNormal, viewDir, basis, randomSample) :
-      lightDirSpecular(si.faceNormal, viewDir, basis, si.roughness, randomSample);
+    lightDir = diffuseOrSpecular.y < mix(0.5, 0.0, si.metalness) ?
+      lightDirDiffuse(si.faceNormal, viewDir, basis, lightRand) :
+      lightDirSpecular(si.faceNormal, viewDir, basis, si.roughness, lightRand);
 
     uv = cartesianToEquirect(lightDir);
     lightPdf = envmapPdf(uv);
     brdfSample = true;
   } else {
-    lightDir = sampleEnvmap(randomSample, uv, lightPdf);
+    lightDir = sampleEnvmap(lightRand, uv, lightPdf);
   }
 
   cosThetaL = dot(si.normal, lightDir);
@@ -45,9 +45,9 @@ void sampleMaterial(SurfaceInteraction si, int bounce, inout Path path) {
   }
 
   float diffuseWeight = 1.0;
-  Ray ray;
-  initRay(ray, si.position + EPS * lightDir, lightDir);
-  if (intersectSceneShadow(ray)) {
+
+  initRay(path.ray, si.position + EPS * lightDir, lightDir);
+  if (intersectSceneShadow(path.ray)) {
     if (lastBounce) {
       diffuseWeight = 0.0;
     } else {
@@ -55,7 +55,7 @@ void sampleMaterial(SurfaceInteraction si, int bounce, inout Path path) {
     }
   }
 
-  vec3 irr = textureLinear(envmap, uv).xyz;
+  vec3 irr = textureLinear(envmap, uv).rgb;
 
   brdf = materialBrdf(si, viewDir, lightDir, cosThetaL, diffuseWeight, scatteringPdf);
 
@@ -75,9 +75,15 @@ void sampleMaterial(SurfaceInteraction si, int bounce, inout Path path) {
 
   // Get new path direction
 
+  if (lastBounce) {
+    return;
+  }
+
+  path.specularBounce = false;
+
   lightDir = diffuseOrSpecular.y < mix(0.5, 0.0, si.metalness) ?
-    lightDirDiffuse(si.faceNormal, viewDir, basis, randomSampleVec2()) :
-    lightDirSpecular(si.faceNormal, viewDir, basis, si.roughness, randomSampleVec2());
+    lightDirDiffuse(si.faceNormal, viewDir, basis, bounceRand) :
+    lightDirSpecular(si.faceNormal, viewDir, basis, si.roughness, bounceRand);
 
   cosThetaL = dot(si.normal, lightDir);
 
@@ -95,8 +101,6 @@ void sampleMaterial(SurfaceInteraction si, int bounce, inout Path path) {
   // the light path is physically impossible and we terminate the path.
   orientation = dot(si.faceNormal, viewDir) * cosThetaL;
   path.abort = orientation < 0.0;
-
-  path.specularBounce = false;
 }
 
 `;

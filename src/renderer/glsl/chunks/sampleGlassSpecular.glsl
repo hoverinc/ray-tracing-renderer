@@ -3,6 +3,8 @@ export default `
 #ifdef USE_GLASS
 
 void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
+  bool lastBounce = bounce == BOUNCES;
+
   vec3 viewDir = -path.ray.d;
   float cosTheta = dot(si.normal, viewDir);
 
@@ -29,7 +31,7 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
   const int usedSamples = 1;
   sampleIndex += SAMPLES_PER_MATERIAL - usedSamples;
 
-  path.li += bounce == BOUNCES ? path.beta * sampleBackgroundFromDirection(lightDir) : vec3(0.0);
+  path.li += lastBounce ? path.beta * sampleBackgroundFromDirection(lightDir) : vec3(0.0);
 }
 
 #endif

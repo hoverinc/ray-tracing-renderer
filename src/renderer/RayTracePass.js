@@ -21,8 +21,8 @@ export function makeRayTracePass(gl, {
   const samplingDimensions = [];
 
   for (let i = 1; i <= bounces; i++) {
-    // specular or diffuse reflection, light importance sampling, material sampling, next path direction
-    samplingDimensions.push(2, 2, 2, 2);
+    // specular or diffuse reflection, light importance sampling, next path direction
+    samplingDimensions.push(2, 2, 2);
     if (i >= 2) {
       // russian roulette sampling
       // this step is skipped on the first bounce
