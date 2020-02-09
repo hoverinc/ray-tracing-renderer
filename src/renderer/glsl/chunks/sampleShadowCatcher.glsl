@@ -20,11 +20,8 @@ void sampleShadowCatcher(SurfaceInteraction si, int bounce, inout Path path) {
   float scatteringPdf;
   float orientation;
 
-  // Add path contribution
-
-  vec3 color = sampleEnvmapFromDirection(-viewDir);
-
   float liContrib = 1.0;
+  float liEq;
 
   bool brdfSample = false;
   if (lastBounce && diffuseOrSpecular.x < 0.5) {
@@ -67,20 +64,21 @@ void sampleShadowCatcher(SurfaceInteraction si, int bounce, inout Path path) {
     weight = powerHeuristic(lightPdf, scatteringPdf) / lightPdf;
   }
 
-  float liEq = liContrib * brdf.r * irr * abs(cosThetaL) * weight;
-  float li = visible * liEq;
+  liEq = liContrib * brdf.r * irr * abs(cosThetaL) * weight;
+  float alpha = liEq;
 
-  path.li += path.beta * color * li;
-  path.alpha *= liEq;
+  vec3 color = sampleEnvmapFromDirection(-viewDir);
+  path.li += visible * path.beta * color * liEq;
 
   // Get new path direction
 
   if (lastBounce) {
+    path.alpha *= alpha;
     return;
   }
 
   path.specularBounce = false;
-  path.alphaFromLi = 1.0;
+  path.luminanceOnly = true;
 
   // lightDir = diffuseOrSpecular.y < mix(0.5, 0.0, si.metalness) ?
   //   lightDirDiffuse(si.faceNormal, viewDir, basis, bounceRand) :
@@ -89,22 +87,35 @@ void sampleShadowCatcher(SurfaceInteraction si, int bounce, inout Path path) {
 
   cosThetaL = dot(si.normal, lightDir);
 
-  // brdf = materialBrdf(si, viewDir, lightDir, cosThetaL, 1.0, scatteringPdf);
-  brdf = vec3(INVPI);
-  scatteringPdf = abs(cosThetaL) * INVPI;
-
-  path.beta *= color * abs(cosThetaL) * brdf / scatteringPdf;
-
-  uv = cartesianToEquirect(lightDir);
-  lightPdf = envmapPdf(uv);
-  path.misWeight = powerHeuristic(scatteringPdf, lightPdf);
-
-  initRay(path.ray, si.position + EPS * lightDir, lightDir);
-
   // If new ray direction is pointing into the surface,
   // the light path is physically impossible and we terminate the path.
   orientation = dot(si.faceNormal, viewDir) * cosThetaL;
   path.abort = orientation < 0.0;
+
+  if (path.abort) {
+    path.alpha *= alpha;
+    return;
+  }
+
+  irr = dot(luminance, sampleEnvmapFromDirection(lightDir));
+
+  // brdf = materialBrdf(si, viewDir, lightDir, cosThetaL, 1.0, scatteringPdf);
+  brdf = vec3(INVPI);
+  scatteringPdf = abs(cosThetaL) * INVPI;
+
+  uv = cartesianToEquirect(lightDir);
+  lightPdf = envmapPdf(uv);
+
+  path.misWeight = powerHeuristic(scatteringPdf, lightPdf);
+
+  liEq = brdf.r * irr * abs(cosThetaL) * path.misWeight / scatteringPdf;
+
+  path.beta = color * abs(cosThetaL) * brdf.r / scatteringPdf;
+
+  alpha += liEq;
+  path.alpha *= alpha;
+
+  initRay(path.ray, si.position + EPS * lightDir, lightDir);
 }
 
 #endif

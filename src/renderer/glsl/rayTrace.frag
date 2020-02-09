@@ -32,17 +32,21 @@ includes: [
 outputs: ['light'],
 source: (defines) => `
   void bounce(inout Path path, int i, inout SurfaceInteraction si) {
+
     if (!si.hit) {
       vec3 irr = path.specularBounce ? sampleBackgroundFromDirection(path.ray.d) : sampleEnvmapFromDirection(path.ray.d);
-      vec3 li = path.misWeight * path.beta * irr;
-      path.li += li;
-      // path.alpha *= path.alphaFromLi > 0.0 ? dot(luminance, li) : 1.0;
+
+      if (path.luminanceOnly) {
+        irr = vec3(dot(luminance, irr));
+      }
+
+      path.li += path.misWeight * path.beta * irr;
       path.abort = true;
       return;
     }
 
     path.misWeight = 1.0;
-    path.alphaFromLi = 0.0;
+    path.luminanceOnly = false;
 
     #ifdef USE_GLASS
       if (si.materialType == THIN_GLASS || si.materialType == THICK_GLASS) {

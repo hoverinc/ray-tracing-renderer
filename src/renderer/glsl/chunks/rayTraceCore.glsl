@@ -76,7 +76,7 @@ export default `
     bool specularBounce;
     bool abort;
     float misWeight;
-    float alphaFromLi;
+    bool luminanceOnly;
   };
 
   uniform Camera camera;
