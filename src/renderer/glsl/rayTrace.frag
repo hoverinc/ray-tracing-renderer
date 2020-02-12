@@ -36,17 +36,16 @@ source: (defines) => `
     if (!si.hit) {
       vec3 irr = path.specularBounce ? sampleBackgroundFromDirection(path.ray.d) : sampleEnvmapFromDirection(path.ray.d);
 
-      if (path.luminanceOnly) {
-        irr = vec3(dot(luminance, irr));
-      }
-
+      // hit a light source (the hdr map)
+      // add contribution from light source
+      // path.misWeight is the multiple importance sampled weight of this light source
       path.li += path.misWeight * path.beta * irr;
       path.abort = true;
       return;
     }
 
     path.misWeight = 1.0;
-    path.luminanceOnly = false;
+    path.specularBounce = false;
 
     #ifdef USE_GLASS
       if (si.materialType == THIN_GLASS || si.materialType == THICK_GLASS) {
@@ -63,13 +62,13 @@ source: (defines) => `
     }
 
     // Russian Roulette sampling
-    // if (i >= 2) {
-    //   float q = 1.0 - dot(path.beta, luminance);
-    //   if (randomSample() < q) {
-    //     path.abort = true;
-    //   }
-    //   path.beta /= 1.0 - q;
-    // }
+    if (i >= 2) {
+      float q = 1.0 - dot(path.beta, luminance);
+      if (randomSample() < q) {
+        path.abort = true;
+      }
+      path.beta /= 1.0 - q;
+    }
 
   }
 
@@ -154,11 +153,11 @@ source: (defines) => `
     // * The resulting image contains only white with some black
     //   All samples are used by the shader. Correct result!
 
-    // fragColor = vec4(0, 0, 0, 1);
+    // out_light = vec4(0, 0, 0, 1);
     // if (sampleIndex == SAMPLING_DIMENSIONS) {
-    //   fragColor = vec4(1, 1, 1, 1);
+    //   out_light = vec4(1, 1, 1, 1);
     // } else if (sampleIndex > SAMPLING_DIMENSIONS) {
-    //   fragColor = vec4(1, 0, 0, 1);
+    //   out_light = vec4(1, 0, 0, 1);
     // }
 }
 `

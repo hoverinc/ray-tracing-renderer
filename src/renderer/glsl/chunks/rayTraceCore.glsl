@@ -4,8 +4,6 @@ export default `
   #define THICK_GLASS 2
   #define SHADOW_CATCHER 3
 
-  #define SAMPLES_PER_MATERIAL 6
-
   const float IOR = 1.5;
   const float INV_IOR = 1.0 / IOR;
 
@@ -76,7 +74,6 @@ export default `
     bool specularBounce;
     bool abort;
     float misWeight;
-    bool luminanceOnly;
   };
 
   uniform Camera camera;
