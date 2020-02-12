@@ -102,7 +102,7 @@ function load(loader, url) {
 }
 
 function createGroundMesh() {
-  const geo = new THREE.PlaneBufferGeometry(10000, 10000);
+  const geo = new THREE.PlaneBufferGeometry(100, 100);
   const mat = new THREE.MeshStandardMaterial();
   mat.color.set(0xffffff);
   mat.roughness = 1.0;

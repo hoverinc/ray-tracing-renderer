@@ -194,7 +194,7 @@ function init() {
 
   // ground plane
   {
-    const geo = new THREE.PlaneBufferGeometry(10000, 10000);
+    const geo = new THREE.PlaneBufferGeometry(1000, 1000);
     const mat = new THREE.MeshStandardMaterial();
     mat.shadowCatcher = true;
     const mesh = new THREE.Mesh(geo, mat);
