@@ -28,7 +28,7 @@ export function makeRenderingPipeline({
 
   // how many partitions of stratified noise should be created
   // higher number results in faster convergence over time, but with lower quality initial samples
-  const strataCount = 1;
+  const strataCount = 6;
 
   const desiredTimeForPreview = 14;
 
