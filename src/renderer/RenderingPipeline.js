@@ -28,7 +28,9 @@ export function makeRenderingPipeline({
 
   // how many partitions of stratified noise should be created
   // higher number results in faster convergence over time, but with lower quality initial samples
-  const strataCount = 6;
+  const strataCount = 1;
+
+  const desiredTimeForPreview = 14;
 
   const decomposedScene = decomposeScene(scene);
 
@@ -159,7 +161,6 @@ export function makeRenderingPipeline({
   }
 
   function setPreviewBufferDimensions() {
-    const desiredTimeForPreview = 12;
     const numPixelsForPreview = desiredTimeForPreview / tileRender.getTimePerPixel();
 
     const aspectRatio = screenWidth / screenHeight;

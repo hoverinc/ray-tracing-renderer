@@ -72,22 +72,12 @@ function resize() {
   }
 }
 
-let ticks = 0;
-let date;
 function tick() {
   controls.update();
   camera.focus = controls.target.distanceTo(camera.position);
   stats.begin();
   renderer.render(scene, camera);
   stats.end();
-  if (ticks === 2) {
-    date = Date.now();
-  }
-  if (Date.now() - date > 30000) {
-    console.log('done');
-    return;
-  }
-  ticks++;
   requestAnimationFrame(tick);
 }
 
@@ -164,8 +154,7 @@ function initRenderer(renderer) {
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.5;
   renderer.renderWhenOffFocus = false;
-  renderer.bounces = 2;
-  // renderer.maxHardwareUsageg = true;
+  renderer.bounces = 3;
 }
 
 function unloadRenderer(renderer) {
