@@ -101,6 +101,8 @@ void sampleMaterial(SurfaceInteraction si, int bounce, inout Path path) {
 
   path.beta *= abs(cosThetaL) * brdf / scatteringPdf;
 
+  path.specularBounce = false;
+
   initRay(path.ray, si.position + EPS * lightDir, lightDir);
 }
 `;

@@ -44,9 +44,6 @@ source: (defines) => `
       return;
     }
 
-    path.misWeight = 1.0;
-    path.specularBounce = false;
-
     #ifdef USE_GLASS
       if (si.materialType == THIN_GLASS || si.materialType == THICK_GLASS) {
         sampleGlassSpecular(si, i, path);

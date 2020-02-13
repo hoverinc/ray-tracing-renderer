@@ -26,9 +26,12 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
     path.beta *= si.color;
   }
 
+  path.misWeight = 1.0;
+
   initRay(path.ray, si.position + EPS * lightDir, lightDir);
 
   path.li += lastBounce ? path.beta * sampleBackgroundFromDirection(lightDir) : vec3(0.0);
+
   path.specularBounce = true;
 }
 

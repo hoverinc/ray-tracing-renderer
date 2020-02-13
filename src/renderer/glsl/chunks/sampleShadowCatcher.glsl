@@ -6,7 +6,7 @@ void sampleShadowCatcher(SurfaceInteraction si, int bounce, inout Path path) {
   bool lastBounce = bounce == BOUNCES;
   mat3 basis = orthonormalBasis(si.normal);
   vec3 viewDir = -path.ray.d;
-  vec3 color = sampleEnvmapFromDirection(-viewDir);
+  vec3 color = bounce == 1  || path.specularBounce ? sampleBackgroundFromDirection(-viewDir) : sampleEnvmapFromDirection(-viewDir);
 
   si.color = vec3(1, 1, 1);
 
@@ -89,6 +89,8 @@ void sampleShadowCatcher(SurfaceInteraction si, int bounce, inout Path path) {
   path.misWeight = 0.0;
 
   path.beta = color * abs(cosThetaL) * brdf.r / scatteringPdf;
+
+  path.specularBounce = false;
 
   initRay(path.ray, si.position + EPS * lightDir, lightDir);
 }
