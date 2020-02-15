@@ -7,6 +7,9 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
   vec3 viewDir = -path.ray.d;
   float cosTheta = dot(si.normal, viewDir);
 
+  float originalRayDistance = path.ray.distance;
+  vec3 originalRayDirection = path.ray.d;
+
   MaterialSamples samples = getRandomMaterialSamples();
 
   float reflectionOrRefraction = samples.s1.x;
@@ -30,7 +33,8 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
 
   initRay(path.ray, si.position + EPS * lightDir, lightDir);
 
-  path.li += lastBounce ? path.beta * sampleBackgroundFromDirection(lightDir) : vec3(0.0);
+  vec3 contribution = lastBounce ? path.beta * sampleBackgroundFromDirection(lightDir) : vec3(0.0);
+  path.li += applyFog(contribution, originalRayDistance, originalRayDirection, path.beta);
 
   path.specularBounce = true;
 }

@@ -18,19 +18,23 @@ export function makeRenderingPipeline({
     optionalExtensions,
     scene,
     toneMappingParams,
-    bounces, // number of global illumination bounces
+    renderingParams,
   }) {
 
-  const maxReprojectedSamples = 20;
+  const maxReprojectedSamples = renderingParams.reprojectedSamples;
 
   // how many samples to render with uniform noise before switching to stratified noise
-  const numUniformSamples = 4;
+  const numUniformSamples = renderingParams.initialUniformSamples;
 
   // how many partitions of stratified noise should be created
   // higher number results in faster convergence over time, but with lower quality initial samples
   const strataCount = 6;
 
-  const desiredTimeForPreview = 14;
+  const desiredTimeForPreview = renderingParams.previewTime;
+
+  const fogScale = renderingParams.fogScale;
+
+  const bounces = renderingParams.bounces; // number of global illumination bounces
 
   const decomposedScene = decomposeScene(scene);
 
@@ -40,7 +44,7 @@ export function makeRenderingPipeline({
 
   const fullscreenQuad = makeFullscreenQuad(gl);
 
-  const rayTracePass = makeRayTracePass(gl, { bounces, decomposedScene, fullscreenQuad, materialBuffer, mergedMesh, optionalExtensions, scene });
+  const rayTracePass = makeRayTracePass(gl, { bounces, decomposedScene, fullscreenQuad, materialBuffer, mergedMesh, optionalExtensions, fogScale });
 
   const reprojectPass = makeReprojectPass(gl, { fullscreenQuad, maxReprojectedSamples });
 

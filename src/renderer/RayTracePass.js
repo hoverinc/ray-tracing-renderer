@@ -14,8 +14,10 @@ export function makeRayTracePass(gl, {
     materialBuffer,
     mergedMesh,
     optionalExtensions,
+    fogScale,
   }) {
 
+  fogScale = clamp(fogScale, 0, 9999).toFixed(1);
   bounces = clamp(bounces, 1, 6);
 
   const samplingDimensions = [];
@@ -33,7 +35,7 @@ export function makeRayTracePass(gl, {
   let samples;
 
   const renderPass = makeRenderPassFromScene({
-    bounces, decomposedScene, fullscreenQuad, gl, materialBuffer, mergedMesh, optionalExtensions, samplingDimensions,
+    bounces, decomposedScene, fullscreenQuad, gl, materialBuffer, mergedMesh, optionalExtensions, samplingDimensions, fogScale,
   });
 
   function setSize(width, height) {
@@ -119,6 +121,7 @@ function makeRenderPassFromScene({
     mergedMesh,
     optionalExtensions,
     samplingDimensions,
+    fogScale,
   }) {
   const { OES_texture_float_linear } = optionalExtensions;
 
@@ -142,6 +145,7 @@ function makeRenderPassFromScene({
       USE_GLASS: materials.some(m => m.transparent),
       USE_SHADOW_CATCHER: materials.some(m => m.shadowCatcher),
       SAMPLING_DIMENSIONS: samplingDimensions.reduce((a, b) => a + b),
+      FOG_SCALE: fogScale,
       ...materialBuffer.defines
     },
     fragment,

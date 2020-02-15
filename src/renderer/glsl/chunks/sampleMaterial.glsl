@@ -8,6 +8,9 @@ void sampleMaterial(SurfaceInteraction si, int bounce, inout Path path) {
   mat3 basis = orthonormalBasis(si.normal);
   vec3 viewDir = -path.ray.d;
 
+  float originalRayDistance = path.ray.distance;
+  vec3 originalRayDirection = path.ray.d;
+
   MaterialSamples samples = getRandomMaterialSamples();
 
   vec2 diffuseOrSpecular = samples.s1;
@@ -22,6 +25,7 @@ void sampleMaterial(SurfaceInteraction si, int bounce, inout Path path) {
   vec2 uv;
   float lightPdf;
   bool brdfSample = false;
+
 
   if (lastBounce && diffuseOrSpecular.x < 0.5) {
     // reuse this sample by multiplying by 2 to bring sample from [0, 0.5), to [0, 1)
@@ -71,7 +75,9 @@ void sampleMaterial(SurfaceInteraction si, int bounce, inout Path path) {
     weight = powerHeuristic(lightPdf, scatteringPdf) / lightPdf;
   }
 
-  path.li += path.beta * occluded * brdf * irr * abs(cosThetaL) * weight;;
+
+  vec3 contribution = path.beta * occluded * brdf * irr * abs(cosThetaL) * weight;
+  path.li += applyFog(contribution, originalRayDistance, originalRayDirection, path.beta);
 
   // Step 2: Setup ray direction for next bounce by importance sampling the BRDF
 

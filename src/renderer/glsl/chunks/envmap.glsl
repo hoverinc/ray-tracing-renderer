@@ -110,4 +110,17 @@ vec3 sampleBackgroundFromDirection(vec3 d) {
   return textureLinear(backgroundMap, uv).rgb;
 }
 
+vec3 applyFog(vec3 li, float distance, vec3 direction, inout vec3 beta) {
+  #ifdef FOG_SCALE
+
+    float fogWeight = max(0.0, 1.0 - ((max(0.0, distance)) / FOG_SCALE));
+    fogWeight = pow(fogWeight, 2.0);
+    vec3 fogColor = sampleBackgroundFromDirection(direction);
+    beta *= fogWeight;
+    return mix(fogColor, li, fogWeight);
+  #endif
+
+  return li;
+}
+
 `;

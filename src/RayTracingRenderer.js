@@ -41,6 +41,10 @@ export function RayTracingRenderer(params = {}) {
     toneMapping: THREE.LinearToneMapping,
     toneMappingExposure: 1,
     toneMappingWhitePoint: 1,
+    reprojectedSamples: 20,
+    initialUniformSamples: 10,
+    previewTime: 25,
+    fogScale: 2000,
   };
 
   function initScene(scene) {
@@ -54,7 +58,15 @@ export function RayTracingRenderer(params = {}) {
 
     const bounces = module.bounces;
 
-    pipeline = makeRenderingPipeline({gl, optionalExtensions, scene, toneMappingParams, bounces});
+    const renderingParams = {
+      reprojectedSamples: module.reprojectedSamples,
+      initialUniformSamples: module.initialUniformSamples,
+      previewTime: module.previewTime,
+      fogScale: module.fogScale,
+      bounces: module.bounces,
+    };
+
+    pipeline = makeRenderingPipeline({gl, optionalExtensions, scene, toneMappingParams, renderingParams});
 
     pipeline.onSampleRendered = (...args) => {
       if (module.onSampleRendered) {

@@ -84,7 +84,7 @@ source: (defines) => `
     SurfaceInteraction si;
 
     // first surface interaction from g-buffer
-    surfaceInteractionDirect(vCoord, si);
+    surfaceInteractionDirect(vCoord, si, path);
 
     // first surface interaction from ray interesction
     // intersectScene(path.ray, si);

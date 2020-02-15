@@ -22,6 +22,7 @@ export default `
     vec3 d;
     vec3 invD;
     float tMax;
+    float distance;
   };
 
   struct SurfaceInteraction {
@@ -48,6 +49,7 @@ export default `
     ray.d = direction;
     ray.invD = 1.0 / ray.d;
     ray.tMax = RAY_MAX_DISTANCE;
+    ray.distance = 0.0;
   }
 
   // given the index from a 1D array, retrieve corresponding position from packed 2D texture
