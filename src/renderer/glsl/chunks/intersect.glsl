@@ -205,6 +205,7 @@ void intersectScene(inout Ray ray, inout SurfaceInteraction si) {
         int materialIndex = floatBitsToInt(r2.w);
         vec3 faceNormal = r2.xyz;
         surfaceInteractionFromBVH(si, tri, hit.barycentric, index, faceNormal, materialIndex);
+        ray.distance = length(ray.o - si.position);
       }
     }
   }

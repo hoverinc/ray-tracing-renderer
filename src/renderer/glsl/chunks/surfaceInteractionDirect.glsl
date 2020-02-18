@@ -6,10 +6,11 @@ export default `
   uniform sampler2D gColor;
   uniform sampler2D gMatProps;
 
-  void surfaceInteractionDirect(vec2 coord, inout SurfaceInteraction si) {
+  void surfaceInteractionDirect(vec2 coord, inout SurfaceInteraction si, inout Path path) {
     vec4 positionAndMeshIndex = texture(gPosition, coord);
 
     si.position = positionAndMeshIndex.xyz;
+    path.ray.distance = (length(path.ray.o - si.position));
 
     float meshIndex = positionAndMeshIndex.w;
 

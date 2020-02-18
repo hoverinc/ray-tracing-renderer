@@ -3,123 +3,112 @@
 
 export default `
 
-vec3 importanceSampleLight(SurfaceInteraction si, vec3 viewDir, bool lastBounce, vec2 random) {
-  vec3 li;
+void sampleMaterial(SurfaceInteraction si, int bounce, inout Path path) {
+  bool lastBounce = bounce == BOUNCES;
+  mat3 basis = orthonormalBasis(si.normal);
+  vec3 viewDir = -path.ray.d;
 
-  float lightPdf;
+  float originalRayDistance = path.ray.distance;
+  vec3 originalRayDirection = path.ray.d;
+
+  MaterialSamples samples = getRandomMaterialSamples();
+
+  vec2 diffuseOrSpecular = samples.s1;
+  vec2 lightDirSample = samples.s2;
+  vec2 bounceDirSample = samples.s3;
+
+  // Step 1: Add direct illumination of the light source (the hdr map)
+  // On every bounce but the last, importance sample the light source
+  // On the last bounce, multiple importance sample the brdf AND the light source, determined by random var
+
+  vec3 lightDir;
   vec2 uv;
-  vec3 lightDir = sampleEnvmap(random, uv, lightPdf);
+  float lightPdf;
+  bool brdfSample = false;
+
+
+  if (lastBounce && diffuseOrSpecular.x < 0.5) {
+    // reuse this sample by multiplying by 2 to bring sample from [0, 0.5), to [0, 1)
+    lightDir = 2.0 * diffuseOrSpecular.x < mix(0.5, 0.0, si.metalness) ?
+      lightDirDiffuse(si.faceNormal, viewDir, basis, lightDirSample) :
+      lightDirSpecular(si.faceNormal, viewDir, basis, si.roughness, lightDirSample);
+
+    uv = cartesianToEquirect(lightDir);
+    lightPdf = envmapPdf(uv);
+    brdfSample = true;
+  } else {
+    lightDir = sampleEnvmap(lightDirSample, uv, lightPdf);
+  }
 
   float cosThetaL = dot(si.normal, lightDir);
 
-  float orientation = dot(si.faceNormal, viewDir) * cosThetaL;
-  if (orientation < 0.0) {
-    return li;
-  }
-
-  float diffuseWeight = 1.0;
-  Ray ray;
-  initRay(ray, si.position + EPS * lightDir, lightDir);
-  if (intersectSceneShadow(ray)) {
-    if (lastBounce) {
-      diffuseWeight = 0.0;
-    } else {
-      return li;
-    }
-  }
-
-  vec3 irr = textureLinear(envmap, uv).xyz;
-
-  float scatteringPdf;
-  vec3 brdf = materialBrdf(si, viewDir, lightDir, cosThetaL, diffuseWeight, scatteringPdf);
-
-  float weight = powerHeuristic(lightPdf, scatteringPdf);
-
-  li = brdf * irr * abs(cosThetaL) * weight / lightPdf;
-
-  return li;
-}
-
-vec3 importanceSampleMaterial(SurfaceInteraction si, vec3 viewDir, bool lastBounce, vec3 lightDir) {
-  vec3 li;
-
-  float cosThetaL = dot(si.normal, lightDir);
+  float occluded = 1.0;
 
   float orientation = dot(si.faceNormal, viewDir) * cosThetaL;
   if (orientation < 0.0) {
-    return li;
+    // light dir points towards surface. invalid dir.
+    occluded = 0.0;
   }
 
   float diffuseWeight = 1.0;
-  Ray ray;
-  initRay(ray, si.position + EPS * lightDir, lightDir);
-  if (intersectSceneShadow(ray)) {
+
+  initRay(path.ray, si.position + EPS * lightDir, lightDir);
+  if (intersectSceneShadow(path.ray)) {
     if (lastBounce) {
       diffuseWeight = 0.0;
     } else {
-      return li;
+      occluded = 0.0;
     }
   }
-
-  vec2 uv = cartesianToEquirect(lightDir);
-
-  float lightPdf = envmapPdf(uv);
 
   vec3 irr = textureLinear(envmap, uv).rgb;
 
   float scatteringPdf;
   vec3 brdf = materialBrdf(si, viewDir, lightDir, cosThetaL, diffuseWeight, scatteringPdf);
 
-  float weight = powerHeuristic(scatteringPdf, lightPdf);
+  float weight;
+  if (lastBounce) {
+    weight = brdfSample ?
+      2.0 * powerHeuristic(scatteringPdf, lightPdf) / scatteringPdf :
+      2.0 * powerHeuristic(lightPdf, scatteringPdf) / lightPdf;
+  } else {
+    weight = powerHeuristic(lightPdf, scatteringPdf) / lightPdf;
+  }
 
-  li += brdf * irr * abs(cosThetaL) * weight / scatteringPdf;
 
-  return li;
-}
+  vec3 contribution = path.beta * occluded * brdf * irr * abs(cosThetaL) * weight;
+  path.li += applyFog(contribution, originalRayDistance, originalRayDirection, path.beta);
 
-void sampleMaterial(SurfaceInteraction si, int bounce, inout Path path) {
-  mat3 basis = orthonormalBasis(si.normal);
-  vec3 viewDir = -path.ray.d;
-
-  vec2 diffuseOrSpecular = randomSampleVec2();
-
-  vec3 lightDir = diffuseOrSpecular.x < mix(0.5, 0.0, si.metalness) ?
-    lightDirDiffuse(si.faceNormal, viewDir, basis, randomSampleVec2()) :
-    lightDirSpecular(si.faceNormal, viewDir, basis, si.roughness, randomSampleVec2());
-
-  bool lastBounce = bounce == BOUNCES;
-
-  // Add path contribution
-  path.li += path.beta * (
-      importanceSampleLight(si, viewDir, lastBounce, randomSampleVec2()) +
-      importanceSampleMaterial(si, viewDir, lastBounce, lightDir)
-    );
-
-  // Get new path direction
+  // Step 2: Setup ray direction for next bounce by importance sampling the BRDF
 
   if (lastBounce) {
     return;
   }
 
   lightDir = diffuseOrSpecular.y < mix(0.5, 0.0, si.metalness) ?
-    lightDirDiffuse(si.faceNormal, viewDir, basis, randomSampleVec2()) :
-    lightDirSpecular(si.faceNormal, viewDir, basis, si.roughness, randomSampleVec2());
+    lightDirDiffuse(si.faceNormal, viewDir, basis, bounceDirSample) :
+    lightDirSpecular(si.faceNormal, viewDir, basis, si.roughness, bounceDirSample);
 
-  float cosThetaL = dot(si.normal, lightDir);
+  cosThetaL = dot(si.normal, lightDir);
 
-  float scatteringPdf;
-  vec3 brdf = materialBrdf(si, viewDir, lightDir, cosThetaL, 1.0, scatteringPdf);
+  orientation = dot(si.faceNormal, viewDir) * cosThetaL;
+  path.abort = orientation < 0.0;
+
+  if (path.abort) {
+    return;
+  }
+
+  brdf = materialBrdf(si, viewDir, lightDir, cosThetaL, 1.0, scatteringPdf);
+
+  uv = cartesianToEquirect(lightDir);
+  lightPdf = envmapPdf(uv);
+
+  path.misWeight = powerHeuristic(scatteringPdf, lightPdf);
 
   path.beta *= abs(cosThetaL) * brdf / scatteringPdf;
 
-  initRay(path.ray, si.position + EPS * lightDir, lightDir);
-
-  // If new ray direction is pointing into the surface,
-  // the light path is physically impossible and we terminate the path.
-  float orientation = dot(si.faceNormal, viewDir) * cosThetaL;
-  path.abort = orientation < 0.0;
-
   path.specularBounce = false;
-}
 
+  initRay(path.ray, si.position + EPS * lightDir, lightDir);
+}
 `;
