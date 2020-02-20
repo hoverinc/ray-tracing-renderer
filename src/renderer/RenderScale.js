@@ -1,14 +1,14 @@
 import { clamp } from './util';
 import { Vector2 } from 'three';
 
-export function makeRenderScale(timePerFrame = 20) {
+export function makeRenderScale(gl, timePerFrame = 21) {
   let fullWidth;
   let fullHeight;
 
   let renderWidth;
   let renderHeight;
 
-  let pixelsPerFrame = 25000;
+  let pixelsPerFrame = pixelsPerFrameEstimate(gl);
   let maxPixelsPerFrame;
 
   let scale = new Vector2(1, 1);
@@ -33,7 +33,7 @@ export function makeRenderScale(timePerFrame = 20) {
     const elapsed = time - lastTime;
     const pixelsPerTime = renderWidth * renderHeight / elapsed;
 
-    const expAvg = 0.9999;
+    const expAvg = 0.99999;
     pixelsPerFrame = expAvg * pixelsPerFrame + (1 - expAvg) * timePerFrame * pixelsPerTime;
     pixelsPerFrame = clamp(timePerFrame * pixelsPerTime, 2048, maxPixelsPerFrame);
   }
@@ -55,4 +55,16 @@ export function makeRenderScale(timePerFrame = 20) {
       return renderHeight;
     }
   };
+}
+
+function pixelsPerFrameEstimate(gl) {
+  const maxRenderbufferSize = gl.getParameter(gl.MAX_RENDERBUFFER_SIZE);
+
+  if (maxRenderbufferSize <= 8192) {
+    return 100000;
+  } else if (maxRenderbufferSize === 16384) {
+    return 200000;
+  } else if (maxRenderbufferSize >= 32768) {
+    return 300000;
+  }
 }

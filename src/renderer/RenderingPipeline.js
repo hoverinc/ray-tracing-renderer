@@ -31,6 +31,8 @@ export function makeRenderingPipeline({
   // higher number results in faster convergence over time, but with lower quality initial samples
   const strataCount = 6;
 
+  const previewFramesBeforeBenchmark = 5;
+
   const decomposedScene = decomposeScene(scene);
 
   const mergedMesh = mergeMeshesToGeometry(decomposedScene.meshes);
@@ -50,6 +52,8 @@ export function makeRenderingPipeline({
   // used to sample only a portion of the scene to the HDR Buffer to prevent the GPU from locking up from excessive computation
   const tileRender = makeTileRender(gl);
 
+  const previewSize = makeRenderScale(gl);
+
   let ready = false;
   const noiseImage = new Image();
   noiseImage.src = noiseBase64;
@@ -60,6 +64,7 @@ export function makeRenderingPipeline({
 
   let sampleCount = 0;
   let previewFrames = 0;
+  let firstFrame = true;
 
   let sampleRenderedCallback = () => {};
 
@@ -71,8 +76,6 @@ export function makeRenderingPipeline({
   let screenHeight = 0;
 
   const fullscreenScale = new Vector2(1, 1);
-
-  const previewSize = makeRenderScale();
 
   let lastToneMappedScale = fullscreenScale;
 
@@ -246,26 +249,25 @@ export function makeRenderingPipeline({
     gl.disable(gl.SCISSOR_TEST);
   }
 
-  function drawPreview(camera, lastCamera) {
+  function setCameras(camera, lastCamera) {
+    rayTracePass.setCamera(camera);
+    gBufferPass.setCamera(camera);
+    reprojectPass.setPreviousCamera(lastCamera);
+    lastCamera.copy(camera);
+  }
+
+  function drawPreview() {
     if (sampleCount > 0) {
       swapBuffers();
     }
 
-    sampleCount = 0;
-    tileRender.reset();
-
-    if (previewFrames > 5) {
+    if (previewFrames >= previewFramesBeforeBenchmark) {
       previewSize.benchmark();
     }
 
     previewSize.calcSize();
 
     updateSeed(previewSize.width, previewSize.height, false);
-
-    rayTracePass.setCamera(camera);
-    gBufferPass.setCamera(camera);
-    reprojectPass.setPreviousCamera(lastCamera);
-    lastCamera.copy(camera);
 
     renderGBuffer();
 
@@ -342,11 +344,20 @@ export function makeRenderingPipeline({
     }
 
     if (!areCamerasEqual(camera, lastCamera)) {
+      setCameras(camera, lastCamera);
+
+      if (firstFrame) {
+        firstFrame = false;
+      } else {
+        drawPreview(camera, lastCamera);
+      }
+
+      sampleCount = 0;
       previewFrames++;
-      drawPreview(camera, lastCamera);
+      tileRender.reset();
     } else {
-      previewFrames = 0;
       drawTile();
+      previewFrames = 0;
     }
   }
 
@@ -361,19 +372,14 @@ export function makeRenderingPipeline({
     swapGBuffer();
     swapReprojectBuffer();
 
-    if (sampleCount === 0) {
-      reprojectPass.setPreviousCamera(lastCamera);
-    }
-
     if (!areCamerasEqual(camera, lastCamera)) {
       sampleCount = 0;
-      rayTracePass.setCamera(camera);
-      gBufferPass.setCamera(camera);
-      lastCamera.copy(camera);
       clearBuffer(hdrBuffer);
     } else {
       sampleCount++;
     }
+
+    setCameras(camera, lastCamera);
 
     updateSeed(screenWidth, screenHeight, true);
 
