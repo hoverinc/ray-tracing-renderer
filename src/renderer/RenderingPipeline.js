@@ -31,7 +31,12 @@ export function makeRenderingPipeline({
   // higher number results in faster convergence over time, but with lower quality initial samples
   const strataCount = 6;
 
+  // tile rendering can cause the GPU to stutter, throwing off future benchmarks for the preview frames
+  // wait to measure performance until this number of frames have been rendered
   const previewFramesBeforeBenchmark = 5;
+
+  // used to sample only a portion of the scene to the HDR Buffer to prevent the GPU from locking up from excessive computation
+  const tileRender = makeTileRender(gl);
 
   const decomposedScene = decomposeScene(scene);
 
@@ -49,8 +54,6 @@ export function makeRenderingPipeline({
 
   const gBufferPass = makeGBufferPass(gl, { materialBuffer, mergedMesh });
 
-  // used to sample only a portion of the scene to the HDR Buffer to prevent the GPU from locking up from excessive computation
-  const tileRender = makeTileRender(gl);
 
   const previewSize = makeRenderScale(gl);
 
