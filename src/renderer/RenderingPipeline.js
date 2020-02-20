@@ -5,6 +5,7 @@ import { makeGBufferPass } from './GBufferPass';
 import { makeMaterialBuffer } from './MaterialBuffer';
 import { mergeMeshesToGeometry } from './mergeMeshesToGeometry';
 import { makeRayTracePass } from './RayTracePass';
+import { makeRenderScale } from './RenderScale';
 import { makeReprojectPass } from './ReprojectPass';
 import { makeToneMapPass } from './ToneMapPass';
 import { clamp, numberArraysEqual } from './util';
@@ -29,8 +30,6 @@ export function makeRenderingPipeline({
   // how many partitions of stratified noise should be created
   // higher number results in faster convergence over time, but with lower quality initial samples
   const strataCount = 6;
-
-  const desiredTimeForPreview = 14;
 
   const decomposedScene = decomposeScene(scene);
 
@@ -60,6 +59,7 @@ export function makeRenderingPipeline({
   };
 
   let sampleCount = 0;
+  let previewFrames = 0;
 
   let sampleRenderedCallback = () => {};
 
@@ -70,11 +70,11 @@ export function makeRenderingPipeline({
   let screenWidth = 0;
   let screenHeight = 0;
 
-  let previewWidth = 0;
-  let previewHeight = 0;
-
-  const previewScale = new Vector2(1, 1);
   const fullscreenScale = new Vector2(1, 1);
+
+  const previewSize = makeRenderScale();
+
+  let lastToneMappedScale = fullscreenScale;
 
   let hdrBuffer;
   let hdrBackBuffer;
@@ -85,7 +85,6 @@ export function makeRenderingPipeline({
   let gBufferBack;
 
   let lastToneMappedTexture;
-  let lastToneMappedScale;
 
   function initFrameBuffers(width, height) {
     const makeHdrBuffer = () => makeFramebuffer(gl, {
@@ -123,7 +122,6 @@ export function makeRenderingPipeline({
     gBufferBack = makeGBuffer();
 
     lastToneMappedTexture = hdrBuffer.color[rayTracePass.outputLocs.light];
-    lastToneMappedScale = fullscreenScale;
   }
 
   function swapReprojectBuffer() {
@@ -157,17 +155,8 @@ export function makeRenderingPipeline({
     screenHeight = h;
 
     tileRender.setSize(w, h);
+    previewSize.setSize(w, h);
     initFrameBuffers(w, h);
-  }
-
-  function setPreviewBufferDimensions() {
-    const numPixelsForPreview = desiredTimeForPreview / tileRender.getTimePerPixel();
-
-    const aspectRatio = screenWidth / screenHeight;
-
-    previewWidth = Math.round(clamp(Math.sqrt(numPixelsForPreview * aspectRatio), 1, screenWidth));
-    previewHeight = Math.round(clamp(previewWidth / aspectRatio, 1, screenHeight));
-    previewScale.set(previewWidth / screenWidth, previewHeight / screenHeight);
   }
 
   function areCamerasEqual(cam1, cam2) {
@@ -231,7 +220,7 @@ export function makeRenderingPipeline({
     });
 
     lastToneMappedTexture = lightTexture;
-    lastToneMappedScale = lightScale;
+    lastToneMappedScale = lightScale.clone();
   }
 
   function renderGBuffer() {
@@ -264,9 +253,14 @@ export function makeRenderingPipeline({
 
     sampleCount = 0;
     tileRender.reset();
-    setPreviewBufferDimensions();
 
-    updateSeed(previewWidth, previewHeight, false);
+    if (previewFrames > 5) {
+      previewSize.benchmark();
+    }
+
+    previewSize.calcSize();
+
+    updateSeed(previewSize.width, previewSize.height, false);
 
     rayTracePass.setCamera(camera);
     gBufferPass.setCamera(camera);
@@ -276,14 +270,14 @@ export function makeRenderingPipeline({
     renderGBuffer();
 
     rayTracePass.bindTextures();
-    newSampleToBuffer(hdrBuffer, previewWidth, previewHeight);
+    newSampleToBuffer(hdrBuffer, previewSize.width, previewSize.height);
 
     reprojectBuffer.bind();
-    gl.viewport(0, 0, previewWidth, previewHeight);
+    gl.viewport(0, 0, previewSize.width, previewSize.height);
     reprojectPass.draw({
       blendAmount: 1.0,
       light: hdrBuffer.color[0],
-      lightScale: previewScale,
+      lightScale: previewSize.scale,
       position: gBuffer.color[gBufferPass.outputLocs.position],
       previousLight: lastToneMappedTexture,
       previousLightScale: lastToneMappedScale,
@@ -291,7 +285,7 @@ export function makeRenderingPipeline({
     });
     reprojectBuffer.unbind();
 
-    toneMapToScreen(reprojectBuffer.color[0], previewScale);
+    toneMapToScreen(reprojectBuffer.color[0], previewSize.scale);
 
     swapBuffers();
   }
@@ -328,7 +322,7 @@ export function makeRenderingPipeline({
           lightScale: fullscreenScale,
           position: gBuffer.color[gBufferPass.outputLocs.position],
           previousLight: reprojectBackBuffer.color[0],
-          previousLightScale: previewScale,
+          previousLightScale: previewSize.scale,
           previousPosition: gBufferBack.color[gBufferPass.outputLocs.position],
         });
         reprojectBuffer.unbind();
@@ -348,8 +342,10 @@ export function makeRenderingPipeline({
     }
 
     if (!areCamerasEqual(camera, lastCamera)) {
+      previewFrames++;
       drawPreview(camera, lastCamera);
     } else {
+      previewFrames = 0;
       drawTile();
     }
   }

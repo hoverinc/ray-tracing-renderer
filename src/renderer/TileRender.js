@@ -27,11 +27,7 @@ export function makeTileRender(gl) {
   // adjusted dynamically according to system performance
   let pixelsPerTile = pixelsPerTileEstimate(gl);
 
-  let pixelsPerTileQuantized = pixelsPerTile;
-
   let desiredTimePerTile = 20;
-
-  let timePerPixel = desiredTimePerTile / pixelsPerTile;
 
   let lastTime = 0;
   let timeElapsed = 0;
@@ -62,7 +58,6 @@ export function makeTileRender(gl) {
     // quantize the width of the tile so that it evenly divides the entire window
     tileWidth = Math.ceil(width / Math.round(width / Math.sqrt(pixelsPerTile * aspectRatio)));
     tileHeight = Math.ceil(tileWidth / aspectRatio);
-    pixelsPerTileQuantized = tileWidth * tileHeight;
 
     columns = Math.ceil(width / tileWidth);
     rows = Math.ceil(height / tileHeight);
@@ -77,9 +72,6 @@ export function makeTileRender(gl) {
 
       const newPixelsPerTile = pixelsPerTile * desiredTimePerTile / timePerTile;
       pixelsPerTile = expAvg * pixelsPerTile + (1 - expAvg) * newPixelsPerTile;
-
-      const newTimePerPixel = timePerTile / pixelsPerTileQuantized;
-      timePerPixel = expAvg * timePerPixel + (1 - expAvg) * newTimePerPixel;
     }
 
     pixelsPerTile = clamp(pixelsPerTile, 8192, width * height);
@@ -115,9 +107,6 @@ export function makeTileRender(gl) {
   }
 
   return {
-    getTimePerPixel() {
-      return timePerPixel;
-    },
     nextTile,
     reset,
     setSize,

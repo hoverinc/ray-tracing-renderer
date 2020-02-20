@@ -37,7 +37,6 @@ export function RayTracingRenderer(params = {}) {
     needsUpdate: true,
     onSampleRendered: null,
     renderWhenOffFocus: true,
-    renderToScreen: true,
     toneMapping: THREE.LinearToneMapping,
     toneMappingExposure: 1,
     toneMappingWhitePoint: 1,
@@ -136,29 +135,13 @@ export function RayTracingRenderer(params = {}) {
 
     camera.updateMatrixWorld();
 
-    if (module.renderToScreen) {
-      if(module.maxHardwareUsage) {
-        // render new sample for the entire screen
-        pipeline.drawFull(camera);
-      } else {
-        // render new sample for a tiled subset of the screen
-        pipeline.draw(camera);
-      }
-
+    if(module.maxHardwareUsage) {
+      // render new sample for the entire screen
+      pipeline.drawFull(camera);
     } else {
-      pipeline.drawOffscreenTile(camera);
+      // render new sample for a tiled subset of the screen
+      pipeline.draw(camera);
     }
-  };
-
-  // Assume module.render is called using requestAnimationFrame.
-  // This means that when the user is on a different browser tab, module.render won't be called.
-  // Since the timer should not measure time when module.render is inactive,
-  // the timer should be reset when the user switches browser tabs
-  document.addEventListener('visibilitychange', restartTimer);
-
-  module.dispose = () => {
-    document.removeEventListener('visibilitychange', restartTimer);
-    pipeline = null;
   };
 
   return module;
