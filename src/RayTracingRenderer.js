@@ -144,6 +144,17 @@ export function RayTracingRenderer(params = {}) {
     }
   };
 
+  // Assume module.render is called using requestAnimationFrame.
+  // This means that when the user is on a different browser tab, module.render won't be called.
+  // Since the timer should not measure time when module.render is inactive,
+  // the timer should be reset when the user switches browser tabs
+  document.addEventListener('visibilitychange', restartTimer);
+
+  module.dispose = () => {
+    document.removeEventListener('visibilitychange', restartTimer);
+    pipeline = null;
+  };
+
   return module;
 }
 
