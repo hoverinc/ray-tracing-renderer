@@ -44,7 +44,9 @@ export function RayTracingRenderer(params = {}) {
     reprojectedSamples: 20,
     initialUniformSamples: 10,
     previewTime: 25,
-    fogScale: 2000,
+    fogScale: 200,
+    fogNear: 50,
+    useExpFog: true,
   };
 
   function initScene(scene) {
@@ -63,6 +65,8 @@ export function RayTracingRenderer(params = {}) {
       initialUniformSamples: module.initialUniformSamples,
       previewTime: module.previewTime,
       fogScale: module.fogScale,
+      fogNear: module.fogNear,
+      useExpFog: module.useExpFog,
       bounces: module.bounces,
     };
 

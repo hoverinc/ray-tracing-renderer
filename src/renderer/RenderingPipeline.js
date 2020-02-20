@@ -32,7 +32,11 @@ export function makeRenderingPipeline({
 
   const desiredTimeForPreview = renderingParams.previewTime;
 
-  const fogScale = renderingParams.fogScale;
+  const fogParams = {
+    fogScale: renderingParams.fogScale,
+    fogNear: renderingParams.fogNear,
+    useExpFog: renderingParams.useExpFog,
+  }
 
   const bounces = renderingParams.bounces; // number of global illumination bounces
 
@@ -44,7 +48,7 @@ export function makeRenderingPipeline({
 
   const fullscreenQuad = makeFullscreenQuad(gl);
 
-  const rayTracePass = makeRayTracePass(gl, { bounces, decomposedScene, fullscreenQuad, materialBuffer, mergedMesh, optionalExtensions, fogScale });
+  const rayTracePass = makeRayTracePass(gl, { bounces, decomposedScene, fullscreenQuad, materialBuffer, mergedMesh, optionalExtensions, fogParams });
 
   const reprojectPass = makeReprojectPass(gl, { fullscreenQuad, maxReprojectedSamples });
 

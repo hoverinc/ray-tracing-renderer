@@ -14,11 +14,8 @@ export function makeRayTracePass(gl, {
     materialBuffer,
     mergedMesh,
     optionalExtensions,
-    fogScale,
+    fogParams,
   }) {
-
-  fogScale = clamp(fogScale, 0, 9999).toFixed(1);
-  bounces = clamp(bounces, 1, 6);
 
   const samplingDimensions = [];
 
@@ -35,7 +32,7 @@ export function makeRayTracePass(gl, {
   let samples;
 
   const renderPass = makeRenderPassFromScene({
-    bounces, decomposedScene, fullscreenQuad, gl, materialBuffer, mergedMesh, optionalExtensions, samplingDimensions, fogScale,
+    bounces, decomposedScene, fullscreenQuad, gl, materialBuffer, mergedMesh, optionalExtensions, samplingDimensions, fogParams,
   });
 
   function setSize(width, height) {
@@ -121,13 +118,22 @@ function makeRenderPassFromScene({
     mergedMesh,
     optionalExtensions,
     samplingDimensions,
-    fogScale,
+    fogParams,
   }) {
   const { OES_texture_float_linear } = optionalExtensions;
 
   const { background, directionalLights, ambientLights, environmentLights } = decomposedScene;
 
   const { geometry, materials, materialIndices } = mergedMesh;
+
+  let {
+    fogScale,
+    fogNear,
+    useExpFog,
+  } = fogParams;
+  fogNear = clamp(fogNear, 0, 9999).toFixed(1);
+  fogScale = clamp(fogScale, 0, 9999).toFixed(1);
+  bounces = clamp(bounces, 1, 6);
 
   // create bounding volume hierarchy from a static scene
   const bvh = bvhAccel(geometry, materialIndices);
@@ -146,6 +152,8 @@ function makeRenderPassFromScene({
       USE_SHADOW_CATCHER: materials.some(m => m.shadowCatcher),
       SAMPLING_DIMENSIONS: samplingDimensions.reduce((a, b) => a + b),
       FOG_SCALE: fogScale,
+      FOG_NEAR: fogNear,
+      EXP_FOG: useExpFog,
       ...materialBuffer.defines
     },
     fragment,

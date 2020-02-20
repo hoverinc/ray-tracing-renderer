@@ -112,9 +112,15 @@ vec3 sampleBackgroundFromDirection(vec3 d) {
 
 vec3 applyFog(vec3 li, float distance, vec3 direction, inout vec3 beta) {
   #ifdef FOG_SCALE
-
-    float fogWeight = max(0.0, 1.0 - ((max(0.0, distance)) / FOG_SCALE));
-    fogWeight = pow(fogWeight, 2.0);
+    #ifdef FOG_NEAR
+      distance = max(0.0, distance - FOG_NEAR);
+    #endif
+    #ifdef EXP_FOG
+      float fogWeight = 1.0 / pow(2.0, distance * (1.0 / FOG_SCALE));
+    #else
+      float fogWeight = max(0.0, 1.0 - ((max(0.0, distance)) / FOG_SCALE));
+      fogWeight = pow(fogWeight, 2.0);
+    #endif
     vec3 fogColor = sampleBackgroundFromDirection(direction);
     beta *= fogWeight;
     return mix(fogColor, li, fogWeight);
