@@ -2123,8 +2123,6 @@ vec3 getMatNormal(int materialIndex, vec2 uv, vec3 normal, vec3 dp1, vec3 dp2, v
   #define THICK_GLASS 2
   #define SHADOW_CATCHER 3
 
-  #define SAMPLES_PER_MATERIAL 8
-
   const float IOR = 1.5;
   const float INV_IOR = 1.0 / IOR;
 
@@ -2143,6 +2141,7 @@ vec3 getMatNormal(int materialIndex, vec2 uv, vec3 normal, vec3 dp1, vec3 dp2, v
     vec3 d;
     vec3 invD;
     float tMax;
+    float distance;
   };
 
   struct SurfaceInteraction {
@@ -2169,6 +2168,7 @@ vec3 getMatNormal(int materialIndex, vec2 uv, vec3 normal, vec3 dp1, vec3 dp2, v
     ray.d = direction;
     ray.invD = 1.0 / ray.d;
     ray.tMax = RAY_MAX_DISTANCE;
+    ray.distance = 0.0;
   }
 
   // given the index from a 1D array, retrieve corresponding position from packed 2D texture
@@ -2190,11 +2190,11 @@ vec3 getMatNormal(int materialIndex, vec2 uv, vec3 normal, vec3 dp1, vec3 dp2, v
   struct Path {
     Ray ray;
     vec3 li;
-    vec3 albedo;
     float alpha;
     vec3 beta;
     bool specularBounce;
     bool abort;
+    float misWeight;
   };
 
   uniform Camera camera;
@@ -2435,6 +2435,7 @@ void intersectScene(inout Ray ray, inout SurfaceInteraction si) {
         int materialIndex = floatBitsToInt(r2.w);
         vec3 faceNormal = r2.xyz;
         surfaceInteractionFromBVH(si, tri, hit.barycentric, index, faceNormal, materialIndex);
+        ray.distance = length(ray.o - si.position);
       }
     }
   }
@@ -2512,10 +2513,11 @@ bool intersectSceneShadow(inout Ray ray) {
   uniform sampler2D gColor;
   uniform sampler2D gMatProps;
 
-  void surfaceInteractionDirect(vec2 coord, inout SurfaceInteraction si) {
+  void surfaceInteractionDirect(vec2 coord, inout SurfaceInteraction si, inout Path path) {
     vec4 positionAndMeshIndex = texture(gPosition, coord);
 
     si.position = positionAndMeshIndex.xyz;
+    path.ray.distance = (length(path.ray.o - si.position));
 
     float meshIndex = positionAndMeshIndex.w;
 
@@ -2570,6 +2572,22 @@ float randomSample() {
 
 vec2 randomSampleVec2() {
   return vec2(randomSample(), randomSample());
+}
+
+struct MaterialSamples {
+  vec2 s1;
+  vec2 s2;
+  vec2 s3;
+};
+
+MaterialSamples getRandomMaterialSamples() {
+  MaterialSamples samples;
+
+  samples.s1 = randomSampleVec2();
+  samples.s2 = randomSampleVec2();
+  samples.s3 = randomSampleVec2();
+
+  return samples;
 }
 `;
 
@@ -2683,6 +2701,25 @@ vec3 sampleEnvmapFromDirection(vec3 d) {
 vec3 sampleBackgroundFromDirection(vec3 d) {
   vec2 uv = cartesianToEquirect(d);
   return textureLinear(backgroundMap, uv).rgb;
+}
+
+vec3 applyFog(vec3 li, float distance, vec3 direction, inout vec3 beta) {
+  #ifdef FOG_SCALE
+    #ifdef FOG_NEAR
+      distance = max(0.0, distance - FOG_NEAR);
+    #endif
+    #ifdef EXP_FOG
+      float fogWeight = 1.0 / pow(2.0, distance * (1.0 / FOG_SCALE));
+    #else
+      float fogWeight = max(0.0, 1.0 - ((max(0.0, distance)) / FOG_SCALE));
+      fogWeight = pow(fogWeight, 2.0);
+    #endif
+    vec3 fogColor = sampleBackgroundFromDirection(direction);
+    beta *= fogWeight;
+    return mix(fogColor, li, fogWeight);
+  #endif
+
+  return li;
 }
 
 `;
@@ -2844,255 +2881,211 @@ float powerHeuristic(float f, float g) {
 
   var sampleMaterial = `
 
-vec3 importanceSampleLight(SurfaceInteraction si, vec3 viewDir, bool lastBounce, vec2 random) {
-  vec3 li;
+void sampleMaterial(SurfaceInteraction si, int bounce, inout Path path) {
+  bool lastBounce = bounce == BOUNCES;
+  mat3 basis = orthonormalBasis(si.normal);
+  vec3 viewDir = -path.ray.d;
 
-  float lightPdf;
+  float originalRayDistance = path.ray.distance;
+  vec3 originalRayDirection = path.ray.d;
+
+  MaterialSamples samples = getRandomMaterialSamples();
+
+  vec2 diffuseOrSpecular = samples.s1;
+  vec2 lightDirSample = samples.s2;
+  vec2 bounceDirSample = samples.s3;
+
+  // Step 1: Add direct illumination of the light source (the hdr map)
+  // On every bounce but the last, importance sample the light source
+  // On the last bounce, multiple importance sample the brdf AND the light source, determined by random var
+
+  vec3 lightDir;
   vec2 uv;
-  vec3 lightDir = sampleEnvmap(random, uv, lightPdf);
+  float lightPdf;
+  bool brdfSample = false;
+
+
+  if (lastBounce && diffuseOrSpecular.x < 0.5) {
+    // reuse this sample by multiplying by 2 to bring sample from [0, 0.5), to [0, 1)
+    lightDir = 2.0 * diffuseOrSpecular.x < mix(0.5, 0.0, si.metalness) ?
+      lightDirDiffuse(si.faceNormal, viewDir, basis, lightDirSample) :
+      lightDirSpecular(si.faceNormal, viewDir, basis, si.roughness, lightDirSample);
+
+    uv = cartesianToEquirect(lightDir);
+    lightPdf = envmapPdf(uv);
+    brdfSample = true;
+  } else {
+    lightDir = sampleEnvmap(lightDirSample, uv, lightPdf);
+  }
 
   float cosThetaL = dot(si.normal, lightDir);
 
-  float orientation = dot(si.faceNormal, viewDir) * cosThetaL;
-  if (orientation < 0.0) {
-    return li;
-  }
-
-  float diffuseWeight = 1.0;
-  Ray ray;
-  initRay(ray, si.position + EPS * lightDir, lightDir);
-  if (intersectSceneShadow(ray)) {
-    if (lastBounce) {
-      diffuseWeight = 0.0;
-    } else {
-      return li;
-    }
-  }
-
-  vec3 irr = textureLinear(envmap, uv).xyz;
-
-  float scatteringPdf;
-  vec3 brdf = materialBrdf(si, viewDir, lightDir, cosThetaL, diffuseWeight, scatteringPdf);
-
-  float weight = powerHeuristic(lightPdf, scatteringPdf);
-
-  li = brdf * irr * abs(cosThetaL) * weight / lightPdf;
-
-  return li;
-}
-
-vec3 importanceSampleMaterial(SurfaceInteraction si, vec3 viewDir, bool lastBounce, vec3 lightDir) {
-  vec3 li;
-
-  float cosThetaL = dot(si.normal, lightDir);
+  float occluded = 1.0;
 
   float orientation = dot(si.faceNormal, viewDir) * cosThetaL;
   if (orientation < 0.0) {
-    return li;
+    // light dir points towards surface. invalid dir.
+    occluded = 0.0;
   }
 
   float diffuseWeight = 1.0;
-  Ray ray;
-  initRay(ray, si.position + EPS * lightDir, lightDir);
-  if (intersectSceneShadow(ray)) {
+
+  initRay(path.ray, si.position + EPS * lightDir, lightDir);
+  if (intersectSceneShadow(path.ray)) {
     if (lastBounce) {
       diffuseWeight = 0.0;
     } else {
-      return li;
+      occluded = 0.0;
     }
   }
-
-  vec2 uv = cartesianToEquirect(lightDir);
-
-  float lightPdf = envmapPdf(uv);
 
   vec3 irr = textureLinear(envmap, uv).rgb;
 
   float scatteringPdf;
   vec3 brdf = materialBrdf(si, viewDir, lightDir, cosThetaL, diffuseWeight, scatteringPdf);
 
-  float weight = powerHeuristic(scatteringPdf, lightPdf);
+  float weight;
+  if (lastBounce) {
+    weight = brdfSample ?
+      2.0 * powerHeuristic(scatteringPdf, lightPdf) / scatteringPdf :
+      2.0 * powerHeuristic(lightPdf, scatteringPdf) / lightPdf;
+  } else {
+    weight = powerHeuristic(lightPdf, scatteringPdf) / lightPdf;
+  }
 
-  li += brdf * irr * abs(cosThetaL) * weight / scatteringPdf;
 
-  return li;
-}
+  vec3 contribution = path.beta * occluded * brdf * irr * abs(cosThetaL) * weight;
+  path.li += applyFog(contribution, originalRayDistance, originalRayDirection, path.beta);
 
-void sampleMaterial(SurfaceInteraction si, int bounce, inout Path path) {
-  mat3 basis = orthonormalBasis(si.normal);
-  vec3 viewDir = -path.ray.d;
-
-  vec2 diffuseOrSpecular = randomSampleVec2();
-
-  vec3 lightDir = diffuseOrSpecular.x < mix(0.5, 0.0, si.metalness) ?
-    lightDirDiffuse(si.faceNormal, viewDir, basis, randomSampleVec2()) :
-    lightDirSpecular(si.faceNormal, viewDir, basis, si.roughness, randomSampleVec2());
-
-  bool lastBounce = bounce == BOUNCES;
-
-  // Add path contribution
-  path.li += path.beta * (
-      importanceSampleLight(si, viewDir, lastBounce, randomSampleVec2()) +
-      importanceSampleMaterial(si, viewDir, lastBounce, lightDir)
-    );
-
-  // Get new path direction
+  // Step 2: Setup ray direction for next bounce by importance sampling the BRDF
 
   if (lastBounce) {
     return;
   }
 
   lightDir = diffuseOrSpecular.y < mix(0.5, 0.0, si.metalness) ?
-    lightDirDiffuse(si.faceNormal, viewDir, basis, randomSampleVec2()) :
-    lightDirSpecular(si.faceNormal, viewDir, basis, si.roughness, randomSampleVec2());
+    lightDirDiffuse(si.faceNormal, viewDir, basis, bounceDirSample) :
+    lightDirSpecular(si.faceNormal, viewDir, basis, si.roughness, bounceDirSample);
 
-  float cosThetaL = dot(si.normal, lightDir);
+  cosThetaL = dot(si.normal, lightDir);
 
-  float scatteringPdf;
-  vec3 brdf = materialBrdf(si, viewDir, lightDir, cosThetaL, 1.0, scatteringPdf);
+  orientation = dot(si.faceNormal, viewDir) * cosThetaL;
+  path.abort = orientation < 0.0;
+
+  if (path.abort) {
+    return;
+  }
+
+  brdf = materialBrdf(si, viewDir, lightDir, cosThetaL, 1.0, scatteringPdf);
+
+  uv = cartesianToEquirect(lightDir);
+  lightPdf = envmapPdf(uv);
+
+  path.misWeight = powerHeuristic(scatteringPdf, lightPdf);
 
   path.beta *= abs(cosThetaL) * brdf / scatteringPdf;
 
-  initRay(path.ray, si.position + EPS * lightDir, lightDir);
-
-  // If new ray direction is pointing into the surface,
-  // the light path is physically impossible and we terminate the path.
-  float orientation = dot(si.faceNormal, viewDir) * cosThetaL;
-  path.abort = orientation < 0.0;
-
   path.specularBounce = false;
-}
 
+  initRay(path.ray, si.position + EPS * lightDir, lightDir);
+}
 `;
 
   var sampleShadowCatcher = `
 
 #ifdef USE_SHADOW_CATCHER
 
-float importanceSampleLightShadowCatcher(SurfaceInteraction si, vec3 viewDir, vec2 random, inout float alpha) {
-  float li;
-
-  float lightPdf;
-  vec2 uv;
-  vec3 lightDir = sampleEnvmap(random, uv, lightPdf);
-
-  float cosThetaL = dot(si.normal, lightDir);
-
-  float orientation = dot(si.faceNormal, viewDir) * cosThetaL;
-  if (orientation < 0.0) {
-    return li;
-  }
-
-  float occluded = 1.0;
-
-  Ray ray;
-  initRay(ray, si.position + EPS * lightDir, lightDir);
-  if (intersectSceneShadow(ray)) {
-    occluded = 0.0;
-  }
-
-  float irr = dot(luminance, textureLinear(envmap, uv).rgb);
-
-  // lambertian BRDF
-  float brdf = INVPI;
-  float scatteringPdf = abs(cosThetaL) * INVPI;
-
-  float weight = powerHeuristic(lightPdf, scatteringPdf);
-
-  float lightEq = irr * brdf * abs(cosThetaL) * weight / lightPdf;
-
-  alpha += lightEq;
-  li += occluded * lightEq;
-
-  return li;
-}
-
-float importanceSampleMaterialShadowCatcher(SurfaceInteraction si, vec3 viewDir, vec3 lightDir, inout float alpha) {
-  float li;
-
-  float cosThetaL = dot(si.normal, lightDir);
-
-  float orientation = dot(si.faceNormal, viewDir) * cosThetaL;
-  if (orientation < 0.0) {
-    return li;
-  }
-
-  float occluded = 1.0;
-
-  Ray ray;
-  initRay(ray, si.position + EPS * lightDir, lightDir);
-  if (intersectSceneShadow(ray)) {
-    occluded = 0.0;
-  }
-
-  vec2 uv = cartesianToEquirect(lightDir);
-
-  float lightPdf = envmapPdf(uv);
-
-  float irr = dot(luminance, textureLinear(envmap, uv).rgb);
-
-  // lambertian BRDF
-  float brdf = INVPI;
-  float scatteringPdf = abs(cosThetaL) * INVPI;
-
-  float weight = powerHeuristic(scatteringPdf, lightPdf);
-
-  float lightEq = irr * brdf * abs(cosThetaL) * weight / scatteringPdf;
-
-  alpha += lightEq;
-  li += occluded * lightEq;
-
-  return li;
-}
-
 void sampleShadowCatcher(SurfaceInteraction si, int bounce, inout Path path) {
+  bool lastBounce = bounce == BOUNCES;
   mat3 basis = orthonormalBasis(si.normal);
   vec3 viewDir = -path.ray.d;
-  vec3 color = bounce > 1 && !path.specularBounce ? sampleEnvmapFromDirection(-viewDir) : sampleBackgroundFromDirection(-viewDir);
+  vec3 color = bounce == 1  || path.specularBounce ? sampleBackgroundFromDirection(-viewDir) : sampleEnvmapFromDirection(-viewDir);
 
-  vec3 lightDir = lightDirDiffuse(si.faceNormal, viewDir, basis, randomSampleVec2());
+  si.color = vec3(1, 1, 1);
 
-  float alphaBounce = 0.0;
+  MaterialSamples samples = getRandomMaterialSamples();
 
-  vec3 li = path.beta * color * (
-      importanceSampleLightShadowCatcher(si, viewDir, randomSampleVec2(), alphaBounce) +
-      importanceSampleMaterialShadowCatcher(si, viewDir, lightDir, alphaBounce)
-    );
+  vec2 diffuseOrSpecular = samples.s1;
+  vec2 lightDirSample = samples.s2;
+  vec2 bounceDirSample = samples.s3;
 
-  // alphaBounce contains the lighting of the shadow catcher *without* shadows
-  alphaBounce = alphaBounce == 0.0 ? 1.0 : alphaBounce;
+  vec3 lightDir;
+  vec2 uv;
+  float lightPdf;
+  bool brdfSample = false;
 
-  // in post processing step, we divide by alpha to obtain the percentage of light relative to shadow for the shadow catcher
-  path.alpha *= alphaBounce;
-
-  // we only want the alpha division to affect the shadow catcher
-  // factor in alpha to the previous light, so that dividing by alpha with the previous light cancels out this contribution
-  path.li *= alphaBounce;
-
-  // add path contribution
-  path.li += li;
-
-  // Get new path direction
-
-  lightDir = lightDirDiffuse(si.faceNormal, viewDir, basis, randomSampleVec2());
+  if (diffuseOrSpecular.x < 0.5) {
+    lightDir = 2.0 * diffuseOrSpecular.x < mix(0.5, 0.0, si.metalness) ?
+      lightDirDiffuse(si.faceNormal, viewDir, basis, lightDirSample) :
+      lightDirSpecular(si.faceNormal, viewDir, basis, si.roughness, lightDirSample);
+    uv = cartesianToEquirect(lightDir);
+    lightPdf = envmapPdf(uv);
+    brdfSample = true;
+  } else {
+    lightDir = sampleEnvmap(lightDirSample, uv, lightPdf);
+  }
 
   float cosThetaL = dot(si.normal, lightDir);
 
-  // lambertian brdf with terms cancelled
-  path.beta *= color;
+  float liContrib = 1.0;
 
-  initRay(path.ray, si.position + EPS * lightDir, lightDir);
-
-  // If new ray direction is pointing into the surface,
-  // the light path is physically impossible and we terminate the path.
   float orientation = dot(si.faceNormal, viewDir) * cosThetaL;
+  if (orientation < 0.0) {
+    liContrib = 0.0;
+  }
+
+  float occluded = 1.0;
+  initRay(path.ray, si.position + EPS * lightDir, lightDir);
+  if (intersectSceneShadow(path.ray)) {
+    occluded = 0.0;
+  }
+
+  float irr = dot(luminance, textureLinear(envmap, uv).rgb);
+
+  float scatteringPdf;
+  vec3 brdf = materialBrdf(si, viewDir, lightDir, cosThetaL, 1.0, scatteringPdf);
+
+  float weight = brdfSample ?
+    2.0 * powerHeuristic(scatteringPdf, lightPdf) / scatteringPdf :
+    2.0 * powerHeuristic(lightPdf, scatteringPdf) / lightPdf;
+
+  float liEq = liContrib * brdf.r * irr * abs(cosThetaL) * weight;
+
+  float alpha = liEq;
+  path.alpha *= alpha;
+  path.li *= alpha;
+
+  path.li += occluded * path.beta * color * liEq;
+
+  if (lastBounce) {
+    return;
+  }
+
+  lightDir = diffuseOrSpecular.y < mix(0.5, 0.0, si.metalness) ?
+    lightDirDiffuse(si.faceNormal, viewDir, basis, bounceDirSample) :
+    lightDirSpecular(si.faceNormal, viewDir, basis, si.roughness, bounceDirSample);
+
+  cosThetaL = dot(si.normal, lightDir);
+
+  orientation = dot(si.faceNormal, viewDir) * cosThetaL;
   path.abort = orientation < 0.0;
+
+  if (path.abort) {
+    return;
+  }
+
+  brdf = materialBrdf(si, viewDir, lightDir, cosThetaL, 1.0, scatteringPdf);
+
+  uv = cartesianToEquirect(lightDir);
+  lightPdf = envmapPdf(uv);
+
+  path.misWeight = 0.0;
+
+  path.beta = color * abs(cosThetaL) * brdf.r / scatteringPdf;
 
   path.specularBounce = false;
 
-  // advance dimension index by unused stratified samples
-  const int usedSamples = 6;
-  sampleIndex += SAMPLES_PER_MATERIAL - usedSamples;
+  initRay(path.ray, si.position + EPS * lightDir, lightDir);
 }
 
 #endif
@@ -3104,16 +3097,22 @@ void sampleShadowCatcher(SurfaceInteraction si, int bounce, inout Path path) {
 #ifdef USE_GLASS
 
 void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
+  bool lastBounce = bounce == BOUNCES;
   vec3 viewDir = -path.ray.d;
   float cosTheta = dot(si.normal, viewDir);
+
+  float originalRayDistance = path.ray.distance;
+  vec3 originalRayDirection = path.ray.d;
+
+  MaterialSamples samples = getRandomMaterialSamples();
+
+  float reflectionOrRefraction = samples.s1.x;
 
   float F = si.materialType == THIN_GLASS ?
     fresnelSchlick(abs(cosTheta), R0) : // thin glass
     fresnelSchlickTIR(cosTheta, R0, IOR); // thick glass
 
   vec3 lightDir;
-
-  float reflectionOrRefraction = randomSample();
 
   if (reflectionOrRefraction < F) {
     lightDir = reflect(-viewDir, si.normal);
@@ -3124,13 +3123,14 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
     path.beta *= si.color;
   }
 
+  path.misWeight = 1.0;
+
   initRay(path.ray, si.position + EPS * lightDir, lightDir);
 
-  // advance sample index by unused stratified samples
-  const int usedSamples = 1;
-  sampleIndex += SAMPLES_PER_MATERIAL - usedSamples;
+  vec3 contribution = lastBounce ? path.beta * sampleBackgroundFromDirection(lightDir) : vec3(0.0);
+  path.li += applyFog(contribution, originalRayDistance, originalRayDirection, path.beta);
 
-  path.li += bounce == BOUNCES ? path.beta * sampleBackgroundFromDirection(lightDir) : vec3(0.0);
+  path.specularBounce = true;
 }
 
 #endif
@@ -3156,36 +3156,41 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
   outputs: ['light'],
   source: (defines) => `
   void bounce(inout Path path, int i, inout SurfaceInteraction si) {
+
     if (!si.hit) {
-      if (path.specularBounce) {
-        path.li += path.beta * sampleBackgroundFromDirection(path.ray.d);
-      }
+      vec3 irr = path.specularBounce ? sampleBackgroundFromDirection(path.ray.d) : sampleEnvmapFromDirection(path.ray.d);
 
+      // hit a light source (the hdr map)
+      // add contribution from light source
+      // path.misWeight is the multiple importance sampled weight of this light source
+      path.li += path.misWeight * path.beta * irr;
       path.abort = true;
-    } else {
-      #ifdef USE_GLASS
-        if (si.materialType == THIN_GLASS || si.materialType == THICK_GLASS) {
-          sampleGlassSpecular(si, i, path);
-        }
-      #endif
-      #ifdef USE_SHADOW_CATCHER
-        if (si.materialType == SHADOW_CATCHER) {
-          sampleShadowCatcher(si, i, path);
-        }
-      #endif
-      if (si.materialType == STANDARD) {
-        sampleMaterial(si, i, path);
-      }
-
-      // Russian Roulette sampling
-      if (i >= 2) {
-        float q = 1.0 - dot(path.beta, luminance);
-        if (randomSample() < q) {
-          path.abort = true;
-        }
-        path.beta /= 1.0 - q;
-      }
+      return;
     }
+
+    #ifdef USE_GLASS
+      if (si.materialType == THIN_GLASS || si.materialType == THICK_GLASS) {
+        sampleGlassSpecular(si, i, path);
+      }
+    #endif
+    #ifdef USE_SHADOW_CATCHER
+      if (si.materialType == SHADOW_CATCHER) {
+        sampleShadowCatcher(si, i, path);
+      }
+    #endif
+    if (si.materialType == STANDARD) {
+      sampleMaterial(si, i, path);
+    }
+
+    // Russian Roulette sampling
+    if (i >= 2) {
+      float q = 1.0 - dot(path.beta, luminance);
+      if (randomSample() < q) {
+        path.abort = true;
+      }
+      path.beta /= 1.0 - q;
+    }
+
   }
 
   // Path tracing integrator as described in
@@ -3198,11 +3203,12 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
     path.beta = vec3(1.0);
     path.specularBounce = true;
     path.abort = false;
+    path.misWeight = 1.0;
 
     SurfaceInteraction si;
 
     // first surface interaction from g-buffer
-    surfaceInteractionDirect(vCoord, si);
+    surfaceInteractionDirect(vCoord, si, path);
 
     // first surface interaction from ray interesction
     // intersectScene(path.ray, si);
@@ -3268,11 +3274,11 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
     // * The resulting image contains only white with some black
     //   All samples are used by the shader. Correct result!
 
-    // fragColor = vec4(0, 0, 0, 1);
+    // out_light = vec4(0, 0, 0, 1);
     // if (sampleIndex == SAMPLING_DIMENSIONS) {
-    //   fragColor = vec4(1, 1, 1, 1);
+    //   out_light = vec4(1, 1, 1, 1);
     // } else if (sampleIndex > SAMPLING_DIMENSIONS) {
-    //   fragColor = vec4(1, 0, 0, 1);
+    //   out_light = vec4(1, 0, 0, 1);
     // }
 }
 `
@@ -3388,15 +3394,14 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
       materialBuffer,
       mergedMesh,
       optionalExtensions,
+      fogParams,
     }) {
-
-    bounces = clamp(bounces, 1, 6);
 
     const samplingDimensions = [];
 
     for (let i = 1; i <= bounces; i++) {
-      // specular or diffuse reflection, light importance sampling, material sampling, next path direction
-      samplingDimensions.push(2, 2, 2, 2);
+      // specular or diffuse reflection, light importance sampling, next path direction
+      samplingDimensions.push(2, 2, 2);
       if (i >= 2) {
         // russian roulette sampling
         // this step is skipped on the first bounce
@@ -3407,7 +3412,7 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
     let samples;
 
     const renderPass = makeRenderPassFromScene({
-      bounces, decomposedScene, fullscreenQuad, gl, materialBuffer, mergedMesh, optionalExtensions, samplingDimensions,
+      bounces, decomposedScene, fullscreenQuad, gl, materialBuffer, mergedMesh, optionalExtensions, samplingDimensions, fogParams,
     });
 
     function setSize(width, height) {
@@ -3493,12 +3498,22 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
       mergedMesh,
       optionalExtensions,
       samplingDimensions,
+      fogParams,
     }) {
     const { OES_texture_float_linear } = optionalExtensions;
 
     const { background, directionalLights, ambientLights, environmentLights } = decomposedScene;
 
     const { geometry, materials, materialIndices } = mergedMesh;
+
+    let {
+      fogScale,
+      fogNear,
+      useExpFog,
+    } = fogParams;
+    fogNear = clamp(fogNear, 0, 9999).toFixed(1);
+    fogScale = clamp(fogScale, 0, 9999).toFixed(1);
+    bounces = clamp(bounces, 1, 6);
 
     // create bounding volume hierarchy from a static scene
     const bvh = bvhAccel(geometry);
@@ -3516,6 +3531,9 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
         USE_GLASS: materials.some(m => m.transparent),
         USE_SHADOW_CATCHER: materials.some(m => m.shadowCatcher),
         SAMPLING_DIMENSIONS: samplingDimensions.reduce((a, b) => a + b),
+        FOG_SCALE: fogScale,
+        FOG_NEAR: fogNear,
+        EXP_FOG: useExpFog,
         ...materialBuffer.defines
       },
       fragment: fragment$1,
@@ -4082,17 +4100,27 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
       optionalExtensions,
       scene,
       toneMappingParams,
-      bounces, // number of global illumination bounces
+      renderingParams,
     }) {
 
-    const maxReprojectedSamples = 20;
+    const maxReprojectedSamples = renderingParams.reprojectedSamples;
 
     // how many samples to render with uniform noise before switching to stratified noise
-    const numUniformSamples = 4;
+    const numUniformSamples = renderingParams.initialUniformSamples;
 
     // how many partitions of stratified noise should be created
     // higher number results in faster convergence over time, but with lower quality initial samples
     const strataCount = 6;
+
+    const desiredTimeForPreview = renderingParams.previewTime;
+
+    const fogParams = {
+      fogScale: renderingParams.fogScale,
+      fogNear: renderingParams.fogNear,
+      useExpFog: renderingParams.useExpFog,
+    };
+
+    const bounces = renderingParams.bounces; // number of global illumination bounces
 
     const decomposedScene = decomposeScene(scene);
 
@@ -4102,7 +4130,7 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
 
     const fullscreenQuad = makeFullscreenQuad(gl);
 
-    const rayTracePass = makeRayTracePass(gl, { bounces, decomposedScene, fullscreenQuad, materialBuffer, mergedMesh, optionalExtensions, scene });
+    const rayTracePass = makeRayTracePass(gl, { bounces, decomposedScene, fullscreenQuad, materialBuffer, mergedMesh, optionalExtensions, fogParams });
 
     const reprojectPass = makeReprojectPass(gl, { fullscreenQuad, maxReprojectedSamples });
 
@@ -4223,7 +4251,6 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
     }
 
     function setPreviewBufferDimensions() {
-      const desiredTimeForPreview = 10;
       const numPixelsForPreview = desiredTimeForPreview / tileRender.getTimePerPixel();
 
       const aspectRatio = screenWidth / screenHeight;
@@ -4521,6 +4548,12 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
       toneMapping: THREE$1.LinearToneMapping,
       toneMappingExposure: 1,
       toneMappingWhitePoint: 1,
+      reprojectedSamples: 20,
+      initialUniformSamples: 10,
+      previewTime: 25,
+      fogScale: 200,
+      fogNear: 50,
+      useExpFog: true,
     };
 
     function initScene(scene) {
@@ -4532,9 +4565,17 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
         toneMapping: module.toneMapping
       };
 
-      const bounces = module.bounces;
+      const renderingParams = {
+        reprojectedSamples: module.reprojectedSamples,
+        initialUniformSamples: module.initialUniformSamples,
+        previewTime: module.previewTime,
+        fogScale: module.fogScale,
+        fogNear: module.fogNear,
+        useExpFog: module.useExpFog,
+        bounces: module.bounces,
+      };
 
-      pipeline = makeRenderingPipeline({gl, optionalExtensions, scene, toneMappingParams, bounces});
+      pipeline = makeRenderingPipeline({gl, optionalExtensions, scene, toneMappingParams, renderingParams});
 
       pipeline.onSampleRendered = (...args) => {
         if (module.onSampleRendered) {
