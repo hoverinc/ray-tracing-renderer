@@ -197,6 +197,8 @@ function init() {
     const geo = new THREE.PlaneBufferGeometry(1000, 1000);
     const mat = new THREE.MeshStandardMaterial();
     mat.shadowCatcher = true;
+    mat.roughness = 0.5;
+    mat.metalness = 0.0;
     const mesh = new THREE.Mesh(geo, mat);
     mesh.rotateX(Math.PI / 2);
     model.add(mesh);

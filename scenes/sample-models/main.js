@@ -105,7 +105,7 @@ function createGroundMesh() {
   const geo = new THREE.PlaneBufferGeometry(100, 100);
   const mat = new THREE.MeshStandardMaterial();
   mat.color.set(0xffffff);
-  mat.roughness = 1.0;
+  mat.roughness = 0.5;
   mat.metalness = 0.0;
   mat.shadowCatcher = true;
   const mesh = new THREE.Mesh(geo, mat);

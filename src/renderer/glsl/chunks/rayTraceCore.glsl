@@ -4,8 +4,6 @@ export default `
   #define THICK_GLASS 2
   #define SHADOW_CATCHER 3
 
-  #define SAMPLES_PER_MATERIAL 8
-
   const float IOR = 1.5;
   const float INV_IOR = 1.0 / IOR;
 
@@ -71,11 +69,11 @@ export default `
   struct Path {
     Ray ray;
     vec3 li;
-    vec3 albedo;
     float alpha;
     vec3 beta;
     bool specularBounce;
     bool abort;
+    float misWeight;
   };
 
   uniform Camera camera;

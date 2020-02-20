@@ -30,6 +30,8 @@ export function makeRenderingPipeline({
   // higher number results in faster convergence over time, but with lower quality initial samples
   const strataCount = 6;
 
+  const desiredTimeForPreview = 14;
+
   const decomposedScene = decomposeScene(scene);
 
   const mergedMesh = mergeMeshesToGeometry(decomposedScene.meshes);
@@ -159,7 +161,6 @@ export function makeRenderingPipeline({
   }
 
   function setPreviewBufferDimensions() {
-    const desiredTimeForPreview = 10;
     const numPixelsForPreview = desiredTimeForPreview / tileRender.getTimePerPixel();
 
     const aspectRatio = screenWidth / screenHeight;

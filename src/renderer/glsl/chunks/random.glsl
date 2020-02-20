@@ -33,4 +33,20 @@ float randomSample() {
 vec2 randomSampleVec2() {
   return vec2(randomSample(), randomSample());
 }
+
+struct MaterialSamples {
+  vec2 s1;
+  vec2 s2;
+  vec2 s3;
+};
+
+MaterialSamples getRandomMaterialSamples() {
+  MaterialSamples samples;
+
+  samples.s1 = randomSampleVec2();
+  samples.s2 = randomSampleVec2();
+  samples.s3 = randomSampleVec2();
+
+  return samples;
+}
 `;
