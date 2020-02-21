@@ -1,7 +1,9 @@
 import { clamp } from './util';
 import { Vector2 } from 'three';
 
-export function makeRenderSize(gl, timePerFrame = 21) {
+export function makeRenderSize(gl) {
+  const timePerFrame = 21;
+
   let fullWidth;
   let fullHeight;
 
@@ -33,9 +35,9 @@ export function makeRenderSize(gl, timePerFrame = 21) {
     const elapsed = time - lastTime;
     const pixelsPerTime = renderWidth * renderHeight / elapsed;
 
-    const expAvg = 0.99999;
+    const expAvg = 0.7;
     pixelsPerFrame = expAvg * pixelsPerFrame + (1 - expAvg) * timePerFrame * pixelsPerTime;
-    pixelsPerFrame = clamp(timePerFrame * pixelsPerTime, 2048, maxPixelsPerFrame);
+    pixelsPerFrame = clamp(pixelsPerFrame, 2048, maxPixelsPerFrame);
   }
 
   function benchmark() {

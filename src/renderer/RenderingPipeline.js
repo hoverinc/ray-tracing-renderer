@@ -33,7 +33,7 @@ export function makeRenderingPipeline({
 
   // tile rendering can cause the GPU to stutter, throwing off future benchmarks for the preview frames
   // wait to measure performance until this number of frames have been rendered
-  const previewFramesBeforeBenchmark = 5;
+  const previewFramesBeforeBenchmark = 3;
 
   // used to sample only a portion of the scene to the HDR Buffer to prevent the GPU from locking up from excessive computation
   const tileRender = makeTileRender(gl);
