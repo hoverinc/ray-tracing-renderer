@@ -1,7 +1,7 @@
 import { clamp } from './util';
 import { Vector2 } from 'three';
 
-export function makeRenderScale(gl, timePerFrame = 21) {
+export function makeRenderSize(gl, timePerFrame = 21) {
   let fullWidth;
   let fullHeight;
 

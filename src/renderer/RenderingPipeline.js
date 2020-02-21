@@ -5,7 +5,7 @@ import { makeGBufferPass } from './GBufferPass';
 import { makeMaterialBuffer } from './MaterialBuffer';
 import { mergeMeshesToGeometry } from './mergeMeshesToGeometry';
 import { makeRayTracePass } from './RayTracePass';
-import { makeRenderScale } from './RenderScale';
+import { makeRenderSize } from './RenderSize';
 import { makeReprojectPass } from './ReprojectPass';
 import { makeToneMapPass } from './ToneMapPass';
 import { clamp, numberArraysEqual } from './util';
@@ -38,6 +38,8 @@ export function makeRenderingPipeline({
   // used to sample only a portion of the scene to the HDR Buffer to prevent the GPU from locking up from excessive computation
   const tileRender = makeTileRender(gl);
 
+  const previewSize = makeRenderSize(gl);
+
   const decomposedScene = decomposeScene(scene);
 
   const mergedMesh = mergeMeshesToGeometry(decomposedScene.meshes);
@@ -53,9 +55,6 @@ export function makeRenderingPipeline({
   const toneMapPass = makeToneMapPass(gl, { fullscreenQuad, toneMappingParams });
 
   const gBufferPass = makeGBufferPass(gl, { materialBuffer, mergedMesh });
-
-
-  const previewSize = makeRenderScale(gl);
 
   let ready = false;
   const noiseImage = new Image();
