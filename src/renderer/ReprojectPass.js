@@ -34,9 +34,11 @@ export function makeReprojectPass(gl, params) {
       light,
       lightScale,
       position,
+      normal,
       previousLight,
       previousLightScale,
       previousPosition,
+      previousNormal,
     } = params;
 
     renderPass.setUniform('blendAmount', blendAmount);
@@ -45,8 +47,10 @@ export function makeReprojectPass(gl, params) {
 
     renderPass.setTexture('light', light);
     renderPass.setTexture('position', position);
+    renderPass.setTexture('normal', normal);
     renderPass.setTexture('previousLight', previousLight);
     renderPass.setTexture('previousPosition', previousPosition);
+    renderPass.setTexture('previousNormal', previousNormal);
 
     renderPass.useProgram();
     fullscreenQuad.draw();

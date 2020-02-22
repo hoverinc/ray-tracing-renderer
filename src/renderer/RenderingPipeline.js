@@ -285,9 +285,11 @@ export function makeRenderingPipeline({
       light: hdrBuffer.color[0],
       lightScale: previewScale,
       position: gBuffer.color[gBufferPass.outputLocs.position],
+      normal: gBuffer.color[gBufferPass.outputLocs.normal],
       previousLight: lastToneMappedTexture,
       previousLightScale: lastToneMappedScale,
       previousPosition: gBufferBack.color[gBufferPass.outputLocs.position],
+      previousNormal: gBufferBack.color[gBufferPass.outputLocs.normal],
     });
     reprojectBuffer.unbind();
 
@@ -327,9 +329,11 @@ export function makeRenderingPipeline({
           light: hdrBuffer.color[0],
           lightScale: fullscreenScale,
           position: gBuffer.color[gBufferPass.outputLocs.position],
+          normal: gBuffer.color[gBufferPass.outputLocs.normal],
           previousLight: reprojectBackBuffer.color[0],
           previousLightScale: previewScale,
           previousPosition: gBufferBack.color[gBufferPass.outputLocs.position],
+          previousNormal: gBufferBack.color[gBufferPass.outputLocs.normal],
         });
         reprojectBuffer.unbind();
 
@@ -393,9 +397,11 @@ export function makeRenderingPipeline({
       light: hdrBuffer.color[0],
       lightScale: fullscreenScale,
       position: gBuffer.color[gBufferPass.outputLocs.position],
+      normal: gBuffer.color[gBufferPass.outputLocs.normal],
       previousLight: lastToneMappedTexture,
       previousLightScale: lastToneMappedScale,
       previousPosition: gBufferBack.color[gBufferPass.outputLocs.position],
+      previousNormal: gBufferBack.color[gBufferPass.outputLocs.normal],
     });
     reprojectBuffer.unbind();
 

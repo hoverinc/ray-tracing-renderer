@@ -40,10 +40,11 @@ export function makeToneMapPass(gl, params) {
       position
     } = params;
 
-    const renderPass =
-      lightScale.x !== 1 && lightScale.y !== 1 ?
-      renderPassUpscale :
-      renderPassNative;
+    // const renderPass =
+      // lightScale.x !== 1 && lightScale.y !== 1 ?
+      // renderPassUpscale :
+      // renderPassNative;
+    const renderPass = renderPassNative;
 
     renderPass.setUniform('lightScale', lightScale.x, lightScale.y);
     renderPass.setTexture('light', light);
