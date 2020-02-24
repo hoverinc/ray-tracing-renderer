@@ -37,6 +37,7 @@ export function makeToneMapPass(gl, params) {
     const {
       light,
       lightScale,
+      albedo,
       position
     } = params;
 
@@ -48,6 +49,7 @@ export function makeToneMapPass(gl, params) {
     renderPass.setUniform('lightScale', lightScale.x, lightScale.y);
     renderPass.setTexture('light', light);
     renderPass.setTexture('position', position);
+    renderPass.setTexture('albedo', albedo);
 
     renderPass.useProgram();
     fullscreenQuad.draw();

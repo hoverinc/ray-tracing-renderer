@@ -60,11 +60,11 @@ export function makeRayTracePass(gl, {
     renderPass.setUniform('jitter', x, y);
   }
 
-  function setGBuffers({ position, normal, faceNormal, color, matProps }) {
+  function setGBuffers({ position, normal, faceNormal, albedo, matProps }) {
     renderPass.setTexture('gPosition', position);
     renderPass.setTexture('gNormal', normal);
     renderPass.setTexture('gFaceNormal', faceNormal);
-    renderPass.setTexture('gColor', color);
+    renderPass.setTexture('gAlbedo', albedo);
     renderPass.setTexture('gMatProps', matProps);
   }
 

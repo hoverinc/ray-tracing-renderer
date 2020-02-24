@@ -23,7 +23,7 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
     lightDir = si.materialType == THIN_GLASS ?
       refract(-viewDir, sign(cosTheta) * si.normal, INV_IOR_THIN) : // thin glass
       refract(-viewDir, sign(cosTheta) * si.normal, cosTheta < 0.0 ? IOR : INV_IOR); // thick glass
-    path.beta *= si.color;
+    path.beta *= si.albedo;
   }
 
   path.misWeight = 1.0;

@@ -49,7 +49,7 @@ vec3 glassRefraction(SurfaceInteraction si, vec3 viewDir, vec3 lightDir, float c
 
   pdf = abs(D * cosThetaH * eta * eta * cosThetaLH / (sqrtDenom * sqrtDenom));
 
-  return si.color * (1.0 - F) * abs(D * G * eta * eta * cosThetaLH * cosThetaVH / (cosThetaL * cosThetaV * sqrtDenom * sqrtDenom));
+  return si.albedo * (1.0 - F) * abs(D * G * eta * eta * cosThetaLH * cosThetaVH / (cosThetaL * cosThetaV * sqrtDenom * sqrtDenom));
 }
 
 vec3 lightDirRefraction(vec3 normal, vec3 viewDir, mat3 basis, float roughness, vec2 random) {

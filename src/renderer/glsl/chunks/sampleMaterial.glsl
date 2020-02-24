@@ -62,6 +62,10 @@ void sampleMaterial(SurfaceInteraction si, int bounce, inout Path path) {
   float scatteringPdf;
   vec3 brdf = materialBrdf(si, viewDir, lightDir, cosThetaL, diffuseWeight, scatteringPdf);
 
+  if (bounce == 1) {
+    brdf /= (si.albedo + 0.00001);
+  }
+
   float weight;
   if (lastBounce) {
     weight = brdfSample ?
@@ -71,7 +75,7 @@ void sampleMaterial(SurfaceInteraction si, int bounce, inout Path path) {
     weight = powerHeuristic(lightPdf, scatteringPdf) / lightPdf;
   }
 
-  path.li += path.beta * occluded * brdf * irr * abs(cosThetaL) * weight;;
+  path.li += path.beta * occluded * brdf * irr * abs(cosThetaL) * weight;
 
   // Step 2: Setup ray direction for next bounce by importance sampling the BRDF
 
@@ -93,6 +97,10 @@ void sampleMaterial(SurfaceInteraction si, int bounce, inout Path path) {
   }
 
   brdf = materialBrdf(si, viewDir, lightDir, cosThetaL, 1.0, scatteringPdf);
+
+  if (bounce == 1) {
+    brdf /= (si.albedo + 0.00001);
+  }
 
   uv = cartesianToEquirect(lightDir);
   lightPdf = envmapPdf(uv);

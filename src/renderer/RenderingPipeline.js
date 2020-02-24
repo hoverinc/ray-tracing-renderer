@@ -113,7 +113,7 @@ export function makeRenderingPipeline({
         [gBufferPass.outputLocs.position]: makeTexture(gl, { width, height, storage: 'float' }),
         [gBufferPass.outputLocs.normal]: normalBuffer,
         [gBufferPass.outputLocs.faceNormal]: faceNormalBuffer,
-        [gBufferPass.outputLocs.color]: colorBuffer,
+        [gBufferPass.outputLocs.albedo]: colorBuffer,
         [gBufferPass.outputLocs.matProps]: matProps,
       },
       depth: depthTarget
@@ -180,11 +180,11 @@ export function makeRenderingPipeline({
   function updateSeed(width, height, useJitter = true) {
     rayTracePass.setSize(width, height);
 
-    const jitterX = useJitter ? (Math.random() - 0.5) / width : 0;
-    const jitterY = useJitter ? (Math.random() - 0.5) / height : 0;
-    gBufferPass.setJitter(jitterX, jitterY);
-    rayTracePass.setJitter(jitterX, jitterY);
-    reprojectPass.setJitter(jitterX, jitterY);
+    // const jitterX = useJitter ? (Math.random() - 0.5) / width : 0;
+    // const jitterY = useJitter ? (Math.random() - 0.5) / height : 0;
+    // gBufferPass.setJitter(jitterX, jitterY);
+    // rayTracePass.setJitter(jitterX, jitterY);
+    // reprojectPass.setJitter(jitterX, jitterY);
 
     if (sampleCount === 0) {
       rayTracePass.setStrataCount(1);
@@ -228,6 +228,7 @@ export function makeRenderingPipeline({
       light: lightTexture,
       lightScale,
       position: gBuffer.color[gBufferPass.outputLocs.position],
+      albedo: gBuffer.color[gBufferPass.outputLocs.albedo]
     });
 
     lastToneMappedTexture = lightTexture;
@@ -245,7 +246,7 @@ export function makeRenderingPipeline({
       position: gBuffer.color[gBufferPass.outputLocs.position],
       normal: gBuffer.color[gBufferPass.outputLocs.normal],
       faceNormal: gBuffer.color[gBufferPass.outputLocs.faceNormal],
-      color: gBuffer.color[gBufferPass.outputLocs.color],
+      albedo: gBuffer.color[gBufferPass.outputLocs.albedo],
       matProps: gBuffer.color[gBufferPass.outputLocs.matProps]
     });
   }

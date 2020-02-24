@@ -7,6 +7,7 @@ source: `
   in vec2 vCoord;
 
   uniform sampler2D light;
+  uniform sampler2D albedo;
   uniform sampler2D position;
 
   uniform vec2 lightScale;
@@ -100,6 +101,8 @@ source: `
     // dividing by alpha normalizes the brightness of the shadow catcher to match the background envmap.
     vec3 light = upscaledLight.rgb / upscaledLight.a;
 
+    light *= texture(albedo, vCoord).rgb;
+
     light *= EXPOSURE;
 
     light = TONE_MAPPING(light);
@@ -107,6 +110,7 @@ source: `
     light = pow(light, vec3(1.0 / 2.2)); // gamma correction
 
     out_color = vec4(light, 1.0);
+    // out_color = vec4(texture(albedo, vCoord).rgb, 1.0);
   }
 `
 }

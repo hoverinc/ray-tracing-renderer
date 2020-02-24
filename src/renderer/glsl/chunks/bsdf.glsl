@@ -88,7 +88,7 @@ vec3 materialBrdf(SurfaceInteraction si, vec3 viewDir, vec3 lightDir, float cosT
 
   pdf = mix(0.5 * (specularPdf + diffusePdf), specularPdf, si.metalness);
 
-  return mix(si.color * diffuse + specular, si.color * specular, si.metalness);
+  return mix(si.albedo * diffuse + specular, si.albedo * specular, si.metalness);
 }
 
 `;

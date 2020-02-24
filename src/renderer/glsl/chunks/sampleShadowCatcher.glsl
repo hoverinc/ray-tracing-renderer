@@ -6,9 +6,9 @@ void sampleShadowCatcher(SurfaceInteraction si, int bounce, inout Path path) {
   bool lastBounce = bounce == BOUNCES;
   mat3 basis = orthonormalBasis(si.normal);
   vec3 viewDir = -path.ray.d;
-  vec3 color = bounce == 1  || path.specularBounce ? sampleBackgroundFromDirection(-viewDir) : sampleEnvmapFromDirection(-viewDir);
+  vec3 albedo = bounce == 1  || path.specularBounce ? sampleBackgroundFromDirection(-viewDir) : sampleEnvmapFromDirection(-viewDir);
 
-  si.color = vec3(1, 1, 1);
+  si.albedo = vec3(1, 1, 1);
 
   MaterialSamples samples = getRandomMaterialSamples();
 
@@ -62,7 +62,7 @@ void sampleShadowCatcher(SurfaceInteraction si, int bounce, inout Path path) {
   path.alpha *= alpha;
   path.li *= alpha;
 
-  path.li += occluded * path.beta * color * liEq;
+  path.li += occluded * path.beta * albedo * liEq;
 
   if (lastBounce) {
     return;
@@ -88,7 +88,7 @@ void sampleShadowCatcher(SurfaceInteraction si, int bounce, inout Path path) {
 
   path.misWeight = 0.0;
 
-  path.beta = color * abs(cosThetaL) * brdf.r / scatteringPdf;
+  path.beta = albedo * abs(cosThetaL) * brdf.r / scatteringPdf;
 
   path.specularBounce = false;
 

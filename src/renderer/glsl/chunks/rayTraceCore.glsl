@@ -29,7 +29,7 @@ export default `
     vec3 position;
     vec3 normal; // smoothed normal from the three triangle vertices
     vec3 faceNormal; // normal of the triangle
-    vec3 color;
+    vec3 albedo;
     float roughness;
     float metalness;
     int materialType;

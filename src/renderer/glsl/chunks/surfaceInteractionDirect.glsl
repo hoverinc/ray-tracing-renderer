@@ -3,7 +3,7 @@ export default `
   uniform sampler2D gPosition;
   uniform sampler2D gNormal;
   uniform sampler2D gFaceNormal;
-  uniform sampler2D gColor;
+  uniform sampler2D gAlbedo;
   uniform sampler2D gMatProps;
 
   void surfaceInteractionDirect(vec2 coord, inout SurfaceInteraction si) {
@@ -20,7 +20,7 @@ export default `
 
     si.faceNormal = normalize(texture(gFaceNormal, coord).xyz);
 
-    si.color = texture(gColor, coord).rgb;
+    si.albedo = texture(gAlbedo, coord).rgb;
 
     vec4 matProps = texture(gMatProps, coord);
     si.roughness = matProps.x;

@@ -1,7 +1,7 @@
 export default `
 
 uniform Materials {
-  vec4 colorAndMaterialType[NUM_MATERIALS];
+  vec4 albedoAndMaterialType[NUM_MATERIALS];
   vec4 roughnessMetalnessNormalScale[NUM_MATERIALS];
 
   #if defined(NUM_DIFFUSE_MAPS) || defined(NUM_NORMAL_MAPS) || defined(NUM_PBR_MAPS)
@@ -30,20 +30,20 @@ uniform Materials {
 #endif
 
 float getMatType(int materialIndex) {
-  return materials.colorAndMaterialType[materialIndex].w;
+  return materials.albedoAndMaterialType[materialIndex].w;
 }
 
-vec3 getMatColor(int materialIndex, vec2 uv) {
-  vec3 color = materials.colorAndMaterialType[materialIndex].rgb;
+vec3 getMatAlbedo(int materialIndex, vec2 uv) {
+  vec3 albedo = materials.albedoAndMaterialType[materialIndex].rgb;
 
   #ifdef NUM_DIFFUSE_MAPS
     int diffuseMapIndex = materials.diffuseNormalRoughnessMetalnessMapIndex[materialIndex].x;
     if (diffuseMapIndex >= 0) {
-      color *= texture(diffuseMap, vec3(uv * materials.diffuseNormalMapSize[diffuseMapIndex].xy, diffuseMapIndex)).rgb;
+      albedo *= texture(diffuseMap, vec3(uv * materials.diffuseNormalMapSize[diffuseMapIndex].xy, diffuseMapIndex)).rgb;
     }
   #endif
 
-  return color;
+  return albedo;
 }
 
 float getMatRoughness(int materialIndex, vec2 uv) {

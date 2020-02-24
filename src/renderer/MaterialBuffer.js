@@ -13,7 +13,7 @@ export function makeMaterialBuffer(gl, materials) {
 
   const bufferData = {};
 
-  bufferData.color = materials.map(m => m.color);
+  bufferData.albedo = materials.map(m => m.color);
   bufferData.roughness = materials.map(m => m.roughness);
   bufferData.metalness = materials.map(m => m.metalness);
   bufferData.normalScale = materials.map(m => m.normalScale);
@@ -125,8 +125,8 @@ function maxImageSize(images) {
 function uploadToUniformBuffer(gl, program, bufferData) {
   const materialBuffer = makeUniformBuffer(gl, program, 'Materials');
 
-  materialBuffer.set('Materials.colorAndMaterialType[0]', interleave(
-    { data: [].concat(...bufferData.color.map(d => d.toArray())), channels: 3 },
+  materialBuffer.set('Materials.albedoAndMaterialType[0]', interleave(
+    { data: [].concat(...bufferData.albedo.map(d => d.toArray())), channels: 3 },
     { data: bufferData.type, channels: 1}
   ));
 
