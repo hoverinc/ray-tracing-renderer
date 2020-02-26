@@ -88,7 +88,7 @@ function makeTextureArray(gl, textures, gammaCorrection = false) {
     data: images,
     flipY,
     channels: 3,
-    minFilter: gl.NEAREST_MIPMAP_LINEAR,
+    minFilter: gl.LINEAR_MIPMAP_LINEAR,
     magFilter: gl.LINEAR,
   });
 

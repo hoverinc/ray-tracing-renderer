@@ -9,6 +9,7 @@ const glRequiredExtensions = [
 
 const glOptionalExtensions = [
   'OES_texture_float_linear', // enables gl.LINEAR texture filtering for float textures,
+  'EXT_texture_filter_anisotropic',
 ];
 
 export function RayTracingRenderer(params = {}) {

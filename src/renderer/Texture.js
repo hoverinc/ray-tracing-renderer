@@ -1,5 +1,8 @@
 import { clamp } from './util';
 
+const TEXTURE_MAX_ANISOTROPY_EXT = 0x84FE;
+const MAX_TEXTURE_MAX_ANISOTROPY_EXT = 0x84FF;
+
 export function makeTexture(gl, params) {
   let {
     width = null,
@@ -45,10 +48,21 @@ export function makeTexture(gl, params) {
   gl.activeTexture(gl.TEXTURE0);
   gl.bindTexture(target, texture);
 
+  const useMipmaps =
+    minFilter === gl.NEAREST_MIPMAP_NEAREST ||
+    minFilter === gl.NEAREST_MIPMAP_LINEAR ||
+    minFilter === gl.LINEAR_MIPMAP_NEAREST ||
+    minFilter === gl.LINEAR_MIPMAP_LINEAR;
+
   gl.texParameteri(target, gl.TEXTURE_WRAP_S, wrapS);
   gl.texParameteri(target, gl.TEXTURE_WRAP_T, wrapT);
   gl.texParameteri(target, gl.TEXTURE_MIN_FILTER, minFilter);
   gl.texParameteri(target, gl.TEXTURE_MAG_FILTER, magFilter);
+
+  if (minFilter === gl.LINEAR_MIPMAP_LINEAR) {
+    const anisotropy = gl.getParameter(MAX_TEXTURE_MAX_ANISOTROPY_EXT);
+    gl.texParameteri(target, TEXTURE_MAX_ANISOTROPY_EXT, anisotropy);
+  }
 
   width = width || data.width || 0;
   height = height || data.height || 0;
@@ -65,16 +79,9 @@ export function makeTexture(gl, params) {
 
   const { type, format, internalFormat } = getTextureFormat(gl, channels, storage, data, gammaCorrection);
 
-  const useMipmaps =
-    minFilter === gl.NEAREST_MIPMAP_NEAREST ||
-    minFilter === gl.NEAREST_MIPMAP_LINEAR ||
-    minFilter === gl.LINEAR_MIPMAP_NEAREST ||
-    minFilter === gl.LINEAR_MIPMAP_LINEAR;
-
   const levels = useMipmaps ?
     Math.floor(Math.log2(Math.max(width, height))) :
     1;
-  // const levels = 1;
 
   if (dataArray) {
     gl.texStorage3D(target, levels, internalFormat, width, height, dataArray.length);
