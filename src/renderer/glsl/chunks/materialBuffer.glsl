@@ -39,7 +39,9 @@ vec3 getMatAlbedo(int materialIndex, vec2 uv) {
   #ifdef NUM_DIFFUSE_MAPS
     int diffuseMapIndex = materials.diffuseNormalRoughnessMetalnessMapIndex[materialIndex].x;
     if (diffuseMapIndex >= 0) {
-      albedo *= texture(diffuseMap, vec3(uv * materials.diffuseNormalMapSize[diffuseMapIndex].xy, diffuseMapIndex)).rgb;
+      vec3 texAlbedo = texture(diffuseMap, vec3(uv * materials.diffuseNormalMapSize[diffuseMapIndex].xy, diffuseMapIndex)).rgb;
+      texAlbedo = pow(texAlbedo, vec3(2.2));
+      albedo *= texAlbedo;
     }
   #endif
 

@@ -1,7 +1,8 @@
+import constants from './chunks/constants.glsl';
 import textureLinear from './chunks/textureLinear.glsl';
 
 export default {
-includes: [textureLinear],
+includes: [constants, textureLinear],
 outputs: ['color'],
 source: `
   in vec2 vCoord;
@@ -101,7 +102,7 @@ source: `
     // dividing by alpha normalizes the brightness of the shadow catcher to match the background envmap.
     vec3 light = upscaledLight.rgb / upscaledLight.a;
 
-    light *= texture(albedo, vCoord).rgb;
+    light *= texture(albedo, vCoord).rgb + EPS;
 
     light *= EXPOSURE;
 

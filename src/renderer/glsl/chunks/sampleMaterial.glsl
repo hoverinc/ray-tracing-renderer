@@ -14,6 +14,10 @@ void sampleMaterial(SurfaceInteraction si, int bounce, inout Path path) {
   vec2 lightDirSample = samples.s2;
   vec2 bounceDirSample = samples.s3;
 
+  // remove surface albedo from first bounce
+  // added back in post-process pass
+  vec3 demodulateAlbedo = bounce == 1 ? 1.0 / (si.albedo + EPS) : vec3(1.0);
+
   // Step 1: Add direct illumination of the light source (the hdr map)
   // On every bounce but the last, importance sample the light source
   // On the last bounce, multiple importance sample the brdf AND the light source, determined by random var
@@ -62,10 +66,6 @@ void sampleMaterial(SurfaceInteraction si, int bounce, inout Path path) {
   float scatteringPdf;
   vec3 brdf = materialBrdf(si, viewDir, lightDir, cosThetaL, diffuseWeight, scatteringPdf);
 
-  if (bounce == 1) {
-    brdf /= (si.albedo + 0.00001);
-  }
-
   float weight;
   if (lastBounce) {
     weight = brdfSample ?
@@ -75,7 +75,7 @@ void sampleMaterial(SurfaceInteraction si, int bounce, inout Path path) {
     weight = powerHeuristic(lightPdf, scatteringPdf) / lightPdf;
   }
 
-  path.li += path.beta * occluded * brdf * irr * abs(cosThetaL) * weight;
+  path.li += path.beta * occluded * brdf * irr * abs(cosThetaL) * weight * demodulateAlbedo;
 
   // Step 2: Setup ray direction for next bounce by importance sampling the BRDF
 
@@ -98,16 +98,12 @@ void sampleMaterial(SurfaceInteraction si, int bounce, inout Path path) {
 
   brdf = materialBrdf(si, viewDir, lightDir, cosThetaL, 1.0, scatteringPdf);
 
-  if (bounce == 1) {
-    brdf /= (si.albedo + 0.00001);
-  }
-
   uv = cartesianToEquirect(lightDir);
   lightPdf = envmapPdf(uv);
 
   path.misWeight = powerHeuristic(scatteringPdf, lightPdf);
 
-  path.beta *= abs(cosThetaL) * brdf / scatteringPdf;
+  path.beta *= abs(cosThetaL) * brdf * demodulateAlbedo / scatteringPdf;
 
   path.specularBounce = false;
 

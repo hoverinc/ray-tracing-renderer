@@ -84,11 +84,11 @@ function makeTextureArray(gl, textures, gammaCorrection = false) {
   const texture = makeTexture(gl, {
     width: maxSize.width,
     height: maxSize.height,
-    gammaCorrection,
+    gammaCorrection: false, // does not work with mipmapping?
     data: images,
     flipY,
     channels: 3,
-    minFilter: gl.LINEAR,
+    minFilter: gl.NEAREST_MIPMAP_LINEAR,
     magFilter: gl.LINEAR,
   });
 
