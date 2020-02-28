@@ -84,7 +84,7 @@ function makeTextureArray(gl, textures, gammaCorrection = false) {
   const texture = makeTexture(gl, {
     width: maxSize.width,
     height: maxSize.height,
-    gammaCorrection: false, // does not work with mipmapping?
+    gammaCorrection: false, // does not work with mip mapping?
     data: images,
     flipY,
     channels: 3,

@@ -102,7 +102,7 @@ source: `
     // dividing by alpha normalizes the brightness of the shadow catcher to match the background envmap.
     vec3 light = upscaledLight.rgb / upscaledLight.a;
 
-    light *= texture(albedo, vCoord).rgb + EPS;
+    // light *= texture(albedo, vCoord).rgb;
 
     light *= EXPOSURE;
 

@@ -93,8 +93,8 @@ export function makeRenderingPipeline({
     });
 
     const makeReprojectBuffer = () => makeFramebuffer(gl, {
-        color: { 0: makeTexture(gl, { width, height, storage: 'float', magFilter: gl.LINEAR, minFilter: gl.LINEAR }) }
-      });
+      color: { 0: makeTexture(gl, { width, height, storage: 'float', magFilter: gl.LINEAR, minFilter: gl.LINEAR }) }
+    });
 
     hdrBuffer = makeHdrBuffer();
     hdrBackBuffer = makeHdrBuffer();
@@ -104,7 +104,7 @@ export function makeRenderingPipeline({
 
     const normalBuffer = makeTexture(gl, { width, height, storage: 'halfFloat' });
     const faceNormalBuffer = makeTexture(gl, { width, height, storage: 'halfFloat' });
-    const colorBuffer = makeTexture(gl, { width, height, storage: 'byte', channels: 3 });
+    const albedoBuffer = makeTexture(gl, { width, height, storage: 'byte', channels: 3});
     const matProps = makeTexture(gl, { width, height, storage: 'byte', channels: 2 });
     const depthTarget = makeDepthTarget(gl, width, height);
 
@@ -113,7 +113,7 @@ export function makeRenderingPipeline({
         [gBufferPass.outputLocs.position]: makeTexture(gl, { width, height, storage: 'float' }),
         [gBufferPass.outputLocs.normal]: normalBuffer,
         [gBufferPass.outputLocs.faceNormal]: faceNormalBuffer,
-        [gBufferPass.outputLocs.albedo]: colorBuffer,
+        [gBufferPass.outputLocs.albedo]: albedoBuffer,
         [gBufferPass.outputLocs.matProps]: matProps,
       },
       depth: depthTarget
