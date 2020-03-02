@@ -2,52 +2,45 @@ import { clamp } from './util';
 import { Vector2 } from 'three';
 
 export function makeRenderSize(gl) {
-  const timePerFrame = 21;
+  const desiredMsPerFrame = 20;
 
   let fullWidth;
   let fullHeight;
 
   let renderWidth;
   let renderHeight;
+  let scale = new Vector2(1, 1);
 
   let pixelsPerFrame = pixelsPerFrameEstimate(gl);
-  let maxPixelsPerFrame;
-
-  let scale = new Vector2(1, 1);
 
   function setSize(w, h) {
     fullWidth = w;
     fullHeight = h;
-    maxPixelsPerFrame = w * h;
-    calcSize();
+    calcDimensions();
   }
 
-  function calcSize() {
+  function calcDimensions() {
     const aspectRatio = fullWidth / fullHeight;
     renderWidth = Math.round(clamp(Math.sqrt(pixelsPerFrame * aspectRatio), 1, fullWidth));
     renderHeight = Math.round(clamp(renderWidth / aspectRatio, 1, fullHeight));
     scale.set(renderWidth / fullWidth, renderHeight / fullHeight);
   }
 
-  let lastTime;
+  function adjustSize(elapsedMs) {
+    if (!elapsedMs) {
+      return;
+    }
 
-  function onBenchmark(time) {
-    const elapsed = time - lastTime;
-    const pixelsPerTime = renderWidth * renderHeight / elapsed;
+    const error = desiredMsPerFrame - elapsedMs;
 
-    const expAvg = 0.7;
-    pixelsPerFrame = expAvg * pixelsPerFrame + (1 - expAvg) * timePerFrame * pixelsPerTime;
-    pixelsPerFrame = clamp(pixelsPerFrame, 2048, maxPixelsPerFrame);
-  }
+    pixelsPerFrame += 600 * error;
+    pixelsPerFrame = clamp(pixelsPerFrame, 8192, fullWidth * fullHeight);
 
-  function benchmark() {
-    lastTime = performance.now();
-    requestAnimationFrame(onBenchmark);
+    calcDimensions();
   }
 
   return {
-    benchmark,
-    calcSize,
+    adjustSize,
     setSize,
     scale,
     get width() {
@@ -63,9 +56,9 @@ function pixelsPerFrameEstimate(gl) {
   const maxRenderbufferSize = gl.getParameter(gl.MAX_RENDERBUFFER_SIZE);
 
   if (maxRenderbufferSize <= 8192) {
-    return 100000;
+    return 80000;
   } else if (maxRenderbufferSize === 16384) {
-    return 200000;
+    return 150000;
   } else if (maxRenderbufferSize >= 32768) {
     return 300000;
   }

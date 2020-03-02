@@ -33,7 +33,7 @@ export function makeRenderingPipeline({
 
   // tile rendering can cause the GPU to stutter, throwing off future benchmarks for the preview frames
   // wait to measure performance until this number of frames have been rendered
-  const previewFramesBeforeBenchmark = 3;
+  const previewFramesBeforeBenchmark = 2;
 
   // used to sample only a portion of the scene to the HDR Buffer to prevent the GPU from locking up from excessive computation
   const tileRender = makeTileRender(gl);
@@ -57,6 +57,7 @@ export function makeRenderingPipeline({
   const gBufferPass = makeGBufferPass(gl, { materialBuffer, mergedMesh });
 
   let ready = false;
+
   const noiseImage = new Image();
   noiseImage.src = noiseBase64;
   noiseImage.onload = () => {
@@ -64,8 +65,12 @@ export function makeRenderingPipeline({
     ready = true;
   };
 
+  let frameTime;
+  let elapsedFrameTime;
+
   let sampleCount = 0;
-  let previewFrames = 0;
+  let numPreviewsRendered = 0;
+
   let firstFrame = true;
 
   let sampleRenderedCallback = () => {};
@@ -162,13 +167,19 @@ export function makeRenderingPipeline({
     tileRender.setSize(w, h);
     previewSize.setSize(w, h);
     initFrameBuffers(w, h);
+    firstFrame = true;
+  }
+
+  // called every frame to update clock
+  function time(newTime) {
+    elapsedFrameTime = newTime - frameTime;
+    frameTime = newTime;
   }
 
   function areCamerasEqual(cam1, cam2) {
     return numberArraysEqual(cam1.matrixWorld.elements, cam2.matrixWorld.elements) &&
       cam1.aspect === cam2.aspect &&
-      cam1.fov === cam2.fov &&
-      cam1.focus === cam2.focus;
+      cam1.fov === cam2.fov;
   }
 
   function updateSeed(width, height, useJitter = true) {
@@ -263,11 +274,9 @@ export function makeRenderingPipeline({
       swapBuffers();
     }
 
-    if (previewFrames >= previewFramesBeforeBenchmark) {
-      previewSize.benchmark();
+    if (numPreviewsRendered >= previewFramesBeforeBenchmark) {
+      previewSize.adjustSize(elapsedFrameTime);
     }
-
-    previewSize.calcSize();
 
     updateSeed(previewSize.width, previewSize.height, false);
 
@@ -295,7 +304,7 @@ export function makeRenderingPipeline({
   }
 
   function drawTile() {
-    const { x, y, tileWidth, tileHeight, isFirstTile, isLastTile } = tileRender.nextTile();
+    const { x, y, tileWidth, tileHeight, isFirstTile, isLastTile } = tileRender.nextTile(elapsedFrameTime);
 
     if (isFirstTile) {
 
@@ -355,11 +364,11 @@ export function makeRenderingPipeline({
       }
 
       sampleCount = 0;
-      previewFrames++;
+      numPreviewsRendered++;
       tileRender.reset();
     } else {
       drawTile();
-      previewFrames = 0;
+      numPreviewsRendered = 0;
     }
   }
 
@@ -409,8 +418,8 @@ export function makeRenderingPipeline({
   return {
     draw,
     drawFull,
-    restartTimer: tileRender.reset,
     setSize,
+    time,
     getTotalSamplesRendered() {
       return sampleCount;
     },

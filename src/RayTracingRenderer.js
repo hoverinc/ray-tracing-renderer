@@ -65,12 +65,6 @@ export function RayTracingRenderer(params = {}) {
     module.needsUpdate = false;
   }
 
-  function restartTimer() {
-    if (pipeline) {
-      pipeline.restartTimer();
-    }
-  }
-
   module.setSize = (width, height, updateStyle = true) => {
     size.set(width, height);
     canvas.width = size.width * pixelRatio;
@@ -110,14 +104,24 @@ export function RayTracingRenderer(params = {}) {
     }
   };
 
-  module.sendToScreen = () => {
-    if (pipeline) {
-      pipeline.hdrBufferToScreen();
-    }
-  };
+  let validTime = 1;
+  // let suppliedTime = false;
+
+  function restartTimer() {
+    validTime = NaN;
+  }
+
+  // module.time = (time) => {
+  //   if (pipeline) {
+  //     pipeline.time(validTime * time);
+  //   }
+  //   validTime = 1;
+  //   suppliedTime = true;
+  // };
 
   let lastFocus = false;
-  module.render = (scene, camera) => {
+
+  module.render = (scene, camera, time) => {
     if (!module.renderWhenOffFocus) {
       const hasFocus = document.hasFocus();
       if (!hasFocus) {
@@ -132,6 +136,15 @@ export function RayTracingRenderer(params = {}) {
     if (module.needsUpdate) {
       initScene(scene);
     }
+
+    if (!time) {
+      console.warn('Ray Tracing Renderer warning: render(scene, camera, time) expects a third parameter equal to the time parameter given to the requestAnimationFrame callback.');
+      time = performance.now(); // less accurate than requestAnimationFrame time
+    }
+
+    pipeline.time(validTime * time);
+
+    validTime = 1;
 
     camera.updateMatrixWorld();
 
