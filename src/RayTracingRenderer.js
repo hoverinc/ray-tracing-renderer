@@ -105,23 +105,20 @@ export function RayTracingRenderer(params = {}) {
   };
 
   let validTime = 1;
-  // let suppliedTime = false;
 
   function restartTimer() {
     validTime = NaN;
   }
 
-  // module.time = (time) => {
-  //   if (pipeline) {
-  //     pipeline.time(validTime * time);
-  //   }
-  //   validTime = 1;
-  //   suppliedTime = true;
-  // };
+  let time;
+
+  module.time = (t) => {
+    time = t;
+  };
 
   let lastFocus = false;
 
-  module.render = (scene, camera, time) => {
+  module.render = (scene, camera) => {
     if (!module.renderWhenOffFocus) {
       const hasFocus = document.hasFocus();
       if (!hasFocus) {
@@ -138,13 +135,14 @@ export function RayTracingRenderer(params = {}) {
     }
 
     if (!time) {
-      console.warn('Ray Tracing Renderer warning: render(scene, camera, time) expects a third parameter equal to the time parameter given to the requestAnimationFrame callback.');
+      console.warn('Ray Tracing Renderer warning: For improved performance, please call renderer.time(time) before render.render(scene, camera), with the time argument equalling the argument passed to the callback of requestAnimationFrame');
       time = performance.now(); // less accurate than requestAnimationFrame time
     }
 
     pipeline.time(validTime * time);
 
     validTime = 1;
+    time = NaN;
 
     camera.updateMatrixWorld();
 

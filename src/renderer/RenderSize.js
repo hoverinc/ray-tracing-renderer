@@ -2,7 +2,7 @@ import { clamp } from './util';
 import { Vector2 } from 'three';
 
 export function makeRenderSize(gl) {
-  const desiredMsPerFrame = 20;
+  const desiredMsPerFrame = 19;
 
   let fullWidth;
   let fullHeight;
@@ -31,11 +31,13 @@ export function makeRenderSize(gl) {
       return;
     }
 
+     // tweak to find balance. higher = faster convergence, lower = less fluctuations to microstutters
+    const strength = 600;
+
     const error = desiredMsPerFrame - elapsedMs;
 
-    pixelsPerFrame += 600 * error;
+    pixelsPerFrame += strength * error;
     pixelsPerFrame = clamp(pixelsPerFrame, 8192, fullWidth * fullHeight);
-
     calcDimensions();
   }
 
@@ -60,6 +62,6 @@ function pixelsPerFrameEstimate(gl) {
   } else if (maxRenderbufferSize === 16384) {
     return 150000;
   } else if (maxRenderbufferSize >= 32768) {
-    return 300000;
+    return 400000;
   }
 }

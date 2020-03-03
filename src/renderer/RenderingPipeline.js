@@ -361,11 +361,11 @@ export function makeRenderingPipeline({
         firstFrame = false;
       } else {
         drawPreview(camera, lastCamera);
+        numPreviewsRendered++;
+        tileRender.reset();
       }
 
       sampleCount = 0;
-      numPreviewsRendered++;
-      tileRender.reset();
     } else {
       drawTile();
       numPreviewsRendered = 0;

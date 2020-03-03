@@ -62,7 +62,10 @@ export function makeTileRender(gl) {
 
     const error = desiredMsPerTile - msPerTile;
 
-    pixelsPerTile += 2000 * error;
+     // tweak to find balance. higher = faster convergence, lower = less fluctuations to microstutters
+    const strength = 8000;
+
+    pixelsPerTile += strength * Math.sign(error) * Math.sqrt(Math.abs(error));
     pixelsPerTile = clamp(pixelsPerTile, 8192, width * height);
   }
 
