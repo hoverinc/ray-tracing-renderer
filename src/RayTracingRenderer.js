@@ -104,16 +104,18 @@ export function RayTracingRenderer(params = {}) {
     }
   };
 
-  let validTime = 1;
+  let isValidTime = 1;
+  let currentTime = NaN;
+  let syncWarning = false;
 
   function restartTimer() {
-    validTime = NaN;
+    isValidTime = NaN;
   }
 
-  let time;
-
-  module.time = (t) => {
-    time = t;
+  module.sync = (t) => {
+    // the first call to the callback of requestAnimationFrame does not have a time parameter
+    // use performance.now() in this case
+    currentTime = t || performance.now();
   };
 
   let lastFocus = false;
@@ -134,15 +136,19 @@ export function RayTracingRenderer(params = {}) {
       initScene(scene);
     }
 
-    if (!time) {
-      console.warn('Ray Tracing Renderer warning: For improved performance, please call renderer.time(time) before render.render(scene, camera), with the time argument equalling the argument passed to the callback of requestAnimationFrame');
-      time = performance.now(); // less accurate than requestAnimationFrame time
+    if (isNaN(currentTime)) {
+      if (!syncWarning) {
+        console.warn('Ray Tracing Renderer warning: For improved performance, please call renderer.sync(time) before render.render(scene, camera), with the time parameter equalling the parameter passed to the callback of requestAnimationFrame');
+        syncWarning = true;
+      }
+
+      currentTime = performance.now(); // less accurate than requestAnimationFrame's time parameter
     }
 
-    pipeline.time(validTime * time);
+    pipeline.time(isValidTime * currentTime);
 
-    validTime = 1;
-    time = NaN;
+    isValidTime = 1;
+    currentTime = NaN;
 
     camera.updateMatrixWorld();
 

@@ -12,7 +12,7 @@ import { clamp } from './util';
 // the time it takes to render an arbitrarily-set tile size and adjusting the size according to the benchmark.
 
 export function makeTileRender(gl) {
-  const desiredMsPerTile = 20;
+  const desiredMsPerTile = 21;
 
   let currentTile = -1;
   let numTiles = 1;
@@ -63,15 +63,16 @@ export function makeTileRender(gl) {
     const error = desiredMsPerTile - msPerTile;
 
      // tweak to find balance. higher = faster convergence, lower = less fluctuations to microstutters
-    const strength = 8000;
+    const strength = 5000;
 
+    // sqrt prevents massive fluctuations in pixelsPerTile for the occasional stutter
     pixelsPerTile += strength * Math.sign(error) * Math.sqrt(Math.abs(error));
     pixelsPerTile = clamp(pixelsPerTile, 8192, width * height);
   }
 
-  function nextTile(frameElapsedTime) {
+  function nextTile(elapsedFrameMs) {
     currentTile++;
-    totalElapsedMs += frameElapsedTime;
+    totalElapsedMs += elapsedFrameMs;
 
     if (currentTile % numTiles === 0) {
       if (totalElapsedMs) {

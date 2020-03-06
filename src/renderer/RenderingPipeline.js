@@ -362,9 +362,8 @@ export function makeRenderingPipeline({
       } else {
         drawPreview(camera, lastCamera);
         numPreviewsRendered++;
-        tileRender.reset();
       }
-
+      tileRender.reset();
       sampleCount = 0;
     } else {
       drawTile();
