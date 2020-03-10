@@ -3576,6 +3576,71 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
     return newArray;
   }
 
+  function makeRenderSize(gl) {
+    const desiredMsPerFrame = 20;
+
+    let fullWidth;
+    let fullHeight;
+
+    let renderWidth;
+    let renderHeight;
+    let scale = new THREE$1.Vector2(1, 1);
+
+    let pixelsPerFrame = pixelsPerFrameEstimate(gl);
+
+    function setSize(w, h) {
+      fullWidth = w;
+      fullHeight = h;
+      calcDimensions();
+    }
+
+    function calcDimensions() {
+      const aspectRatio = fullWidth / fullHeight;
+      renderWidth = Math.round(clamp(Math.sqrt(pixelsPerFrame * aspectRatio), 1, fullWidth));
+      renderHeight = Math.round(clamp(renderWidth / aspectRatio, 1, fullHeight));
+      scale.set(renderWidth / fullWidth, renderHeight / fullHeight);
+    }
+
+    function adjustSize(elapsedFrameMs) {
+      if (!elapsedFrameMs) {
+        return;
+      }
+
+       // tweak to find balance. higher = faster convergence, lower = less fluctuations to microstutters
+      const strength = 600;
+
+      const error = desiredMsPerFrame - elapsedFrameMs;
+
+      pixelsPerFrame += strength * error;
+      pixelsPerFrame = clamp(pixelsPerFrame, 8192, fullWidth * fullHeight);
+      calcDimensions();
+    }
+
+    return {
+      adjustSize,
+      setSize,
+      scale,
+      get width() {
+        return renderWidth;
+      },
+      get height() {
+        return renderHeight;
+      }
+    };
+  }
+
+  function pixelsPerFrameEstimate(gl) {
+    const maxRenderbufferSize = gl.getParameter(gl.MAX_RENDERBUFFER_SIZE);
+
+    if (maxRenderbufferSize <= 8192) {
+      return 80000;
+    } else if (maxRenderbufferSize === 16384) {
+      return 150000;
+    } else if (maxRenderbufferSize >= 32768) {
+      return 400000;
+    }
+  }
+
   var fragment$2 = {
   outputs: ['light'],
   includes: [textureLinear],
@@ -3924,94 +3989,79 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
   // the time it takes to render an arbitrarily-set tile size and adjusting the size according to the benchmark.
 
   function makeTileRender(gl) {
+    const desiredMsPerTile = 21;
+
     let currentTile = -1;
     let numTiles = 1;
+
     let tileWidth;
     let tileHeight;
+
     let columns;
     let rows;
 
     let width = 0;
     let height = 0;
 
+    let totalElapsedMs;
+
     // initial number of pixels per rendered tile
     // based on correlation between system performance and max supported render buffer size
     // adjusted dynamically according to system performance
     let pixelsPerTile = pixelsPerTileEstimate(gl);
 
-    let pixelsPerTileQuantized = pixelsPerTile;
-
-    let desiredTimePerTile = 20;
-
-    let timePerPixel = desiredTimePerTile / pixelsPerTile;
-
-    let lastTime = 0;
-    let timeElapsed = 0;
-
-    function updateTime(time) {
-      if (lastTime) {
-        timeElapsed = time - lastTime;
-      }
-
-      lastTime = time;
-    }
-
     function reset() {
       currentTile = -1;
-      timeElapsed = 0;
-      lastTime = 0;
+      totalElapsedMs = NaN;
     }
 
     function setSize(w, h) {
       width = w;
       height = h;
       reset();
+      calcTileDimensions();
     }
 
-    function setTileDimensions(pixelsPerTile) {
+    function calcTileDimensions() {
       const aspectRatio = width / height;
 
       // quantize the width of the tile so that it evenly divides the entire window
       tileWidth = Math.ceil(width / Math.round(width / Math.sqrt(pixelsPerTile * aspectRatio)));
       tileHeight = Math.ceil(tileWidth / aspectRatio);
-      pixelsPerTileQuantized = tileWidth * tileHeight;
 
       columns = Math.ceil(width / tileWidth);
       rows = Math.ceil(height / tileHeight);
       numTiles = columns * rows;
     }
 
-    function initTiles() {
-      if (timeElapsed) {
-        const timePerTile = timeElapsed / numTiles;
+    function updatePixelsPerTile() {
+      const msPerTile = totalElapsedMs / numTiles;
 
-        const expAvg = 0.5;
+      const error = desiredMsPerTile - msPerTile;
 
-        const newPixelsPerTile = pixelsPerTile * desiredTimePerTile / timePerTile;
-        pixelsPerTile = expAvg * pixelsPerTile + (1 - expAvg) * newPixelsPerTile;
+       // tweak to find balance. higher = faster convergence, lower = less fluctuations to microstutters
+      const strength = 5000;
 
-        const newTimePerPixel = timePerTile / pixelsPerTileQuantized;
-        timePerPixel = expAvg * timePerPixel + (1 - expAvg) * newTimePerPixel;
-      }
-
+      // sqrt prevents massive fluctuations in pixelsPerTile for the occasional stutter
+      pixelsPerTile += strength * Math.sign(error) * Math.sqrt(Math.abs(error));
       pixelsPerTile = clamp(pixelsPerTile, 8192, width * height);
-
-      setTileDimensions(pixelsPerTile);
     }
 
-    function nextTile() {
+    function nextTile(elapsedFrameMs) {
       currentTile++;
+      totalElapsedMs += elapsedFrameMs;
 
       if (currentTile % numTiles === 0) {
-        initTiles();
+        if (totalElapsedMs) {
+          updatePixelsPerTile();
+          calcTileDimensions();
+        }
+
+        totalElapsedMs = 0;
         currentTile = 0;
-        timeElapsed = 0;
       }
 
       const isLastTile = currentTile === numTiles - 1;
-      if (isLastTile) {
-        requestAnimationFrame(updateTime);
-      }
 
       const x = currentTile % columns;
       const y = Math.floor(currentTile / columns) % rows;
@@ -4027,9 +4077,6 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
     }
 
     return {
-      getTimePerPixel() {
-        return timePerPixel;
-      },
       nextTile,
       reset,
       setSize,
@@ -4067,7 +4114,14 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
     // higher number results in faster convergence over time, but with lower quality initial samples
     const strataCount = 6;
 
-    const desiredTimeForPreview = 14;
+    // tile rendering can cause the GPU to stutter, throwing off future benchmarks for the preview frames
+    // wait to measure performance until this number of frames have been rendered
+    const previewFramesBeforeBenchmark = 2;
+
+    // used to sample only a portion of the scene to the HDR Buffer to prevent the GPU from locking up from excessive computation
+    const tileRender = makeTileRender(gl);
+
+    const previewSize = makeRenderSize(gl);
 
     const decomposedScene = decomposeScene(scene);
 
@@ -4085,10 +4139,8 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
 
     const gBufferPass = makeGBufferPass(gl, { materialBuffer, mergedMesh });
 
-    // used to sample only a portion of the scene to the HDR Buffer to prevent the GPU from locking up from excessive computation
-    const tileRender = makeTileRender(gl);
-
     let ready = false;
+
     const noiseImage = new Image();
     noiseImage.src = noiseBase64;
     noiseImage.onload = () => {
@@ -4096,7 +4148,13 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
       ready = true;
     };
 
+    let frameTime;
+    let elapsedFrameTime;
+
     let sampleCount = 0;
+    let numPreviewsRendered = 0;
+
+    let firstFrame = true;
 
     let sampleRenderedCallback = () => {};
 
@@ -4107,11 +4165,9 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
     let screenWidth = 0;
     let screenHeight = 0;
 
-    let previewWidth = 0;
-    let previewHeight = 0;
-
-    const previewScale = new THREE$1.Vector2(1, 1);
     const fullscreenScale = new THREE$1.Vector2(1, 1);
+
+    let lastToneMappedScale = fullscreenScale;
 
     let hdrBuffer;
     let hdrBackBuffer;
@@ -4122,7 +4178,6 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
     let gBufferBack;
 
     let lastToneMappedTexture;
-    let lastToneMappedScale;
 
     function initFrameBuffers(width, height) {
       const makeHdrBuffer = () => makeFramebuffer(gl, {
@@ -4160,7 +4215,6 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
       gBufferBack = makeGBuffer();
 
       lastToneMappedTexture = hdrBuffer.color[rayTracePass.outputLocs.light];
-      lastToneMappedScale = fullscreenScale;
     }
 
     function swapReprojectBuffer() {
@@ -4194,24 +4248,21 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
       screenHeight = h;
 
       tileRender.setSize(w, h);
+      previewSize.setSize(w, h);
       initFrameBuffers(w, h);
+      firstFrame = true;
     }
 
-    function setPreviewBufferDimensions() {
-      const numPixelsForPreview = desiredTimeForPreview / tileRender.getTimePerPixel();
-
-      const aspectRatio = screenWidth / screenHeight;
-
-      previewWidth = Math.round(clamp(Math.sqrt(numPixelsForPreview * aspectRatio), 1, screenWidth));
-      previewHeight = Math.round(clamp(previewWidth / aspectRatio, 1, screenHeight));
-      previewScale.set(previewWidth / screenWidth, previewHeight / screenHeight);
+    // called every frame to update clock
+    function time(newTime) {
+      elapsedFrameTime = newTime - frameTime;
+      frameTime = newTime;
     }
 
     function areCamerasEqual(cam1, cam2) {
       return numberArraysEqual(cam1.matrixWorld.elements, cam2.matrixWorld.elements) &&
         cam1.aspect === cam2.aspect &&
-        cam1.fov === cam2.fov &&
-        cam1.focus === cam2.focus;
+        cam1.fov === cam2.fov;
     }
 
     function updateSeed(width, height, useJitter = true) {
@@ -4268,7 +4319,7 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
       });
 
       lastToneMappedTexture = lightTexture;
-      lastToneMappedScale = lightScale;
+      lastToneMappedScale = lightScale.clone();
     }
 
     function renderGBuffer() {
@@ -4294,33 +4345,35 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
       gl.disable(gl.SCISSOR_TEST);
     }
 
-    function drawPreview(camera, lastCamera) {
-      if (sampleCount > 0) {
-        swapBuffers();
-      }
-
-      sampleCount = 0;
-      tileRender.reset();
-      setPreviewBufferDimensions();
-
-      updateSeed(previewWidth, previewHeight, false);
-
+    function setCameras(camera, lastCamera) {
       rayTracePass.setCamera(camera);
       gBufferPass.setCamera(camera);
       reprojectPass.setPreviousCamera(lastCamera);
       lastCamera.copy(camera);
+    }
+
+    function drawPreview() {
+      if (sampleCount > 0) {
+        swapBuffers();
+      }
+
+      if (numPreviewsRendered >= previewFramesBeforeBenchmark) {
+        previewSize.adjustSize(elapsedFrameTime);
+      }
+
+      updateSeed(previewSize.width, previewSize.height, false);
 
       renderGBuffer();
 
       rayTracePass.bindTextures();
-      newSampleToBuffer(hdrBuffer, previewWidth, previewHeight);
+      newSampleToBuffer(hdrBuffer, previewSize.width, previewSize.height);
 
       reprojectBuffer.bind();
-      gl.viewport(0, 0, previewWidth, previewHeight);
+      gl.viewport(0, 0, previewSize.width, previewSize.height);
       reprojectPass.draw({
         blendAmount: 1.0,
         light: hdrBuffer.color[0],
-        lightScale: previewScale,
+        lightScale: previewSize.scale,
         position: gBuffer.color[gBufferPass.outputLocs.position],
         previousLight: lastToneMappedTexture,
         previousLightScale: lastToneMappedScale,
@@ -4328,13 +4381,13 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
       });
       reprojectBuffer.unbind();
 
-      toneMapToScreen(reprojectBuffer.color[0], previewScale);
+      toneMapToScreen(reprojectBuffer.color[0], previewSize.scale);
 
       swapBuffers();
     }
 
     function drawTile() {
-      const { x, y, tileWidth, tileHeight, isFirstTile, isLastTile } = tileRender.nextTile();
+      const { x, y, tileWidth, tileHeight, isFirstTile, isLastTile } = tileRender.nextTile(elapsedFrameTime);
 
       if (isFirstTile) {
 
@@ -4365,7 +4418,7 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
             lightScale: fullscreenScale,
             position: gBuffer.color[gBufferPass.outputLocs.position],
             previousLight: reprojectBackBuffer.color[0],
-            previousLightScale: previewScale,
+            previousLightScale: previewSize.scale,
             previousPosition: gBufferBack.color[gBufferPass.outputLocs.position],
           });
           reprojectBuffer.unbind();
@@ -4385,9 +4438,19 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
       }
 
       if (!areCamerasEqual(camera, lastCamera)) {
-        drawPreview(camera, lastCamera);
+        setCameras(camera, lastCamera);
+
+        if (firstFrame) {
+          firstFrame = false;
+        } else {
+          drawPreview();
+          numPreviewsRendered++;
+        }
+        tileRender.reset();
+        sampleCount = 0;
       } else {
         drawTile();
+        numPreviewsRendered = 0;
       }
     }
 
@@ -4402,19 +4465,14 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
       swapGBuffer();
       swapReprojectBuffer();
 
-      if (sampleCount === 0) {
-        reprojectPass.setPreviousCamera(lastCamera);
-      }
-
       if (!areCamerasEqual(camera, lastCamera)) {
         sampleCount = 0;
-        rayTracePass.setCamera(camera);
-        gBufferPass.setCamera(camera);
-        lastCamera.copy(camera);
         clearBuffer(hdrBuffer);
       } else {
         sampleCount++;
       }
+
+      setCameras(camera, lastCamera);
 
       updateSeed(screenWidth, screenHeight, true);
 
@@ -4442,8 +4500,8 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
     return {
       draw,
       drawFull,
-      restartTimer: tileRender.reset,
       setSize,
+      time,
       getTotalSamplesRendered() {
         return sampleCount;
       },
@@ -4491,7 +4549,6 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
       needsUpdate: true,
       onSampleRendered: null,
       renderWhenOffFocus: true,
-      renderToScreen: true,
       toneMapping: THREE$1.LinearToneMapping,
       toneMappingExposure: 1,
       toneMappingWhitePoint: 1,
@@ -4518,12 +4575,6 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
 
       module.setSize(size.width, size.height);
       module.needsUpdate = false;
-    }
-
-    function restartTimer() {
-      if (pipeline) {
-        pipeline.restartTimer();
-      }
     }
 
     module.setSize = (width, height, updateStyle = true) => {
@@ -4565,13 +4616,22 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
       }
     };
 
-    module.sendToScreen = () => {
-      if (pipeline) {
-        pipeline.hdrBufferToScreen();
-      }
+    let isValidTime = 1;
+    let currentTime = NaN;
+    let syncWarning = false;
+
+    function restartTimer() {
+      isValidTime = NaN;
+    }
+
+    module.sync = (t) => {
+      // the first call to the callback of requestAnimationFrame does not have a time parameter
+      // use performance.now() in this case
+      currentTime = t || performance.now();
     };
 
     let lastFocus = false;
+
     module.render = (scene, camera) => {
       if (!module.renderWhenOffFocus) {
         const hasFocus = document.hasFocus();
@@ -4588,19 +4648,28 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
         initScene(scene);
       }
 
-      camera.updateMatrixWorld();
-
-      if (module.renderToScreen) {
-        if(module.maxHardwareUsage) {
-          // render new sample for the entire screen
-          pipeline.drawFull(camera);
-        } else {
-          // render new sample for a tiled subset of the screen
-          pipeline.draw(camera);
+      if (isNaN(currentTime)) {
+        if (!syncWarning) {
+          console.warn('Ray Tracing Renderer warning: For improved performance, please call renderer.sync(time) before render.render(scene, camera), with the time parameter equalling the parameter passed to the callback of requestAnimationFrame');
+          syncWarning = true;
         }
 
+        currentTime = performance.now(); // less accurate than requestAnimationFrame's time parameter
+      }
+
+      pipeline.time(isValidTime * currentTime);
+
+      isValidTime = 1;
+      currentTime = NaN;
+
+      camera.updateMatrixWorld();
+
+      if(module.maxHardwareUsage) {
+        // render new sample for the entire screen
+        pipeline.drawFull(camera);
       } else {
-        pipeline.drawOffscreenTile(camera);
+        // render new sample for a tiled subset of the screen
+        pipeline.draw(camera);
       }
     };
 
