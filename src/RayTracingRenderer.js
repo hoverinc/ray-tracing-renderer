@@ -37,7 +37,6 @@ export function RayTracingRenderer(params = {}) {
     needsUpdate: true,
     onSampleRendered: null,
     renderWhenOffFocus: true,
-    renderToScreen: true,
     toneMapping: THREE.LinearToneMapping,
     toneMappingExposure: 1,
     toneMappingWhitePoint: 1,
@@ -64,12 +63,6 @@ export function RayTracingRenderer(params = {}) {
 
     module.setSize(size.width, size.height);
     module.needsUpdate = false;
-  }
-
-  function restartTimer() {
-    if (pipeline) {
-      pipeline.restartTimer();
-    }
   }
 
   module.setSize = (width, height, updateStyle = true) => {
@@ -111,13 +104,22 @@ export function RayTracingRenderer(params = {}) {
     }
   };
 
-  module.sendToScreen = () => {
-    if (pipeline) {
-      pipeline.hdrBufferToScreen();
-    }
+  let isValidTime = 1;
+  let currentTime = NaN;
+  let syncWarning = false;
+
+  function restartTimer() {
+    isValidTime = NaN;
+  }
+
+  module.sync = (t) => {
+    // the first call to the callback of requestAnimationFrame does not have a time parameter
+    // use performance.now() in this case
+    currentTime = t || performance.now();
   };
 
   let lastFocus = false;
+
   module.render = (scene, camera) => {
     if (!module.renderWhenOffFocus) {
       const hasFocus = document.hasFocus();
@@ -134,19 +136,28 @@ export function RayTracingRenderer(params = {}) {
       initScene(scene);
     }
 
-    camera.updateMatrixWorld();
-
-    if (module.renderToScreen) {
-      if(module.maxHardwareUsage) {
-        // render new sample for the entire screen
-        pipeline.drawFull(camera);
-      } else {
-        // render new sample for a tiled subset of the screen
-        pipeline.draw(camera);
+    if (isNaN(currentTime)) {
+      if (!syncWarning) {
+        console.warn('Ray Tracing Renderer warning: For improved performance, please call renderer.sync(time) before render.render(scene, camera), with the time parameter equalling the parameter passed to the callback of requestAnimationFrame');
+        syncWarning = true;
       }
 
+      currentTime = performance.now(); // less accurate than requestAnimationFrame's time parameter
+    }
+
+    pipeline.time(isValidTime * currentTime);
+
+    isValidTime = 1;
+    currentTime = NaN;
+
+    camera.updateMatrixWorld();
+
+    if(module.maxHardwareUsage) {
+      // render new sample for the entire screen
+      pipeline.drawFull(camera);
     } else {
-      pipeline.drawOffscreenTile(camera);
+      // render new sample for a tiled subset of the screen
+      pipeline.draw(camera);
     }
   };
 
