@@ -12,94 +12,79 @@ import { clamp } from './util';
 // the time it takes to render an arbitrarily-set tile size and adjusting the size according to the benchmark.
 
 export function makeTileRender(gl) {
+  const desiredMsPerTile = 21;
+
   let currentTile = -1;
   let numTiles = 1;
+
   let tileWidth;
   let tileHeight;
+
   let columns;
   let rows;
 
   let width = 0;
   let height = 0;
 
+  let totalElapsedMs;
+
   // initial number of pixels per rendered tile
   // based on correlation between system performance and max supported render buffer size
   // adjusted dynamically according to system performance
   let pixelsPerTile = pixelsPerTileEstimate(gl);
 
-  let pixelsPerTileQuantized = pixelsPerTile;
-
-  let desiredTimePerTile = 20;
-
-  let timePerPixel = desiredTimePerTile / pixelsPerTile;
-
-  let lastTime = 0;
-  let timeElapsed = 0;
-
-  function updateTime(time) {
-    if (lastTime) {
-      timeElapsed = time - lastTime;
-    }
-
-    lastTime = time;
-  }
-
   function reset() {
     currentTile = -1;
-    timeElapsed = 0;
-    lastTime = 0;
+    totalElapsedMs = NaN;
   }
 
   function setSize(w, h) {
     width = w;
     height = h;
     reset();
+    calcTileDimensions();
   }
 
-  function setTileDimensions(pixelsPerTile) {
+  function calcTileDimensions() {
     const aspectRatio = width / height;
 
     // quantize the width of the tile so that it evenly divides the entire window
     tileWidth = Math.ceil(width / Math.round(width / Math.sqrt(pixelsPerTile * aspectRatio)));
     tileHeight = Math.ceil(tileWidth / aspectRatio);
-    pixelsPerTileQuantized = tileWidth * tileHeight;
 
     columns = Math.ceil(width / tileWidth);
     rows = Math.ceil(height / tileHeight);
     numTiles = columns * rows;
   }
 
-  function initTiles() {
-    if (timeElapsed) {
-      const timePerTile = timeElapsed / numTiles;
+  function updatePixelsPerTile() {
+    const msPerTile = totalElapsedMs / numTiles;
 
-      const expAvg = 0.5;
+    const error = desiredMsPerTile - msPerTile;
 
-      const newPixelsPerTile = pixelsPerTile * desiredTimePerTile / timePerTile;
-      pixelsPerTile = expAvg * pixelsPerTile + (1 - expAvg) * newPixelsPerTile;
+     // tweak to find balance. higher = faster convergence, lower = less fluctuations to microstutters
+    const strength = 5000;
 
-      const newTimePerPixel = timePerTile / pixelsPerTileQuantized;
-      timePerPixel = expAvg * timePerPixel + (1 - expAvg) * newTimePerPixel;
-    }
-
+    // sqrt prevents massive fluctuations in pixelsPerTile for the occasional stutter
+    pixelsPerTile += strength * Math.sign(error) * Math.sqrt(Math.abs(error));
     pixelsPerTile = clamp(pixelsPerTile, 8192, width * height);
-
-    setTileDimensions(pixelsPerTile);
   }
 
-  function nextTile() {
+  function nextTile(elapsedFrameMs) {
     currentTile++;
+    totalElapsedMs += elapsedFrameMs;
 
     if (currentTile % numTiles === 0) {
-      initTiles();
+      if (totalElapsedMs) {
+        updatePixelsPerTile();
+        calcTileDimensions();
+      }
+
+      totalElapsedMs = 0;
       currentTile = 0;
-      timeElapsed = 0;
     }
 
     const isLastTile = currentTile === numTiles - 1;
-    if (isLastTile) {
-      requestAnimationFrame(updateTime);
-    }
 
     const x = currentTile % columns;
     const y = Math.floor(currentTile / columns) % rows;
@@ -115,9 +100,6 @@ export function makeTileRender(gl) {
   }
 
   return {
-    getTimePerPixel() {
-      return timePerPixel;
-    },
     nextTile,
     reset,
     setSize,

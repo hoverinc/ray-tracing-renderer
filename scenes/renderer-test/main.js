@@ -38,10 +38,11 @@ function resize() {
 window.addEventListener('resize', resize);
 resize();
 
-const tick = () => {
+const tick = (time) => {
   controls.update();
   camera.focus = controls.target.distanceTo(camera.position);
   stats.begin();
+  renderer.sync(time);
   renderer.render(scene, camera);
   stats.end();
   requestAnimationFrame(tick);

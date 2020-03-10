@@ -72,12 +72,18 @@ function resize() {
   }
 }
 
-function tick() {
+function tick(time) {
   controls.update();
   camera.focus = controls.target.distanceTo(camera.position);
   stats.begin();
+
+  if (renderer.sync) {
+    renderer.sync(time);
+  }
+
   renderer.render(scene, camera);
   stats.end();
+
   requestAnimationFrame(tick);
 }
 
