@@ -125,25 +125,25 @@ function maxImageSize(images) {
 function uploadToUniformBuffer(gl, program, bufferData) {
   const materialBuffer = makeUniformBuffer(gl, program, 'Materials');
 
-  materialBuffer.set('Materials.albedoAndMaterialType[0]', interleave(
+  materialBuffer.set('Materials.albedo_materialType[0]', interleave(
     { data: [].concat(...bufferData.albedo.map(d => d.toArray())), channels: 3 },
     { data: bufferData.type, channels: 1}
   ));
 
-  materialBuffer.set('Materials.roughnessMetalnessNormalScale[0]', interleave(
+  materialBuffer.set('Materials.roughness_metalness_normalScale[0]', interleave(
     { data: bufferData.roughness, channels: 1 },
     { data: bufferData.metalness, channels: 1 },
     { data: [].concat(...bufferData.normalScale.map(d => d.toArray())), channels: 2 }
   ));
 
-  materialBuffer.set('Materials.diffuseNormalRoughnessMetalnessMapIndex[0]', interleave(
+  materialBuffer.set('Materials.diffuse_normal_roughness_metalness_mapIndex[0]', interleave(
     { data: bufferData.diffuseMapIndex, channels: 1 },
     { data: bufferData.normalMapIndex, channels: 1 },
     { data: bufferData.roughnessMapIndex, channels: 1 },
     { data: bufferData.metalnessMapIndex, channels: 1 }
   ));
 
-  materialBuffer.set('Materials.diffuseNormalMapSize[0]', interleave(
+  materialBuffer.set('Materials.diffuse_normal_mapSize[0]', interleave(
     { data: bufferData.diffuseMapSize, channels: 2 },
     { data: bufferData.normalMapSize, channels: 2 }
   ));

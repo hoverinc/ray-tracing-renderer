@@ -70,7 +70,7 @@ void sampleMaterial(SurfaceInteraction si, int bounce, inout Path path) {
 
   vec3 irr = textureLinear(envmap, uv).rgb;
 
-  MaterialBrdf brdf = materialBrdf(si, viewDir, lightDir, cosThetaL, diffuseWeight);
+  MaterialBrdf brdf = getMaterialBrdf(si, viewDir, lightDir, cosThetaL, diffuseWeight);
 
   float scatteringPdf = mix(brdf.specularPdf, brdf.diffusePdf, probDiffuse);
 
@@ -106,7 +106,7 @@ void sampleMaterial(SurfaceInteraction si, int bounce, inout Path path) {
     return;
   }
 
-  brdf = materialBrdf(si, viewDir, lightDir, cosThetaL, diffuseWeight);
+  brdf = getMaterialBrdf(si, viewDir, lightDir, cosThetaL, diffuseWeight);
 
   scatteringPdf = mix(brdf.specularPdf, brdf.diffusePdf, probDiffuse);
 

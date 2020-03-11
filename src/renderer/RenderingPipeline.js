@@ -79,8 +79,7 @@ export function makeRenderingPipeline({
   lastCamera.position.set(1, 1, 1);
   lastCamera.updateMatrixWorld();
 
-  let screenWidth = 0;
-  let screenHeight = 0;
+  const screenSize = new Vector2();
 
   const fullscreenScale = new Vector2(1, 1);
 
@@ -161,8 +160,8 @@ export function makeRenderingPipeline({
   }
 
   function setSize(w, h) {
-    screenWidth = w;
-    screenHeight = h;
+    screenSize.width = w;
+    screenSize.height = h;
 
     tileRender.setSize(w, h);
     previewSize.setSize(w, h);
@@ -171,7 +170,7 @@ export function makeRenderingPipeline({
   }
 
   // called every frame to update clock
-  function time(newTime) {
+  function sync(newTime) {
     elapsedFrameTime = newTime - frameTime;
     frameTime = newTime;
   }
@@ -182,11 +181,18 @@ export function makeRenderingPipeline({
       cam1.fov === cam2.fov;
   }
 
-  function updateSeed(width, height, useJitter = true) {
-    rayTracePass.setSize(width, height);
+  function setCameras(camera, lastCamera) {
+    rayTracePass.setCamera(camera);
+    gBufferPass.setCamera(camera);
+    reprojectPass.setPreviousCamera(lastCamera);
+    lastCamera.copy(camera);
+  }
 
-    // const jitterX = useJitter ? (Math.random() - 0.5) / width : 0;
-    // const jitterY = useJitter ? (Math.random() - 0.5) / height : 0;
+  function updateSeed(size, useJitter = true) {
+    rayTracePass.setSize(size.width, size.height);
+
+    // const jitterX = useJitter ? (Math.random() - 0.5) / size.width : 0;
+    // const jitterY = useJitter ? (Math.random() - 0.5) / size.height : 0;
     // gBufferPass.setJitter(jitterX, jitterY);
     // rayTracePass.setJitter(jitterX, jitterY);
     // reprojectPass.setJitter(jitterX, jitterY);
@@ -206,25 +212,63 @@ export function makeRenderingPipeline({
     buffer.unbind();
   }
 
-  function addSampleToBuffer(buffer, width, height) {
+  function addSampleToBuffer(buffer, size) {
     buffer.bind();
 
     gl.blendEquation(gl.FUNC_ADD);
     gl.blendFunc(gl.ONE, gl.ONE);
     gl.enable(gl.BLEND);
 
-    gl.viewport(0, 0, width, height);
+    gl.viewport(0, 0, size.width, size.height);
     rayTracePass.draw();
 
     gl.disable(gl.BLEND);
     buffer.unbind();
   }
 
-  function newSampleToBuffer(buffer, width, height) {
+  function newSampleToBuffer(buffer, size) {
     buffer.bind();
-    gl.viewport(0, 0, width, height);
+    gl.viewport(0, 0, size.width, size.height);
     rayTracePass.draw();
     buffer.unbind();
+  }
+
+  function renderGBuffer() {
+    gBuffer.bind();
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+    gl.viewport(0, 0, screenSize.width, screenSize.height);
+    gBufferPass.draw();
+    gBuffer.unbind();
+
+    rayTracePass.setGBuffers({
+      position: gBuffer.color[gBufferPass.outputLocs.position],
+      normal: gBuffer.color[gBufferPass.outputLocs.normal],
+      faceNormal: gBuffer.color[gBufferPass.outputLocs.faceNormal],
+      albedo: gBuffer.color[gBufferPass.outputLocs.albedo],
+      matProps: gBuffer.color[gBufferPass.outputLocs.matProps]
+    });
+  }
+
+  function reproject({ size, blendAmount, lightScale, previousLight, previousLightScale }) {
+    reprojectBuffer.bind();
+    gl.viewport(0, 0, size.width, size.height);
+    reprojectPass.draw({
+      blendAmount,
+      light: hdrBuffer.color[0],
+      lightScale,
+      position: gBuffer.color[gBufferPass.outputLocs.position],
+      previousLight,
+      previousLightScale,
+      previousPosition: gBufferBack.color[gBufferPass.outputLocs.position],
+    });
+    reprojectBuffer.unbind();
+  }
+
+  function renderTile(buffer, x, y, width, height) {
+    gl.scissor(x, y, width, height);
+    gl.enable(gl.SCISSOR_TEST);
+    addSampleToBuffer(buffer, screenSize);
+    gl.disable(gl.SCISSOR_TEST);
   }
 
   function toneMapToScreen(lightTexture, lightScale) {
@@ -240,36 +284,6 @@ export function makeRenderingPipeline({
     lastToneMappedScale = lightScale.clone();
   }
 
-  function renderGBuffer() {
-    gBuffer.bind();
-    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-    gl.viewport(0, 0, screenWidth, screenHeight);
-    gBufferPass.draw();
-    gBuffer.unbind();
-
-    rayTracePass.setGBuffers({
-      position: gBuffer.color[gBufferPass.outputLocs.position],
-      normal: gBuffer.color[gBufferPass.outputLocs.normal],
-      faceNormal: gBuffer.color[gBufferPass.outputLocs.faceNormal],
-      albedo: gBuffer.color[gBufferPass.outputLocs.albedo],
-      matProps: gBuffer.color[gBufferPass.outputLocs.matProps]
-    });
-  }
-
-  function renderTile(buffer, x, y, width, height) {
-    gl.scissor(x, y, width, height);
-    gl.enable(gl.SCISSOR_TEST);
-    addSampleToBuffer(buffer, screenWidth, screenHeight);
-    gl.disable(gl.SCISSOR_TEST);
-  }
-
-  function setCameras(camera, lastCamera) {
-    rayTracePass.setCamera(camera);
-    gBufferPass.setCamera(camera);
-    reprojectPass.setPreviousCamera(lastCamera);
-    lastCamera.copy(camera);
-  }
-
   function drawPreview() {
     if (sampleCount > 0) {
       swapBuffers();
@@ -279,25 +293,20 @@ export function makeRenderingPipeline({
       previewSize.adjustSize(elapsedFrameTime);
     }
 
-    updateSeed(previewSize.width, previewSize.height, false);
+    updateSeed(previewSize, false);
 
     renderGBuffer();
 
     rayTracePass.bindTextures();
-    newSampleToBuffer(hdrBuffer, previewSize.width, previewSize.height);
+    newSampleToBuffer(hdrBuffer, previewSize);
 
-    reprojectBuffer.bind();
-    gl.viewport(0, 0, previewSize.width, previewSize.height);
-    reprojectPass.draw({
+    reproject({
+      size: previewSize,
       blendAmount: 1.0,
-      light: hdrBuffer.color[0],
       lightScale: previewSize.scale,
-      position: gBuffer.color[gBufferPass.outputLocs.position],
       previousLight: lastToneMappedTexture,
-      previousLightScale: lastToneMappedScale,
-      previousPosition: gBufferBack.color[gBufferPass.outputLocs.position],
+      previousLightScale: lastToneMappedScale
     });
-    reprojectBuffer.unbind();
 
     toneMapToScreen(reprojectBuffer.color[0], previewSize.scale);
 
@@ -314,7 +323,7 @@ export function makeRenderingPipeline({
         reprojectPass.setPreviousCamera(lastCamera);
       }
 
-      updateSeed(screenWidth, screenHeight, true);
+      updateSeed(screenSize, true);
       renderGBuffer();
       rayTracePass.bindTextures();
     }
@@ -328,18 +337,13 @@ export function makeRenderingPipeline({
       blendAmount *= blendAmount;
 
       if (blendAmount > 0.0) {
-        reprojectBuffer.bind();
-        gl.viewport(0, 0, screenWidth, screenHeight);
-        reprojectPass.draw({
+        reproject({
+          size: screenSize,
           blendAmount,
-          light: hdrBuffer.color[0],
           lightScale: fullscreenScale,
-          position: gBuffer.color[gBufferPass.outputLocs.position],
           previousLight: reprojectBackBuffer.color[0],
-          previousLightScale: previewSize.scale,
-          previousPosition: gBufferBack.color[gBufferPass.outputLocs.position],
+          previousLightScale: previewSize.scale
         });
-        reprojectBuffer.unbind();
 
         toneMapToScreen(reprojectBuffer.color[0], fullscreenScale);
       } else {
@@ -392,25 +396,20 @@ export function makeRenderingPipeline({
 
     setCameras(camera, lastCamera);
 
-    updateSeed(screenWidth, screenHeight, true);
+    updateSeed(screenSize, true);
 
     renderGBuffer(camera);
 
     rayTracePass.bindTextures();
-    addSampleToBuffer(hdrBuffer, screenWidth, screenHeight);
+    addSampleToBuffer(hdrBuffer, screenSize);
 
-    reprojectBuffer.bind();
-    gl.viewport(0, 0, screenWidth, screenHeight);
-    reprojectPass.draw({
+    reproject({
+      size: screenSize,
       blendAmount: 1.0,
-      light: hdrBuffer.color[0],
       lightScale: fullscreenScale,
-      position: gBuffer.color[gBufferPass.outputLocs.position],
       previousLight: lastToneMappedTexture,
-      previousLightScale: lastToneMappedScale,
-      previousPosition: gBufferBack.color[gBufferPass.outputLocs.position],
+      previousLightScale: lastToneMappedScale
     });
-    reprojectBuffer.unbind();
 
     toneMapToScreen(reprojectBuffer.color[0], fullscreenScale);
   }
@@ -419,7 +418,7 @@ export function makeRenderingPipeline({
     draw,
     drawFull,
     setSize,
-    time,
+    sync,
     getTotalSamplesRendered() {
       return sampleCount;
     },

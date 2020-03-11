@@ -68,7 +68,7 @@ struct MaterialBrdf {
 
 // An implementation of Disney's principled BRDF
 // https://disney-animation.s3.amazonaws.com/library/s2012_pbs_disney_brdf_notes_v2.pdf
-MaterialBrdf materialBrdf(SurfaceInteraction si, vec3 viewDir, vec3 lightDir, float cosThetaL, float diffuseWeight) {
+MaterialBrdf getMaterialBrdf(SurfaceInteraction si, vec3 viewDir, vec3 lightDir, float cosThetaL, float diffuseWeight) {
   MaterialBrdf brdf;
 
   vec3 halfVector = normalize(viewDir + lightDir);

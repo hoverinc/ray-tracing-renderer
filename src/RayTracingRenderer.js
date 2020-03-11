@@ -146,7 +146,7 @@ export function RayTracingRenderer(params = {}) {
       currentTime = performance.now(); // less accurate than requestAnimationFrame's time parameter
     }
 
-    pipeline.time(isValidTime * currentTime);
+    pipeline.sync(isValidTime * currentTime);
 
     isValidTime = 1;
     currentTime = NaN;
