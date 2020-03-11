@@ -97,11 +97,20 @@ export function makeRenderingPipeline({
 
   function initFrameBuffers(width, height) {
     const makeHdrBuffer = () => makeFramebuffer(gl, {
-      color: { 0: makeTexture(gl, { width, height, storage: 'float', magFilter: gl.LINEAR, minFilter: gl.LINEAR }) }
+      colorAttachments: [
+        {
+          location: 0,
+          layer: 0,
+          texture: makeTexture(gl, { width, height, length: 2, storage: 'float', magFilter: gl.LINEAR, minFilter: gl.LINEAR })
+        }
+      ]
     });
 
     const makeReprojectBuffer = () => makeFramebuffer(gl, {
-      color: { 0: makeTexture(gl, { width, height, storage: 'float', magFilter: gl.LINEAR, minFilter: gl.LINEAR }) }
+      colorAttachments: {
+        location: 0,
+        texture: makeTexture(gl, { width, height, storage: 'float', magFilter: gl.LINEAR, minFilter: gl.LINEAR })
+      }
     });
 
     hdrBuffer = makeHdrBuffer();
@@ -117,14 +126,14 @@ export function makeRenderingPipeline({
     const depthTarget = makeDepthTarget(gl, width, height);
 
     const makeGBuffer = () => makeFramebuffer(gl, {
-      color: {
-        [gBufferPass.outputLocs.position]: makeTexture(gl, { width, height, storage: 'float' }),
-        [gBufferPass.outputLocs.normal]: normalBuffer,
-        [gBufferPass.outputLocs.faceNormal]: faceNormalBuffer,
-        [gBufferPass.outputLocs.albedo]: albedoBuffer,
-        [gBufferPass.outputLocs.matProps]: matProps,
-      },
-      depth: depthTarget
+      colorAttachments: [
+        { location: gBufferPass.outputLocs.position, texture: makeTexture(gl, { width, height, storage: 'float' })},
+        { location: gBufferPass.outputLocs.normal, texture: normalBuffer },
+        { location: gBufferPass.outputLocs.faceNormal, texture: faceNormalBuffer },
+        { location: gBufferPass.outputLocs.albedo, texture: albedoBuffer },
+        { location: gBufferPass.outputLocs.matProps, texture: matProps },
+      ],
+      depthAttachment: depthTarget
     });
 
     gBuffer = makeGBuffer();
@@ -403,15 +412,16 @@ export function makeRenderingPipeline({
     rayTracePass.bindTextures();
     addSampleToBuffer(hdrBuffer, screenSize);
 
-    reproject({
-      size: screenSize,
-      blendAmount: 1.0,
-      lightScale: fullscreenScale,
-      previousLight: lastToneMappedTexture,
-      previousLightScale: lastToneMappedScale
-    });
+    // reproject({
+    //   size: screenSize,
+    //   blendAmount: 1.0,
+    //   lightScale: fullscreenScale,
+    //   previousLight: lastToneMappedTexture,
+    //   previousLightScale: lastToneMappedScale
+    // });
 
-    toneMapToScreen(reprojectBuffer.color[0], fullscreenScale);
+    // toneMapToScreen(reprojectBuffer.color[0], fullscreenScale);
+    toneMapToScreen(hdrBuffer.color[0], fullscreenScale);
   }
 
   return {

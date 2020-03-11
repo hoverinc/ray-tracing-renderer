@@ -7,7 +7,7 @@ outputs: ['color'],
 source: `
   in vec2 vCoord;
 
-  uniform sampler2D light;
+  uniform mediump sampler2DArray diffuseSpecular;
   uniform sampler2D albedo;
   uniform sampler2D position;
 
@@ -74,14 +74,14 @@ source: `
       vec2 pCoord = (vec2(texels[i]) + 0.5) / sizef;
       float isValid = getMeshId(position, pCoord) == meshId ? 1.0 : 0.0;
       float weight = isValid * weights[i];
-      upscaledLight += weight * texelFetch(light, texels[i], 0);
+      // upscaledLight += weight * texelFetch(light, texels[i], 0);
       sum += weight;
     }
 
     if (sum > 0.0) {
       upscaledLight /= sum;
     } else {
-      upscaledLight = texture(light, lightScale * coord);
+      // upscaledLight = texture(light, lightScale * coord);
     }
 
     return upscaledLight;
@@ -92,7 +92,7 @@ source: `
     #ifdef EDGE_PRESERVING_UPSCALE
       vec4 upscaledLight = getUpscaledLight(vCoord);
     #else
-      vec4 upscaledLight = texture(light, lightScale * vCoord);
+      vec4 upscaledLight = texture(diffuseSpecular, vec3(lightScale * vCoord, 0));
     #endif
 
     // alpha channel stores the number of samples progressively rendered

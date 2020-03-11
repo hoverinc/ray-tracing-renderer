@@ -47,7 +47,7 @@ export function makeToneMapPass(gl, params) {
       renderPassNative;
 
     renderPass.setUniform('lightScale', lightScale.x, lightScale.y);
-    renderPass.setTexture('light', light);
+    renderPass.setTexture('diffuseSpecular', light);
     renderPass.setTexture('position', position);
     renderPass.setTexture('albedo', albedo);
 
