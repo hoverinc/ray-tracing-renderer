@@ -41,7 +41,7 @@ export function RayTracingRenderer(params = {}) {
     toneMapping: THREE.LinearToneMapping,
     toneMappingExposure: 1,
     toneMappingWhitePoint: 1,
-    forcePerformanceLevel: DynamicPerformance,
+    performanceLevel: DynamicPerformance,
   };
 
   function initScene(scene) {
@@ -54,7 +54,7 @@ export function RayTracingRenderer(params = {}) {
     };
 
     const bounces = module.bounces;
-    const performanceLevel = module.forcePerformanceLevel;
+    const performanceLevel = module.performanceLevel;
 
     pipeline = makeRenderingPipeline({gl, optionalExtensions, scene, toneMappingParams, bounces, performanceLevel});
 

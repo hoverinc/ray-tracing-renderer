@@ -60,13 +60,13 @@ export function makeRenderSize(gl, performanceLevel) {
 function pixelsPerFrameFromPerformanceLevel(performanceLevel) {
   switch (performanceLevel) {
     case MinimumPerformance:
-      return 5000;
+      return 3000;
     case OkPerformance:
-      return 20000;
+      return 5000;
     case GoodPerformance:
-      return 504000;
+      return 30000;
     case ExcellentPerformance:
-      return 945000;
+      return 800000;
     case DynamicPerformance:
       return null;
   }

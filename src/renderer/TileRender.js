@@ -28,7 +28,6 @@ export function makeTileRender(gl, performanceLevel) {
   let height = 0;
 
   let totalElapsedMs;
-
   // initial number of pixels per rendered tile
   // based on correlation between system performance and max supported render buffer size
   // adjusted dynamically according to system performance
@@ -110,13 +109,13 @@ export function makeTileRender(gl, performanceLevel) {
 function pixelsPerMsFromPerformanceLevel(performanceLevel) {
   switch (performanceLevel) {
     case MinimumPerformance:
-      return 5000;
+      return 1000;
     case OkPerformance:
-      return 10000;
+      return 2500;
     case GoodPerformance:
-      return 15000;
+      return 8000;
     case ExcellentPerformance:
-      return 30000;
+      return 80000;
     case DynamicPerformance:
       return null;
   }
