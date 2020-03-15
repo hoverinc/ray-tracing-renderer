@@ -3644,13 +3644,13 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
   function pixelsPerFrameFromPerformanceLevel(performanceLevel) {
     switch (performanceLevel) {
       case MinimumPerformance:
-        return 5000;
+        return 3000;
       case OkPerformance:
-        return 20000;
+        return 5000;
       case GoodPerformance:
-        return 504000;
+        return 30000;
       case ExcellentPerformance:
-        return 945000;
+        return 800000;
       case DynamicPerformance:
         return null;
     }
@@ -4032,7 +4032,6 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
     let height = 0;
 
     let totalElapsedMs;
-
     // initial number of pixels per rendered tile
     // based on correlation between system performance and max supported render buffer size
     // adjusted dynamically according to system performance
@@ -4114,13 +4113,13 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
   function pixelsPerMsFromPerformanceLevel(performanceLevel) {
     switch (performanceLevel) {
       case MinimumPerformance:
-        return 5000;
+        return 1000;
       case OkPerformance:
-        return 10000;
+        return 2500;
       case GoodPerformance:
-        return 15000;
+        return 8000;
       case ExcellentPerformance:
-        return 30000;
+        return 80000;
       case DynamicPerformance:
         return null;
     }
@@ -4152,7 +4151,7 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
     const maxReprojectedSamples = 20;
 
     // how many samples to render with uniform noise before switching to stratified noise
-    const numUniformSamples = 100;
+    const numUniformSamples = 4;
 
     // how many partitions of stratified noise should be created
     // higher number results in faster convergence over time, but with lower quality initial samples
@@ -4599,7 +4598,7 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
       toneMapping: THREE$1.LinearToneMapping,
       toneMappingExposure: 1,
       toneMappingWhitePoint: 1,
-      forcePerformanceLevel: DynamicPerformance,
+      performanceLevel: DynamicPerformance,
     };
 
     function initScene(scene) {
@@ -4612,7 +4611,7 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
       };
 
       const bounces = module.bounces;
-      const performanceLevel = module.forcePerformanceLevel;
+      const performanceLevel = module.performanceLevel;
 
       pipeline = makeRenderingPipeline({gl, optionalExtensions, scene, toneMappingParams, bounces, performanceLevel});
 
