@@ -7,11 +7,21 @@
   const ThinMaterial = 1;
   const ThickMaterial = 2;
   const ShadowCatcherMaterial = 3;
+  const MinimumPerformance = 4;
+  const OkPerformance = 5;
+  const GoodPerformance = 6;
+  const ExcellentPerformance = 7;
+  const DynamicPerformance = 8;
 
   var constants = /*#__PURE__*/Object.freeze({
     ThinMaterial: ThinMaterial,
     ThickMaterial: ThickMaterial,
-    ShadowCatcherMaterial: ShadowCatcherMaterial
+    ShadowCatcherMaterial: ShadowCatcherMaterial,
+    MinimumPerformance: MinimumPerformance,
+    OkPerformance: OkPerformance,
+    GoodPerformance: GoodPerformance,
+    ExcellentPerformance: ExcellentPerformance,
+    DynamicPerformance: DynamicPerformance
   });
 
   class LensCamera extends THREE$1.PerspectiveCamera {
@@ -3576,17 +3586,19 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
     return newArray;
   }
 
-  function makeRenderSize(gl) {
+  function makeRenderSize(gl, performanceLevel) {
     const desiredMsPerFrame = 20;
 
     let fullWidth;
     let fullHeight;
+    let aspectRatio;
+    let overridePixelsPerFrame = pixelsPerFrameFromPerformanceLevel(performanceLevel);
 
     let renderWidth;
     let renderHeight;
     let scale = new THREE$1.Vector2(1, 1);
 
-    let pixelsPerFrame = pixelsPerFrameEstimate(gl);
+    let pixelsPerFrame = overridePixelsPerFrame ? overridePixelsPerFrame : pixelsPerFrameEstimate(gl);
 
     function setSize(w, h) {
       fullWidth = w;
@@ -3595,14 +3607,14 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
     }
 
     function calcDimensions() {
-      const aspectRatio = fullWidth / fullHeight;
+      aspectRatio = fullWidth / fullHeight;
       renderWidth = Math.round(clamp(Math.sqrt(pixelsPerFrame * aspectRatio), 1, fullWidth));
       renderHeight = Math.round(clamp(renderWidth / aspectRatio, 1, fullHeight));
       scale.set(renderWidth / fullWidth, renderHeight / fullHeight);
     }
 
     function adjustSize(elapsedFrameMs) {
-      if (!elapsedFrameMs) {
+      if (!elapsedFrameMs || overridePixelsPerFrame) {
         return;
       }
 
@@ -3627,6 +3639,21 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
         return renderHeight;
       }
     };
+  }
+
+  function pixelsPerFrameFromPerformanceLevel(performanceLevel) {
+    switch (performanceLevel) {
+      case MinimumPerformance:
+        return 5000;
+      case OkPerformance:
+        return 20000;
+      case GoodPerformance:
+        return 504000;
+      case ExcellentPerformance:
+        return 945000;
+      case DynamicPerformance:
+        return null;
+    }
   }
 
   function pixelsPerFrameEstimate(gl) {
@@ -3988,8 +4015,9 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
   // Since the render time of a tile is dependent on the device, we find the desired tile dimensions by measuring
   // the time it takes to render an arbitrarily-set tile size and adjusting the size according to the benchmark.
 
-  function makeTileRender(gl) {
+  function makeTileRender(gl, performanceLevel) {
     const desiredMsPerTile = 21;
+    const overridePixelsPerMs = pixelsPerMsFromPerformanceLevel(performanceLevel);
 
     let currentTile = -1;
     let numTiles = 1;
@@ -4008,7 +4036,7 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
     // initial number of pixels per rendered tile
     // based on correlation between system performance and max supported render buffer size
     // adjusted dynamically according to system performance
-    let pixelsPerTile = pixelsPerTileEstimate(gl);
+    let pixelsPerTile = overridePixelsPerMs ? (overridePixelsPerMs * desiredMsPerTile) : pixelsPerTileEstimate(gl);
 
     function reset() {
       currentTile = -1;
@@ -4052,7 +4080,7 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
       totalElapsedMs += elapsedFrameMs;
 
       if (currentTile % numTiles === 0) {
-        if (totalElapsedMs) {
+        if (totalElapsedMs && !overridePixelsPerMs) {
           updatePixelsPerTile();
           calcTileDimensions();
         }
@@ -4083,6 +4111,21 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
     };
   }
 
+  function pixelsPerMsFromPerformanceLevel(performanceLevel) {
+    switch (performanceLevel) {
+      case MinimumPerformance:
+        return 5000;
+      case OkPerformance:
+        return 10000;
+      case GoodPerformance:
+        return 15000;
+      case ExcellentPerformance:
+        return 30000;
+      case DynamicPerformance:
+        return null;
+    }
+  }
+
   function pixelsPerTileEstimate(gl) {
     const maxRenderbufferSize = gl.getParameter(gl.MAX_RENDERBUFFER_SIZE);
 
@@ -4103,12 +4146,13 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
       scene,
       toneMappingParams,
       bounces, // number of global illumination bounces
+      performanceLevel,
     }) {
 
     const maxReprojectedSamples = 20;
 
     // how many samples to render with uniform noise before switching to stratified noise
-    const numUniformSamples = 4;
+    const numUniformSamples = 100;
 
     // how many partitions of stratified noise should be created
     // higher number results in faster convergence over time, but with lower quality initial samples
@@ -4119,9 +4163,9 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
     const previewFramesBeforeBenchmark = 2;
 
     // used to sample only a portion of the scene to the HDR Buffer to prevent the GPU from locking up from excessive computation
-    const tileRender = makeTileRender(gl);
+    const tileRender = makeTileRender(gl, performanceLevel);
 
-    const previewSize = makeRenderSize(gl);
+    const previewSize = makeRenderSize(gl, performanceLevel);
 
     const decomposedScene = decomposeScene(scene);
 
@@ -4407,7 +4451,7 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
         sampleCount++;
 
         let blendAmount = clamp(1.0 - sampleCount / maxReprojectedSamples, 0, 1);
-        blendAmount *= blendAmount;
+        // blendAmount *= blendAmount;
 
         if (blendAmount > 0.0) {
           reprojectBuffer.bind();
@@ -4510,6 +4554,9 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
       },
       get onSampleRendered() {
         return sampleRenderedCallback;
+      },
+      set forceSamplesPerMs(samples) {
+        
       }
     };
   }
@@ -4552,6 +4599,7 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
       toneMapping: THREE$1.LinearToneMapping,
       toneMappingExposure: 1,
       toneMappingWhitePoint: 1,
+      forcePerformanceLevel: DynamicPerformance,
     };
 
     function initScene(scene) {
@@ -4564,8 +4612,9 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
       };
 
       const bounces = module.bounces;
+      const performanceLevel = module.forcePerformanceLevel;
 
-      pipeline = makeRenderingPipeline({gl, optionalExtensions, scene, toneMappingParams, bounces});
+      pipeline = makeRenderingPipeline({gl, optionalExtensions, scene, toneMappingParams, bounces, performanceLevel});
 
       pipeline.onSampleRendered = (...args) => {
         if (module.onSampleRendered) {
@@ -4716,6 +4765,11 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
     THREE.RayTracingRenderer = RayTracingRenderer;
     THREE.ThickMaterial = ThickMaterial;
     THREE.ThinMaterial = ThinMaterial;
+    THREE.MinimumRayTracingPerformance = MinimumPerformance;
+    THREE.OkRayTracingPerformance = OkPerformance;
+    THREE.GoodRayTracingPerformance = GoodPerformance;
+    THREE.ExcellentRayTracingPerformance = ExcellentPerformance;
+    THREE.DynamicRayTracingPerformance = DynamicPerformance;
   }
 
   exports.EnvironmentLight = EnvironmentLight;
