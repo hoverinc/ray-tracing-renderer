@@ -1,5 +1,6 @@
 import { loadExtensions } from './renderer/glUtil';
 import { makeRenderingPipeline } from './renderer/RenderingPipeline';
+import { MinimumPerformance, OkPerformance, GoodPerformance, ExcellentPerformance, DynamicPerformance } from './constants';
 import * as THREE from 'three';
 
 const glRequiredExtensions = [
@@ -40,6 +41,7 @@ export function RayTracingRenderer(params = {}) {
     toneMapping: THREE.LinearToneMapping,
     toneMappingExposure: 1,
     toneMappingWhitePoint: 1,
+    forcePerformanceLevel: DynamicPerformance,
   };
 
   function initScene(scene) {
@@ -52,8 +54,9 @@ export function RayTracingRenderer(params = {}) {
     };
 
     const bounces = module.bounces;
+    const performanceLevel = module.forcePerformanceLevel;
 
-    pipeline = makeRenderingPipeline({gl, optionalExtensions, scene, toneMappingParams, bounces});
+    pipeline = makeRenderingPipeline({gl, optionalExtensions, scene, toneMappingParams, bounces, performanceLevel});
 
     pipeline.onSampleRendered = (...args) => {
       if (module.onSampleRendered) {

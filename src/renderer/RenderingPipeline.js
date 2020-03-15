@@ -20,12 +20,13 @@ export function makeRenderingPipeline({
     scene,
     toneMappingParams,
     bounces, // number of global illumination bounces
+    performanceLevel,
   }) {
 
   const maxReprojectedSamples = 20;
 
   // how many samples to render with uniform noise before switching to stratified noise
-  const numUniformSamples = 4;
+  const numUniformSamples = 100;
 
   // how many partitions of stratified noise should be created
   // higher number results in faster convergence over time, but with lower quality initial samples
@@ -36,9 +37,9 @@ export function makeRenderingPipeline({
   const previewFramesBeforeBenchmark = 2;
 
   // used to sample only a portion of the scene to the HDR Buffer to prevent the GPU from locking up from excessive computation
-  const tileRender = makeTileRender(gl);
+  const tileRender = makeTileRender(gl, performanceLevel);
 
-  const previewSize = makeRenderSize(gl);
+  const previewSize = makeRenderSize(gl, performanceLevel);
 
   const decomposedScene = decomposeScene(scene);
 
@@ -324,7 +325,7 @@ export function makeRenderingPipeline({
       sampleCount++;
 
       let blendAmount = clamp(1.0 - sampleCount / maxReprojectedSamples, 0, 1);
-      blendAmount *= blendAmount;
+      // blendAmount *= blendAmount;
 
       if (blendAmount > 0.0) {
         reprojectBuffer.bind();
@@ -427,6 +428,9 @@ export function makeRenderingPipeline({
     },
     get onSampleRendered() {
       return sampleRenderedCallback;
+    },
+    set forceSamplesPerMs(samples) {
+      
     }
   };
 }

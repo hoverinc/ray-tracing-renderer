@@ -1,5 +1,5 @@
 import { clamp } from './util';
-
+import { MinimumPerformance, OkPerformance, GoodPerformance, ExcellentPerformance, DynamicPerformance } from '../constants';
 // TileRender is based on the concept of a compute shader's work group.
 
 // Sampling the scene with the RayTracingRenderer can be very slow (<1 fps).
@@ -11,8 +11,9 @@ import { clamp } from './util';
 // Since the render time of a tile is dependent on the device, we find the desired tile dimensions by measuring
 // the time it takes to render an arbitrarily-set tile size and adjusting the size according to the benchmark.
 
-export function makeTileRender(gl) {
+export function makeTileRender(gl, performanceLevel) {
   const desiredMsPerTile = 21;
+  const overridePixelsPerMs = pixelsPerMsFromPerformanceLevel(performanceLevel);
 
   let currentTile = -1;
   let numTiles = 1;
@@ -31,7 +32,7 @@ export function makeTileRender(gl) {
   // initial number of pixels per rendered tile
   // based on correlation between system performance and max supported render buffer size
   // adjusted dynamically according to system performance
-  let pixelsPerTile = pixelsPerTileEstimate(gl);
+  let pixelsPerTile = overridePixelsPerMs ? (overridePixelsPerMs * desiredMsPerTile) : pixelsPerTileEstimate(gl);
 
   function reset() {
     currentTile = -1;
@@ -75,7 +76,7 @@ export function makeTileRender(gl) {
     totalElapsedMs += elapsedFrameMs;
 
     if (currentTile % numTiles === 0) {
-      if (totalElapsedMs) {
+      if (totalElapsedMs && !overridePixelsPerMs) {
         updatePixelsPerTile();
         calcTileDimensions();
       }
@@ -104,6 +105,21 @@ export function makeTileRender(gl) {
     reset,
     setSize,
   };
+}
+
+function pixelsPerMsFromPerformanceLevel(performanceLevel) {
+  switch (performanceLevel) {
+    case MinimumPerformance:
+      return 5000;
+    case OkPerformance:
+      return 10000;
+    case GoodPerformance:
+      return 15000;
+    case ExcellentPerformance:
+      return 30000;
+    case DynamicPerformance:
+      return null;
+  }
 }
 
 function pixelsPerTileEstimate(gl) {

@@ -1,17 +1,20 @@
 import { clamp } from './util';
 import { Vector2 } from 'three';
+import { MinimumPerformance, OkPerformance, GoodPerformance, ExcellentPerformance, DynamicPerformance } from '../constants';
 
-export function makeRenderSize(gl) {
+export function makeRenderSize(gl, performanceLevel) {
   const desiredMsPerFrame = 20;
 
   let fullWidth;
   let fullHeight;
+  let aspectRatio;
+  let overridePixelsPerFrame = pixelsPerFrameFromPerformanceLevel(performanceLevel);
 
   let renderWidth;
   let renderHeight;
   let scale = new Vector2(1, 1);
 
-  let pixelsPerFrame = pixelsPerFrameEstimate(gl);
+  let pixelsPerFrame = overridePixelsPerFrame ? overridePixelsPerFrame : pixelsPerFrameEstimate(gl);
 
   function setSize(w, h) {
     fullWidth = w;
@@ -20,14 +23,14 @@ export function makeRenderSize(gl) {
   }
 
   function calcDimensions() {
-    const aspectRatio = fullWidth / fullHeight;
+    aspectRatio = fullWidth / fullHeight;
     renderWidth = Math.round(clamp(Math.sqrt(pixelsPerFrame * aspectRatio), 1, fullWidth));
     renderHeight = Math.round(clamp(renderWidth / aspectRatio, 1, fullHeight));
     scale.set(renderWidth / fullWidth, renderHeight / fullHeight);
   }
 
   function adjustSize(elapsedFrameMs) {
-    if (!elapsedFrameMs) {
+    if (!elapsedFrameMs || overridePixelsPerFrame) {
       return;
     }
 
@@ -52,6 +55,21 @@ export function makeRenderSize(gl) {
       return renderHeight;
     }
   };
+}
+
+function pixelsPerFrameFromPerformanceLevel(performanceLevel) {
+  switch (performanceLevel) {
+    case MinimumPerformance:
+      return 5000;
+    case OkPerformance:
+      return 20000;
+    case GoodPerformance:
+      return 504000;
+    case ExcellentPerformance:
+      return 945000;
+    case DynamicPerformance:
+      return null;
+  }
 }
 
 function pixelsPerFrameEstimate(gl) {
