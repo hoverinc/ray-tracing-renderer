@@ -3,8 +3,8 @@
 
 export default `
 
-uniform sampler2D envmap;
-uniform sampler2D envmapDistribution;
+uniform sampler2D envMap;
+uniform sampler2D envMapDistribution;
 uniform sampler2D backgroundMap;
 
 vec2 cartesianToEquirect(vec3 pointOnSphere) {
@@ -14,13 +14,13 @@ vec2 cartesianToEquirect(vec3 pointOnSphere) {
 }
 
 float getEnvmapV(float u, out int vOffset, out float pdf) {
-  ivec2 size = textureSize(envmap, 0);
+  ivec2 size = textureSize(envMap, 0);
 
   int left = 0;
-  int right = size.y + 1; // cdf length is the length of the envmap + 1
+  int right = size.y + 1; // cdf length is the length of the env map + 1
   while (left < right) {
     int mid = (left + right) >> 1;
-    float s = texelFetch(envmapDistribution, ivec2(0, mid), 0).x;
+    float s = texelFetch(envMapDistribution, ivec2(0, mid), 0).x;
     if (s <= u) {
       left = mid + 1;
     } else {
@@ -29,10 +29,10 @@ float getEnvmapV(float u, out int vOffset, out float pdf) {
   }
   vOffset = left - 1;
 
-  // x channel is cumulative distribution of envmap luminance
-  // y channel is partial probability density of envmap luminance
-  vec2 s0 = texelFetch(envmapDistribution, ivec2(0, vOffset), 0).xy;
-  vec2 s1 = texelFetch(envmapDistribution, ivec2(0, vOffset + 1), 0).xy;
+  // x channel is cumulative distribution of env map luminance
+  // y channel is partial probability density of env map luminance
+  vec2 s0 = texelFetch(envMapDistribution, ivec2(0, vOffset), 0).xy;
+  vec2 s1 = texelFetch(envMapDistribution, ivec2(0, vOffset + 1), 0).xy;
 
   pdf = s0.y;
 
@@ -40,13 +40,13 @@ float getEnvmapV(float u, out int vOffset, out float pdf) {
 }
 
 float getEnvmapU(float u, int vOffset, out float pdf) {
-  ivec2 size = textureSize(envmap, 0);
+  ivec2 size = textureSize(envMap, 0);
 
   int left = 0;
-  int right = size.x + 1; // cdf length is the length of the envmap + 1
+  int right = size.x + 1; // cdf length is the length of the env map + 1
   while (left < right) {
     int mid = (left + right) >> 1;
-    float s = texelFetch(envmapDistribution, ivec2(1 + mid, vOffset), 0).x;
+    float s = texelFetch(envMapDistribution, ivec2(1 + mid, vOffset), 0).x;
     if (s <= u) {
       left = mid + 1;
     } else {
@@ -55,10 +55,10 @@ float getEnvmapU(float u, int vOffset, out float pdf) {
   }
   int uOffset = left - 1;
 
-  // x channel is cumulative distribution of envmap luminance
-  // y channel is partial probability density of envmap luminance
-  vec2 s0 = texelFetch(envmapDistribution, ivec2(1 + uOffset, vOffset), 0).xy;
-  vec2 s1 = texelFetch(envmapDistribution, ivec2(1 + uOffset + 1, vOffset), 0).xy;
+  // x channel is cumulative distribution of env map luminance
+  // y channel is partial probability density of env map luminance
+  vec2 s0 = texelFetch(envMapDistribution, ivec2(1 + uOffset, vOffset), 0).xy;
+  vec2 s1 = texelFetch(envMapDistribution, ivec2(1 + uOffset + 1, vOffset), 0).xy;
 
   pdf = s0.y;
 
@@ -87,22 +87,22 @@ vec3 sampleEnvmap(vec2 random, out vec2 uv, out float pdf) {
   return dir;
 }
 
-float envmapPdf(vec2 uv) {
-  vec2 size = vec2(textureSize(envmap, 0));
+float envMapPdf(vec2 uv) {
+  vec2 size = vec2(textureSize(envMap, 0));
 
   float sinTheta = sin(uv.y * PI);
 
   uv *= size;
 
-  float partialX = texelFetch(envmapDistribution, ivec2(1.0 + uv.x, uv.y), 0).y;
-  float partialY = texelFetch(envmapDistribution, ivec2(0, uv.y), 0).y;
+  float partialX = texelFetch(envMapDistribution, ivec2(1.0 + uv.x, uv.y), 0).y;
+  float partialY = texelFetch(envMapDistribution, ivec2(0, uv.y), 0).y;
 
   return partialX * partialY * INVPI2 / (2.0 * sinTheta);
 }
 
 vec3 sampleEnvmapFromDirection(vec3 d) {
   vec2 uv = cartesianToEquirect(d);
-  return textureLinear(envmap, uv).rgb;
+  return textureLinear(envMap, uv).rgb;
 }
 
 vec3 sampleBackgroundFromDirection(vec3 d) {

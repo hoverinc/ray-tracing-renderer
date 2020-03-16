@@ -6,8 +6,8 @@ outputs: ['color'],
 source: `
   in vec2 vCoord;
 
-  uniform sampler2D light;
-  uniform sampler2D position;
+  uniform sampler2D lightTex;
+  uniform sampler2D positionTex;
 
   uniform vec2 lightScale;
 
@@ -45,9 +45,9 @@ source: `
   }
 
   vec4 getUpscaledLight(vec2 coord) {
-    float meshId = getMeshId(position, coord);
+    float meshId = getMeshId(positionTex, coord);
 
-    vec2 sizef = lightScale * vec2(textureSize(position, 0));
+    vec2 sizef = lightScale * vec2(textureSize(positionTex, 0));
     vec2 texelf = coord * sizef - 0.5;
     ivec2 texel = ivec2(texelf);
     vec2 f = fract(texelf);
@@ -70,16 +70,16 @@ source: `
     float sum;
     for (int i = 0; i < 4; i++) {
       vec2 pCoord = (vec2(texels[i]) + 0.5) / sizef;
-      float isValid = getMeshId(position, pCoord) == meshId ? 1.0 : 0.0;
+      float isValid = getMeshId(positionTex, pCoord) == meshId ? 1.0 : 0.0;
       float weight = isValid * weights[i];
-      upscaledLight += weight * texelFetch(light, texels[i], 0);
+      upscaledLight += weight * texelFetch(lightTex, texels[i], 0);
       sum += weight;
     }
 
     if (sum > 0.0) {
       upscaledLight /= sum;
     } else {
-      upscaledLight = texture(light, lightScale * coord);
+      upscaledLight = texture(lightTex, lightScale * coord);
     }
 
     return upscaledLight;
@@ -90,14 +90,14 @@ source: `
     #ifdef EDGE_PRESERVING_UPSCALE
       vec4 upscaledLight = getUpscaledLight(vCoord);
     #else
-      vec4 upscaledLight = texture(light, lightScale * vCoord);
+      vec4 upscaledLight = texture(lightTex, lightScale * vCoord);
     #endif
 
     // alpha channel stores the number of samples progressively rendered
     // divide the sum of light by alpha to obtain average contribution of light
 
     // in addition, alpha contains a scale factor for the shadow catcher material
-    // dividing by alpha normalizes the brightness of the shadow catcher to match the background envmap.
+    // dividing by alpha normalizes the brightness of the shadow catcher to match the background envMap.
     vec3 light = upscaledLight.rgb / upscaledLight.a;
 
     light *= EXPOSURE;
