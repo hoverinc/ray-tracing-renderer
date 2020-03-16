@@ -97,7 +97,7 @@ source: `
     // divide the sum of light by alpha to obtain average contribution of light
 
     // in addition, alpha contains a scale factor for the shadow catcher material
-    // dividing by alpha normalizes the brightness of the shadow catcher to match the background envMap.
+    // dividing by alpha normalizes the brightness of the shadow catcher to match the background env map.
     vec3 light = upscaledLight.rgb / upscaledLight.a;
 
     light *= EXPOSURE;
