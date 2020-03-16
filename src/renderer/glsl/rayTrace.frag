@@ -79,9 +79,9 @@ source: (defines) => `
     path.beta = vec3(1.0);
     path.diffuseBeta = vec3(1.0);
     path.specularBeta = vec3(1.0);
-    path.specularBounce = true;
+    path.specularBounce = false;
+    path.misWeight = 0.0;
     path.abort = false;
-    path.misWeight = 1.0;
 
     SurfaceInteraction si;
 
@@ -133,9 +133,12 @@ source: (defines) => `
 
     Path path = integrator(cam);
 
-    // if (!(liAndAlpha.x < INF && liAndAlpha.x > -EPS)) {
-    //   liAndAlpha = vec4(0, 0, 0, 1);
-    // }
+    float validLi = dot(path.diffuse, path.specular);
+
+    if (!(validLi < INF && validLi > -EPS)) {
+      path.diffuse = vec3(0);
+      path.specular = vec3(0);
+    }
 
     out_diffuse = vec4(path.diffuse, path.alpha);
     out_specular = vec4(path.specular, path.alpha);

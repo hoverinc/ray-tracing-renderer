@@ -27,6 +27,8 @@ export function makeFramebuffer(gl, { colorAttachments, depthAttachment }) {
       locationToTex[attachment.location || 0] = attachment.texture;
     }
 
+    drawBuffers.sort(); // glDrawBuffers requires the color attachments to be specified in order
+
     gl.drawBuffers(drawBuffers);
 
     if (depthAttachment) {

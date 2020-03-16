@@ -43,10 +43,10 @@ export function makeReprojectPass(gl, params) {
     renderPass.setUniform('lightScale', lightScale.x, lightScale.y);
     renderPass.setUniform('previousLightScale', previousLightScale.x, previousLightScale.y);
 
-    renderPass.setTexture('light', light);
-    renderPass.setTexture('position', position);
-    renderPass.setTexture('previousLight', previousLight);
-    renderPass.setTexture('previousPosition', previousPosition);
+    renderPass.setTexture('diffuseSpecularTex', light);
+    renderPass.setTexture('positionTex', position);
+    renderPass.setTexture('previousDiffuseSpecularTex', previousLight);
+    renderPass.setTexture('previousPositionTex', previousPosition);
 
     renderPass.useProgram();
     fullscreenQuad.draw();
@@ -56,5 +56,6 @@ export function makeReprojectPass(gl, params) {
     draw,
     setJitter,
     setPreviousCamera,
+    outputLocs: renderPass.outputLocs
   };
 }
