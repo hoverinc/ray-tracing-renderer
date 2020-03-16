@@ -29,7 +29,7 @@ includes: [
   sampleGlass,
   sampleShadowCatcher,
 ],
-outputs: ['light'],
+outputs: ['diffuse', 'specular'],
 source: (defines) => `
   void bounce(inout Path path, int i, inout SurfaceInteraction si) {
 
@@ -39,7 +39,8 @@ source: (defines) => `
       // hit a light source (the hdr map)
       // add contribution from light source
       // path.misWeight is the multiple importance sampled weight of this light source
-      path.li += path.misWeight * path.beta * irr;
+      path.diffuse += path.beta * path.diffuseBeta * path.misWeight * irr;
+      path.specular += path.beta * path.specularBeta * path.misWeight * irr;
       path.abort = true;
       return;
     }
@@ -71,12 +72,13 @@ source: (defines) => `
 
   // Path tracing integrator as described in
   // http://www.pbr-book.org/3ed-2018/Light_Transport_I_Surface_Reflection/Path_Tracing.html#
-  vec4 integrator(inout Ray ray) {
+  Path integrator(inout Ray ray) {
     Path path;
     path.ray = ray;
-    path.li = vec3(0);
     path.alpha = 1.0;
     path.beta = vec3(1.0);
+    path.diffuseBeta = vec3(1.0);
+    path.specularBeta = vec3(1.0);
     path.specularBounce = true;
     path.abort = false;
     path.misWeight = 1.0;
@@ -93,17 +95,16 @@ source: (defines) => `
 
     // Manually unroll for loop.
     // Some hardware fails to iterate over a GLSL loop, so we provide this workaround
-    // for (int i = 1; i < defines.bounces + 1, i += 1)
-    // equivelant to
+    // for (int i = 2; i < defines.bounces + 1, i += 1)
     ${unrollLoop('i', 2, defines.BOUNCES + 1, 1, `
       if (path.abort) {
-        return vec4(path.li, path.alpha);
+        return path;
       }
       intersectScene(path.ray, si);
       bounce(path, i, si);
     `)}
 
-    return vec4(path.li, path.alpha);
+    return path;
   }
 
   void main() {
@@ -130,13 +131,14 @@ source: (defines) => `
     Ray cam;
     initRay(cam, origin, direction);
 
-    vec4 liAndAlpha = integrator(cam);
+    Path path = integrator(cam);
 
-    if (!(liAndAlpha.x < INF && liAndAlpha.x > -EPS)) {
-      liAndAlpha = vec4(0, 0, 0, 1);
-    }
+    // if (!(liAndAlpha.x < INF && liAndAlpha.x > -EPS)) {
+    //   liAndAlpha = vec4(0, 0, 0, 1);
+    // }
 
-    out_light = liAndAlpha;
+    out_diffuse = vec4(path.diffuse, path.alpha);
+    out_specular = vec4(path.specular, path.alpha);
 
     // Stratified Sampling Sample Count Test
     // ---------------

@@ -47,9 +47,9 @@ export function makeToneMapPass(gl, params) {
       renderPassNative;
 
     renderPass.setUniform('lightScale', lightScale.x, lightScale.y);
-    renderPass.setTexture('diffuseSpecular', light);
-    renderPass.setTexture('position', position);
-    renderPass.setTexture('albedo', albedo);
+    renderPass.setTexture('diffuseSpecularBuffer', light);
+    renderPass.setTexture('positionBuffer', position);
+    renderPass.setTexture('albedoBuffer', albedo);
 
     renderPass.useProgram();
     fullscreenQuad.draw();

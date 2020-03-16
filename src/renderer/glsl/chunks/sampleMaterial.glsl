@@ -4,6 +4,7 @@
 export default `
 
 void sampleMaterial(SurfaceInteraction si, int bounce, inout Path path) {
+  bool firstBounce = bounce == 1;
   bool lastBounce = bounce == BOUNCES;
   mat3 basis = orthonormalBasis(si.normal);
   vec3 viewDir = -path.ray.d;
@@ -19,11 +20,6 @@ void sampleMaterial(SurfaceInteraction si, int bounce, inout Path path) {
   // float probDiffuse = lumAlbedo / (lumAlbedo + lumSpecular) * (1.0 - si.metalness);
 
   float probDiffuse = mix(0.5, 0.0, si.metalness);
-
-  // remove surface albedo from first bounce
-  // added back in post-process pass
-  // vec3 demodulateAlbedo = bounce == 1 ? 1.0 / si.albedo : vec3(1.0);
-  vec3 demodulateAlbedo = vec3(1.0);
 
   // Step 1: Add direct illumination of the light source (the hdr map)
   // On every bounce but the last, importance sample the light source
@@ -83,9 +79,19 @@ void sampleMaterial(SurfaceInteraction si, int bounce, inout Path path) {
     weight = powerHeuristic(lightPdf, scatteringPdf) / lightPdf;
   }
 
-  vec3 finalBrdf = mix(brdf.diffuse * si.albedo + brdf.specular, brdf.specular * si.albedo, si.metalness);
+  vec3 li = path.beta * occluded * irr * abs(cosThetaL) * weight;
 
-  path.li += path.beta * occluded * demodulateAlbedo * finalBrdf * irr * abs(cosThetaL) * weight;
+  vec3 diffuse = li * brdf.diffuse;
+  vec3 specular = li * brdf.specular;
+
+  if (firstBounce) {
+    path.diffuse += diffuse;
+    path.specular += specular;
+  } else {
+    vec3 combined = si.albedo * diffuse + mix(vec3(1.0), si.albedo, si.metalness) * specular;
+    path.diffuse += path.diffuseBeta * combined;
+    path.specular += path.specularBeta * combined;
+  }
 
   // Step 2: Setup ray direction for next bounce by importance sampling the BRDF
 
@@ -110,14 +116,23 @@ void sampleMaterial(SurfaceInteraction si, int bounce, inout Path path) {
 
   scatteringPdf = mix(brdf.specularPdf, brdf.diffusePdf, probDiffuse);
 
-  finalBrdf = mix(brdf.diffuse * si.albedo + brdf.specular, brdf.specular * si.albedo, si.metalness);
 
   uv = cartesianToEquirect(lightDir);
   lightPdf = envmapPdf(uv);
 
   path.misWeight = powerHeuristic(scatteringPdf, lightPdf);
 
-  path.beta *= abs(cosThetaL) * finalBrdf * demodulateAlbedo / scatteringPdf;
+  float beta = abs(cosThetaL) / scatteringPdf;
+
+  float diffuseBeta = beta * brdf.diffuse;
+  float specularBeta = beta * brdf.specular;
+
+  if (firstBounce) {
+    path.diffuseBeta *= diffuseBeta;
+    path.specularBeta *= specularBeta;
+  } else {
+    path.beta *= si.albedo * diffuseBeta + mix(vec3(1.0), si.albedo, si.metalness) * specularBeta;
+  }
 
   path.specularBounce = false;
 

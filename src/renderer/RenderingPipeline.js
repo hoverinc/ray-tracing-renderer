@@ -96,22 +96,25 @@ export function makeRenderingPipeline({
   let lastToneMappedTexture;
 
   function initFrameBuffers(width, height) {
-    const makeHdrBuffer = () => makeFramebuffer(gl, {
-      colorAttachments: [
-        {
-          location: 0,
-          layer: 0,
-          texture: makeTexture(gl, { width, height, length: 2, storage: 'float', magFilter: gl.LINEAR, minFilter: gl.LINEAR })
-        }
-      ]
-    });
 
-    const makeReprojectBuffer = () => makeFramebuffer(gl, {
-      colorAttachments: {
-        location: 0,
-        texture: makeTexture(gl, { width, height, storage: 'float', magFilter: gl.LINEAR, minFilter: gl.LINEAR })
-      }
-    });
+    function makeHdrBuffer() {
+      const texture = makeTexture(gl, { width, height, length: 2, storage: 'halfFloat', magFilter: gl.LINEAR, minFilter: gl.LINEAR });
+      return makeFramebuffer(gl, {
+        colorAttachments: [
+          { location: rayTracePass.outputLocs.diffuse, layer: 0, texture },
+          { location: rayTracePass.outputLocs.specular, layer: 1, texture },
+        ]
+      });
+    }
+
+    function makeReprojectBuffer() {
+      return makeFramebuffer(gl, {
+        colorAttachments: {
+          location: 0,
+          texture: makeTexture(gl, { width, height, storage: 'float', magFilter: gl.LINEAR, minFilter: gl.LINEAR })
+        }
+      });
+    }
 
     hdrBuffer = makeHdrBuffer();
     hdrBackBuffer = makeHdrBuffer();
@@ -121,7 +124,7 @@ export function makeRenderingPipeline({
 
     const normalBuffer = makeTexture(gl, { width, height, storage: 'halfFloat' });
     const faceNormalBuffer = makeTexture(gl, { width, height, storage: 'halfFloat' });
-    const albedoBuffer = makeTexture(gl, { width, height, storage: 'byte', channels: 3});
+    const albedoBuffer = makeTexture(gl, { width, height, storage: 'byte', channels: 4});
     const matProps = makeTexture(gl, { width, height, storage: 'byte', channels: 2 });
     const depthTarget = makeDepthTarget(gl, width, height);
 

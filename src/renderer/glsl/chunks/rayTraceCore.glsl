@@ -68,9 +68,12 @@ export default `
 
   struct Path {
     Ray ray;
-    vec3 li;
+    vec3 diffuse;
+    vec3 specular;
     float alpha;
     vec3 beta;
+    vec3 diffuseBeta;
+    vec3 specularBeta;
     bool specularBounce;
     bool abort;
     float misWeight;

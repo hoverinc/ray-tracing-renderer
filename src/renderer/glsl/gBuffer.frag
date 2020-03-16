@@ -49,7 +49,7 @@ source: `
     out_position = vec4(vPosition, float(meshIndex) + EPS);
     out_normal = vec4(normal, materialType);
     out_faceNormal = vec4(faceNormal, 0);
-    out_albedo = vec4(albedo, 0);
+    out_albedo = vec4(albedo, metalness);
     out_matProps = vec4(roughness, metalness, 0, 0);
   }
 `

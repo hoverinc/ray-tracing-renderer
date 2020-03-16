@@ -95,7 +95,8 @@ MaterialBrdf getMaterialBrdf(SurfaceInteraction si, vec3 viewDir, vec3 lightDir,
   brdf.diffuse = diffuseWeight * INVPI * (1.0 + f * fresnelSchlickWeight(cosThetaL)) * (1.0 + f * fresnelSchlickWeight(cosThetaV));
   brdf.diffusePdf = cosThetaL * INVPI;
 
+  brdf.diffuse *= (1.0 - si.metalness);
+
   return brdf;
 }
-
 `;
