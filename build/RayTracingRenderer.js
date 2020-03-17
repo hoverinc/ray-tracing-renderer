@@ -7,21 +7,21 @@
   const ThinMaterial = 1;
   const ThickMaterial = 2;
   const ShadowCatcherMaterial = 3;
-  const MinimumPerformance = 4;
-  const OkPerformance = 5;
-  const GoodPerformance = 6;
-  const ExcellentPerformance = 7;
-  const DynamicPerformance = 8;
+  const MinimumRayTracingPerformance = 4;
+  const OkRayTracingPerformance = 5;
+  const GoodRayTracingPerformance = 6;
+  const ExcellentRayTracingPerformance = 7;
+  const DynamicRayTracingPerformance = 8;
 
   var constants = /*#__PURE__*/Object.freeze({
     ThinMaterial: ThinMaterial,
     ThickMaterial: ThickMaterial,
     ShadowCatcherMaterial: ShadowCatcherMaterial,
-    MinimumPerformance: MinimumPerformance,
-    OkPerformance: OkPerformance,
-    GoodPerformance: GoodPerformance,
-    ExcellentPerformance: ExcellentPerformance,
-    DynamicPerformance: DynamicPerformance
+    MinimumRayTracingPerformance: MinimumRayTracingPerformance,
+    OkRayTracingPerformance: OkRayTracingPerformance,
+    GoodRayTracingPerformance: GoodRayTracingPerformance,
+    ExcellentRayTracingPerformance: ExcellentRayTracingPerformance,
+    DynamicRayTracingPerformance: DynamicRayTracingPerformance
   });
 
   class LensCamera extends THREE$1.PerspectiveCamera {
@@ -3643,15 +3643,15 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
 
   function pixelsPerFrameFromPerformanceLevel(performanceLevel) {
     switch (performanceLevel) {
-      case MinimumPerformance:
+      case MinimumRayTracingPerformance:
         return 3000;
-      case OkPerformance:
+      case OkRayTracingPerformance:
         return 5000;
-      case GoodPerformance:
+      case GoodRayTracingPerformance:
         return 30000;
-      case ExcellentPerformance:
-        return 800000;
-      case DynamicPerformance:
+      case ExcellentRayTracingPerformance:
+        return 1000000;
+      case DynamicRayTracingPerformance:
         return null;
     }
   }
@@ -4036,10 +4036,13 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
     // based on correlation between system performance and max supported render buffer size
     // adjusted dynamically according to system performance
     let pixelsPerTile = overridePixelsPerMs ? (overridePixelsPerMs * desiredMsPerTile) : pixelsPerTileEstimate(gl);
+    // let avgPixelsPerMs;
+    // let lastTenPixelsPerMs = [];
 
     function reset() {
       currentTile = -1;
       totalElapsedMs = NaN;
+      // lastTenPixelsPerMs = [];
     }
 
     function setSize(w, h) {
@@ -4063,7 +4066,10 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
 
     function updatePixelsPerTile() {
       const msPerTile = totalElapsedMs / numTiles;
-
+      // const pixelsPerMs = pixelsPerTile / msPerTile;
+      // lastTenPixelsPerMs.push(pixelsPerMs);
+      // avgPixelsPerMs = avgValue(lastTenPixelsPerMs);
+      // console.log("AVG PIXELS PER MS:",avgPixelsPerMs);
       const error = desiredMsPerTile - msPerTile;
 
        // tweak to find balance. higher = faster convergence, lower = less fluctuations to microstutters
@@ -4112,15 +4118,15 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
 
   function pixelsPerMsFromPerformanceLevel(performanceLevel) {
     switch (performanceLevel) {
-      case MinimumPerformance:
+      case MinimumRayTracingPerformance:
         return 1000;
-      case OkPerformance:
-        return 2500;
-      case GoodPerformance:
-        return 8000;
-      case ExcellentPerformance:
-        return 80000;
-      case DynamicPerformance:
+      case OkRayTracingPerformance:
+        return 10000;
+      case GoodRayTracingPerformance:
+        return 50000;
+      case ExcellentRayTracingPerformance:
+        return 100000;
+      case DynamicRayTracingPerformance:
         return null;
     }
   }
@@ -4598,7 +4604,7 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
       toneMapping: THREE$1.LinearToneMapping,
       toneMappingExposure: 1,
       toneMappingWhitePoint: 1,
-      performanceLevel: DynamicPerformance,
+      performanceLevel: DynamicRayTracingPerformance,
     };
 
     function initScene(scene) {
@@ -4764,11 +4770,11 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
     THREE.RayTracingRenderer = RayTracingRenderer;
     THREE.ThickMaterial = ThickMaterial;
     THREE.ThinMaterial = ThinMaterial;
-    THREE.MinimumRayTracingPerformance = MinimumPerformance;
-    THREE.OkRayTracingPerformance = OkPerformance;
-    THREE.GoodRayTracingPerformance = GoodPerformance;
-    THREE.ExcellentRayTracingPerformance = ExcellentPerformance;
-    THREE.DynamicRayTracingPerformance = DynamicPerformance;
+    THREE.MinimumRayTracingPerformance = MinimumRayTracingPerformance;
+    THREE.OkRayTracingPerformance = OkRayTracingPerformance;
+    THREE.GoodRayTracingPerformance = GoodRayTracingPerformance;
+    THREE.ExcellentRayTracingPerformance = ExcellentRayTracingPerformance;
+    THREE.DynamicRayTracingPerformance = DynamicRayTracingPerformance;
   }
 
   exports.EnvironmentLight = EnvironmentLight;
