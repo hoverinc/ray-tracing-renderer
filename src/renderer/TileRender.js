@@ -1,5 +1,5 @@
-import { clamp } from './util';
-import { MinimumPerformance, OkPerformance, GoodPerformance, ExcellentPerformance, DynamicPerformance } from '../constants';
+import { clamp, avgValue } from './util';
+import { MinimumRayTracingPerformance, OkRayTracingPerformance, GoodRayTracingPerformance, ExcellentRayTracingPerformance, DynamicRayTracingPerformance } from '../constants';
 // TileRender is based on the concept of a compute shader's work group.
 
 // Sampling the scene with the RayTracingRenderer can be very slow (<1 fps).
@@ -32,10 +32,13 @@ export function makeTileRender(gl, performanceLevel) {
   // based on correlation between system performance and max supported render buffer size
   // adjusted dynamically according to system performance
   let pixelsPerTile = overridePixelsPerMs ? (overridePixelsPerMs * desiredMsPerTile) : pixelsPerTileEstimate(gl);
+  // let avgPixelsPerMs;
+  // let lastTenPixelsPerMs = [];
 
   function reset() {
     currentTile = -1;
     totalElapsedMs = NaN;
+    // lastTenPixelsPerMs = [];
   }
 
   function setSize(w, h) {
@@ -59,7 +62,10 @@ export function makeTileRender(gl, performanceLevel) {
 
   function updatePixelsPerTile() {
     const msPerTile = totalElapsedMs / numTiles;
-
+    // const pixelsPerMs = pixelsPerTile / msPerTile;
+    // lastTenPixelsPerMs.push(pixelsPerMs);
+    // avgPixelsPerMs = avgValue(lastTenPixelsPerMs);
+    // console.log("AVG PIXELS PER MS:",avgPixelsPerMs);
     const error = desiredMsPerTile - msPerTile;
 
      // tweak to find balance. higher = faster convergence, lower = less fluctuations to microstutters
@@ -108,15 +114,15 @@ export function makeTileRender(gl, performanceLevel) {
 
 function pixelsPerMsFromPerformanceLevel(performanceLevel) {
   switch (performanceLevel) {
-    case MinimumPerformance:
+    case MinimumRayTracingPerformance:
       return 1000;
-    case OkPerformance:
-      return 2500;
-    case GoodPerformance:
-      return 8000;
-    case ExcellentPerformance:
-      return 80000;
-    case DynamicPerformance:
+    case OkRayTracingPerformance:
+      return 10000;
+    case GoodRayTracingPerformance:
+      return 50000;
+    case ExcellentRayTracingPerformance:
+      return 100000;
+    case DynamicRayTracingPerformance:
       return null;
   }
 }

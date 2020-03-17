@@ -1,8 +1,8 @@
 export const ThinMaterial = 1;
 export const ThickMaterial = 2;
 export const ShadowCatcherMaterial = 3;
-export const MinimumPerformance = 4;
-export const OkPerformance = 5;
-export const GoodPerformance = 6;
-export const ExcellentPerformance = 7;
-export const DynamicPerformance = 8;
+export const MinimumRayTracingPerformance = 4;
+export const OkRayTracingPerformance = 5;
+export const GoodRayTracingPerformance = 6;
+export const ExcellentRayTracingPerformance = 7;
+export const DynamicRayTracingPerformance = 8;

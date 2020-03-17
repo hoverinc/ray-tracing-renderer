@@ -14,11 +14,11 @@ if (window.THREE) {
   THREE.RayTracingRenderer = RayTracingRenderer;
   THREE.ThickMaterial = constants.ThickMaterial;
   THREE.ThinMaterial = constants.ThinMaterial;
-  THREE.MinimumRayTracingPerformance = constants.MinimumPerformance;
-  THREE.OkRayTracingPerformance = constants.OkPerformance;
-  THREE.GoodRayTracingPerformance = constants.GoodPerformance;
-  THREE.ExcellentRayTracingPerformance = constants.ExcellentPerformance;
-  THREE.DynamicRayTracingPerformance = constants.DynamicPerformance;
+  THREE.MinimumRayTracingPerformance = constants.MinimumRayTracingPerformance;
+  THREE.OkRayTracingPerformance = constants.OkRayTracingPerformance;
+  THREE.GoodRayTracingPerformance = constants.GoodRayTracingPerformance;
+  THREE.ExcellentRayTracingPerformance = constants.ExcellentRayTracingPerformance;
+  THREE.DynamicRayTracingPerformance = constants.DynamicRayTracingPerformance;
 }
 
 export {

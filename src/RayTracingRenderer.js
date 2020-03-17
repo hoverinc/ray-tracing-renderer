@@ -1,6 +1,6 @@
 import { loadExtensions } from './renderer/glUtil';
 import { makeRenderingPipeline } from './renderer/RenderingPipeline';
-import { MinimumPerformance, OkPerformance, GoodPerformance, ExcellentPerformance, DynamicPerformance } from './constants';
+import { MinimumRayTracingPerformance, OkRayTracingPerformance, GoodRayTracingPerformance, ExcellentRayTracingPerformance, DynamicRayTracingPerformance } from './constants';
 import * as THREE from 'three';
 
 const glRequiredExtensions = [
@@ -41,7 +41,7 @@ export function RayTracingRenderer(params = {}) {
     toneMapping: THREE.LinearToneMapping,
     toneMappingExposure: 1,
     toneMappingWhitePoint: 1,
-    performanceLevel: DynamicPerformance,
+    performanceLevel: DynamicRayTracingPerformance,
   };
 
   function initScene(scene) {

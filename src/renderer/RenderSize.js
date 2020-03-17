@@ -1,6 +1,6 @@
 import { clamp } from './util';
 import { Vector2 } from 'three';
-import { MinimumPerformance, OkPerformance, GoodPerformance, ExcellentPerformance, DynamicPerformance } from '../constants';
+import { MinimumRayTracingPerformance, OkRayTracingPerformance, GoodRayTracingPerformance, ExcellentRayTracingPerformance, DynamicRayTracingPerformance } from '../constants';
 
 export function makeRenderSize(gl, performanceLevel) {
   const desiredMsPerFrame = 20;
@@ -59,15 +59,15 @@ export function makeRenderSize(gl, performanceLevel) {
 
 function pixelsPerFrameFromPerformanceLevel(performanceLevel) {
   switch (performanceLevel) {
-    case MinimumPerformance:
+    case MinimumRayTracingPerformance:
       return 3000;
-    case OkPerformance:
+    case OkRayTracingPerformance:
       return 5000;
-    case GoodPerformance:
+    case GoodRayTracingPerformance:
       return 30000;
-    case ExcellentPerformance:
-      return 800000;
-    case DynamicPerformance:
+    case ExcellentRayTracingPerformance:
+      return 1000000;
+    case DynamicRayTracingPerformance:
       return null;
   }
 }
