@@ -21,3 +21,14 @@ export function numberArraysEqual(a, b, eps = 1e-4) {
 
   return true;
 }
+
+export function avgValue(arr) {
+  if (arr.length < 1) {
+    return 0;
+  }
+  return arr.reduce((a, b) => (a + b)) / arr.length;
+}
+
+export const sleep = (milliseconds) => {
+  return new Promise(resolve => setTimeout(resolve, milliseconds))
+}

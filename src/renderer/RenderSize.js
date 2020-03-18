@@ -2,9 +2,9 @@ import { clamp } from './util';
 import { Vector2 } from 'three';
 import { MinimumRayTracingPerformance, OkRayTracingPerformance, GoodRayTracingPerformance, ExcellentRayTracingPerformance, DynamicRayTracingPerformance } from '../constants';
 
-export function makeRenderSize(gl, performanceLevel) {
+export function makeRenderSize(gl, performanceLevel, debugOutput) {
   const desiredMsPerFrame = 20;
-
+  const performanceDebugOutput = debugOutput;
   let fullWidth;
   let fullHeight;
   let aspectRatio;
@@ -30,7 +30,7 @@ export function makeRenderSize(gl, performanceLevel) {
   }
 
   function adjustSize(elapsedFrameMs) {
-    if (!elapsedFrameMs || overridePixelsPerFrame) {
+    if (!elapsedFrameMs) {
       return;
     }
 
@@ -39,9 +39,15 @@ export function makeRenderSize(gl, performanceLevel) {
 
     const error = desiredMsPerFrame - elapsedFrameMs;
 
-    pixelsPerFrame += strength * error;
-    pixelsPerFrame = clamp(pixelsPerFrame, 8192, fullWidth * fullHeight);
-    calcDimensions();
+    let tempPixPerFrame = pixelsPerFrame;
+    tempPixPerFrame += strength * error;
+    tempPixPerFrame = clamp(tempPixPerFrame, 8192, fullWidth * fullHeight);
+    if(!overridePixelsPerFrame) {
+      pixelsPerFrame = tempPixPerFrame;
+      calcDimensions();
+    }
+    // pixelsPerFrame += strength * error;
+    // pixelsPerFrame = clamp(pixelsPerFrame, 8192, fullWidth * fullHeight);
   }
 
   return {
@@ -60,11 +66,11 @@ export function makeRenderSize(gl, performanceLevel) {
 function pixelsPerFrameFromPerformanceLevel(performanceLevel) {
   switch (performanceLevel) {
     case MinimumRayTracingPerformance:
-      return 3000;
+      return 20000;
     case OkRayTracingPerformance:
-      return 5000;
+      return 50000;
     case GoodRayTracingPerformance:
-      return 30000;
+      return 80000;
     case ExcellentRayTracingPerformance:
       return 1000000;
     case DynamicRayTracingPerformance:

@@ -8,7 +8,7 @@ import { makeRayTracePass } from './RayTracePass';
 import { makeRenderSize } from './RenderSize';
 import { makeReprojectPass } from './ReprojectPass';
 import { makeToneMapPass } from './ToneMapPass';
-import { clamp, numberArraysEqual } from './util';
+import { clamp, numberArraysEqual, sleep } from './util';
 import { makeTileRender } from './TileRender';
 import { makeDepthTarget, makeTexture } from './Texture';
 import noiseBase64 from './texture/noise';
@@ -21,6 +21,7 @@ export function makeRenderingPipeline({
     toneMappingParams,
     bounces, // number of global illumination bounces
     performanceLevel,
+    performanceDebugOutput,
   }) {
 
   const maxReprojectedSamples = 20;
@@ -37,9 +38,9 @@ export function makeRenderingPipeline({
   const previewFramesBeforeBenchmark = 2;
 
   // used to sample only a portion of the scene to the HDR Buffer to prevent the GPU from locking up from excessive computation
-  const tileRender = makeTileRender(gl, performanceLevel);
+  const tileRender = makeTileRender(gl, performanceLevel, performanceDebugOutput);
 
-  const previewSize = makeRenderSize(gl, performanceLevel);
+  const previewSize = makeRenderSize(gl, performanceLevel, performanceDebugOutput);
 
   const decomposedScene = decomposeScene(scene);
 
@@ -305,8 +306,7 @@ export function makeRenderingPipeline({
   }
 
   function drawTile() {
-    const { x, y, tileWidth, tileHeight, isFirstTile, isLastTile } = tileRender.nextTile(elapsedFrameTime);
-
+    const { x, y, tileWidth, tileHeight, isFirstTile, isLastTile, extraMs } = tileRender.nextTile(elapsedFrameTime);
     if (isFirstTile) {
 
       if (sampleCount === 0) { // previous rendered image was a preview image

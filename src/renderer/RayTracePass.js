@@ -129,6 +129,7 @@ function makeRenderPassFromScene({
   // create bounding volume hierarchy from a static scene
   const bvh = bvhAccel(geometry, materialIndices);
   const flattenedBvh = flattenBvh(bvh);
+  console.log("BVH MAX DEPTH:",flattenedBvh.maxDepth);
   const numTris = geometry.index.count / 3;
 
   const renderPass = makeRenderPass(gl, {

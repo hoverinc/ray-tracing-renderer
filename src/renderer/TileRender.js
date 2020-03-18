@@ -1,4 +1,4 @@
-import { clamp, avgValue } from './util';
+import { clamp, avgValue, sleep } from './util';
 import { MinimumRayTracingPerformance, OkRayTracingPerformance, GoodRayTracingPerformance, ExcellentRayTracingPerformance, DynamicRayTracingPerformance } from '../constants';
 // TileRender is based on the concept of a compute shader's work group.
 
@@ -11,9 +11,12 @@ import { MinimumRayTracingPerformance, OkRayTracingPerformance, GoodRayTracingPe
 // Since the render time of a tile is dependent on the device, we find the desired tile dimensions by measuring
 // the time it takes to render an arbitrarily-set tile size and adjusting the size according to the benchmark.
 
-export function makeTileRender(gl, performanceLevel) {
+export function makeTileRender(gl, performanceLevel, debugOutput) {
   const desiredMsPerTile = 21;
-  const overridePixelsPerMs = pixelsPerMsFromPerformanceLevel(performanceLevel);
+  let pixelsPerMsPerFrame = [];
+
+  const requestedTileSize = tileSizeForPerformance(performanceLevel);
+  const desiredPixelsPerMs = desiredPixelsPerMsForPerformance(performanceLevel);
 
   let currentTile = -1;
   let numTiles = 1;
@@ -31,14 +34,20 @@ export function makeTileRender(gl, performanceLevel) {
   // initial number of pixels per rendered tile
   // based on correlation between system performance and max supported render buffer size
   // adjusted dynamically according to system performance
-  let pixelsPerTile = overridePixelsPerMs ? (overridePixelsPerMs * desiredMsPerTile) : pixelsPerTileEstimate(gl);
-  // let avgPixelsPerMs;
-  // let lastTenPixelsPerMs = [];
+  let pixelsPerTile = requestedTileSize ? requestedTileSize : pixelsPerTileEstimate(gl);
+
+  let lastFramePixelsPerMs = [];
+  let allFramesPixelsPerMs = [];
+  let allFramesTileSize = [];
+  let iterations = 0;
+  const performanceDebugOutput = debugOutput;
 
   function reset() {
     currentTile = -1;
     totalElapsedMs = NaN;
-    // lastTenPixelsPerMs = [];
+    lastFramePixelsPerMs = [];
+    allFramesPixelsPerMs = [];
+    allFramesTileSize = [];
   }
 
   function setSize(w, h) {
@@ -46,6 +55,7 @@ export function makeTileRender(gl, performanceLevel) {
     height = h;
     reset();
     calcTileDimensions();
+
   }
 
   function calcTileDimensions() {
@@ -79,11 +89,30 @@ export function makeTileRender(gl, performanceLevel) {
   function nextTile(elapsedFrameMs) {
     currentTile++;
     totalElapsedMs += elapsedFrameMs;
-
-    if (currentTile % numTiles === 0) {
-      if (totalElapsedMs && !overridePixelsPerMs) {
-        updatePixelsPerTile();
-        calcTileDimensions();
+    let extraMs = 0;
+    if (currentTile % numTiles === 0) { // starting from first tile
+      if(totalElapsedMs) { // we've rendered our first set of tiles already
+        iterations++;
+        const pixelsPerMs = (tileWidth * tileHeight) / (totalElapsedMs / numTiles);
+        const actualNumPixels = numTiles * tileWidth * tileHeight;
+        const expectedTotalElapsedMs = actualNumPixels / desiredPixelsPerMs;
+        if (expectedTotalElapsedMs > totalElapsedMs) {
+          extraMs = expectedTotalElapsedMs - totalElapsedMs;
+        }
+        if(performanceDebugOutput) {
+          allFramesTileSize.push(tileWidth * tileHeight);
+          pixelsPerMsPerFrame.push(pixelsPerMs);
+          if(iterations == 20 || iterations == 200 || iterations == 600) {
+            console.log("avg px per ms:", avgValue(pixelsPerMsPerFrame));
+            // console.log("avg px per ms after stall")
+            console.log("tileSize:",avgValue(allFramesTileSize));
+            console.log("requestedTileSize:",pixelsPerTile);
+          }
+        }
+        if (!requestedTileSize) { // dynamically calculate
+          updatePixelsPerTile();
+          calcTileDimensions();
+        }
       }
 
       totalElapsedMs = 0;
@@ -102,6 +131,7 @@ export function makeTileRender(gl, performanceLevel) {
       tileHeight,
       isFirstTile: currentTile === 0,
       isLastTile,
+      extraMs,
     };
   }
 
@@ -112,16 +142,31 @@ export function makeTileRender(gl, performanceLevel) {
   };
 }
 
-function pixelsPerMsFromPerformanceLevel(performanceLevel) {
+function tileSizeForPerformance(performanceLevel) {
   switch (performanceLevel) {
     case MinimumRayTracingPerformance:
-      return 1000;
+      return 54000;
     case OkRayTracingPerformance:
-      return 10000;
+      return 54000;
     case GoodRayTracingPerformance:
-      return 50000;
+      return 266000;
     case ExcellentRayTracingPerformance:
-      return 100000;
+      return 330000;
+    case DynamicRayTracingPerformance:
+      return null;
+  }
+}
+
+function desiredPixelsPerMsForPerformance(performanceLevel) {
+  switch (performanceLevel) {
+    case MinimumRayTracingPerformance:
+      return 2300;
+    case OkRayTracingPerformance:
+      return 2500;
+    case GoodRayTracingPerformance:
+      return 11000;
+    case ExcellentRayTracingPerformance:
+      return 16000;
     case DynamicRayTracingPerformance:
       return null;
   }
