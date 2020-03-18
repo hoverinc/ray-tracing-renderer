@@ -97,7 +97,7 @@ source: `
       diffuseHistory.w = 1000.0;
     }
 
-    float maxSpecularSamples = mix(4.0, 50.0, roughness * roughness);
+    float maxSpecularSamples = mix(5.0, 40.0, roughness * roughness);
     if (specularHistory.w > maxSpecularSamples) {
       specularHistory.xyz *= maxSpecularSamples / specularHistory.w;
       specularHistory.w = maxSpecularSamples;

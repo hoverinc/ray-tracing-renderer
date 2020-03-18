@@ -81,6 +81,9 @@ source: `
     // vec3 light = diffuse.rgb / diffuse.a;
     // vec3 light = specular.rgb / specular.a;
     vec3 light = albedo * diffuse.rgb / diffuse.a + mix(vec3(1.0), albedo, metalness) * specular.rgb / specular.a;
+    // vec3 light = specular.rgb / specular.a;
+    // vec3 light = diffuse.rgb / diffuse.a;
+
 
     light *= EXPOSURE;
 

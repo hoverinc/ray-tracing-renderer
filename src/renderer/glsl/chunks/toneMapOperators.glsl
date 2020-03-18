@@ -1,6 +1,6 @@
-export default `
-  // Tonemapping functions from THREE.js
+// https://github.com/mrdoob/three.js/blob/dev/src/renderers/shaders/ShaderChunk/tonemapping_pars_fragment.glsl.js
 
+export default `
   vec3 linear(vec3 color) {
     return color;
   }

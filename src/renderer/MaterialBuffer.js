@@ -14,8 +14,8 @@ export function makeMaterialBuffer(gl, materials) {
   const bufferData = {};
 
   bufferData.albedo = materials.map(m => m.color);
-  bufferData.roughness = materials.map(m => m.roughness);
-  bufferData.metalness = materials.map(m => m.metalness);
+  bufferData.roughness = materials.map(m => m.transparent ? 0.0 : m.roughness);
+  bufferData.metalness = materials.map(m => m.transparent ? 1.0 : m.metalness);
   bufferData.normalScale = materials.map(m => m.normalScale);
 
   bufferData.type = materials.map(m => {
