@@ -8,6 +8,7 @@ source: `
 
   uniform mediump sampler2DArray diffuseSpecularTex;
   uniform mediump sampler2D positionTex;
+  uniform mediump sampler2D matPropsTex;
   uniform vec2 lightScale;
   uniform vec2 previousLightScale;
 
@@ -31,10 +32,12 @@ source: `
     vec3 currentPosition = textureLinear(positionTex, vCoord).xyz;
     float currentMeshId = getMeshId(positionTex, vCoord);
 
-    vec4 currentLight = texture(diffuseSpecularTex, vec3(lightScale * vCoord, 0));
+    vec4 currentDiffuse = texture(diffuseSpecularTex, vec3(lightScale * vCoord, 0));
+    vec4 currentSpecular = texture(diffuseSpecularTex, vec3(lightScale * vCoord, 1));
 
     if (currentMeshId == 0.0) {
-      out_diffuse = currentLight;
+      out_diffuse = currentDiffuse;
+      out_specular = currentSpecular;
       return;
     }
 
@@ -62,7 +65,8 @@ source: `
       f.x * f.y
     );
 
-    vec4 history;
+    vec4 diffuseHistory;
+    vec4 specularHistory;
     float sum;
 
     // bilinear sampling, rejecting samples that don't have a matching mesh id
@@ -74,41 +78,34 @@ source: `
       float isValid = histMeshId != currentMeshId || any(greaterThanEqual(texel[i], hSize)) ? 0.0 : 1.0;
 
       float weight = isValid * weights[i];
-      history += weight * texelFetch(previousDiffuseSpecularTex, ivec3(texel[i], 0), 0);
+      diffuseHistory += weight * texelFetch(previousDiffuseSpecularTex, ivec3(texel[i], 0), 0);
+      specularHistory += weight * texelFetch(previousDiffuseSpecularTex, ivec3(texel[i], 1), 0);
       sum += weight;
     }
 
     if (sum > 0.0) {
-      history /= sum;
-    } else {
-      // If all samples of bilinear fail, try a 3x3 box filter
-      // hTexel = ivec2(hTexelf + 0.5);
-
-      // for (int x = -1; x <= 1; x++) {
-      //   for (int y = -1; y <= 1; y++) {
-      //     ivec2 texel = hTexel + ivec2(x, y);
-      //     vec2 gCoord = (vec2(texel) + 0.5) * hSizeInv;
-
-      //     float histMeshId = getMeshId(previousPositionTex, gCoord);
-
-      //     float isValid = histMeshId != currentMeshId || any(greaterThanEqual(texel, hSize)) ? 0.0 : 1.0;
-
-      //     float weight = isValid;
-      //     vec4 h = texelFetch(previousDiffuseSpecularTex, texel, 0);
-      //     history += weight * h;
-      //     sum += weight;
-      //   }
-      // }
-      // history = sum > 0.0 ? history / sum : history;
+      diffuseHistory /= sum;
+      specularHistory /= sum;
     }
 
-    if (history.w > MAX_SAMPLES) {
-      history.xyz *= MAX_SAMPLES / history.w;
-      history.w = MAX_SAMPLES;
+    vec4 matProps = texture(matPropsTex, vCoord);
+    float roughness = matProps.x;
+    float metalness = matProps.y;
+
+    if (diffuseHistory.w > 1000.0) {
+      diffuseHistory.xyz *= 1000.0 / diffuseHistory.w;
+      diffuseHistory.w = 1000.0;
     }
 
-    out_diffuse = blendAmount * history + currentLight;
-    out_specular = texture(diffuseSpecularTex, vec3(lightScale * vCoord, 1));
+    float maxSpecularSamples = mix(4.0, 50.0, roughness * roughness);
+    if (specularHistory.w > maxSpecularSamples) {
+      specularHistory.xyz *= maxSpecularSamples / specularHistory.w;
+      specularHistory.w = maxSpecularSamples;
+    }
+
+    out_diffuse = blendAmount * diffuseHistory + currentDiffuse;
+    out_specular = blendAmount * specularHistory + currentSpecular;
+    // out_specular = vec4(0, 0, 0, 1);
   }
 `
 }

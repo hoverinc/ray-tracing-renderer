@@ -265,6 +265,7 @@ export function makeRenderingPipeline({
       light: hdrBuffer.color[0],
       lightScale,
       position: gBuffer.color[gBufferPass.outputLocs.position],
+      matProps: gBuffer.color[gBufferPass.outputLocs.matProps],
       previousLight,
       previousLightScale,
       previousPosition: gBufferBack.color[gBufferPass.outputLocs.position],

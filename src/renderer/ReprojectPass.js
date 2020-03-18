@@ -34,6 +34,7 @@ export function makeReprojectPass(gl, params) {
       light,
       lightScale,
       position,
+      matProps,
       previousLight,
       previousLightScale,
       previousPosition,
@@ -45,6 +46,7 @@ export function makeReprojectPass(gl, params) {
 
     renderPass.setTexture('diffuseSpecularTex', light);
     renderPass.setTexture('positionTex', position);
+    renderPass.setTexture('matPropsTex', matProps);
     renderPass.setTexture('previousDiffuseSpecularTex', previousLight);
     renderPass.setTexture('previousPositionTex', previousPosition);
 

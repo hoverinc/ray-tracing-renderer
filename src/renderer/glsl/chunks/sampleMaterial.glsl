@@ -116,14 +116,12 @@ void sampleMaterial(SurfaceInteraction si, int bounce, inout Path path) {
 
   scatteringPdf = mix(brdf.specularPdf, brdf.diffusePdf, probDiffuse);
 
-
   uv = cartesianToEquirect(lightDir);
   lightPdf = envmapPdf(uv);
 
   path.misWeight = powerHeuristic(scatteringPdf, lightPdf);
 
   float beta = abs(cosThetaL) / scatteringPdf;
-
   float diffuseBeta = beta * brdf.diffuse;
   float specularBeta = beta * brdf.specular;
 
