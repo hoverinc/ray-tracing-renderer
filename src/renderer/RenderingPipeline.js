@@ -22,7 +22,7 @@ export function makeRenderingPipeline({
     bounces, // number of global illumination bounces
   }) {
 
-  const maxReprojectedSamples = 20;
+  const maxReprojectedSamples = 400;
 
   // how many samples to render with uniform noise before switching to stratified noise
   const numUniformSamples = 4;
@@ -342,8 +342,9 @@ export function makeRenderingPipeline({
     if (isLastTile) {
       sampleCount++;
 
-      let blendAmount = clamp(1.0 - sampleCount / maxReprojectedSamples, 0, 1);
-      blendAmount *= blendAmount;
+      // let blendAmount = clamp(1.0 - sampleCount / maxReprojectedSamples, 0, 1);
+      // blendAmount *= blendAmount;
+      let blendAmount = 1.0;
 
       if (blendAmount > 0.0) {
         reproject({
@@ -351,7 +352,7 @@ export function makeRenderingPipeline({
           blendAmount,
           lightScale: fullscreenScale,
           previousLight: reprojectBackBuffer.color[0],
-          previousLightScale: previewSize.scale
+          previousLightScale: previewSize.scale,
         });
 
         toneMapToScreen(reprojectBuffer.color[0], fullscreenScale);
@@ -417,7 +418,7 @@ export function makeRenderingPipeline({
       blendAmount: 1.0,
       lightScale: fullscreenScale,
       previousLight: reprojectBackBuffer.color[0],
-      previousLightScale: fullscreenScale
+      previousLightScale: fullscreenScale,
     });
 
     toneMapToScreen(reprojectBuffer.color[0], fullscreenScale);
@@ -425,7 +426,7 @@ export function makeRenderingPipeline({
   }
 
   return {
-    draw: drawFull,
+    draw,
     drawFull,
     setSize,
     sync,

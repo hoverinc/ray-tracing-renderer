@@ -78,8 +78,7 @@ source: `
 
     // in addition, alpha contains a scale factor for the shadow catcher material
     // dividing by alpha normalizes the brightness of the shadow catcher to match the background envmap.
-    // vec3 light = diffuse.rgb / diffuse.a;
-    // vec3 light = specular.rgb / specular.a;
+    // vec3 light = diffuse.rgb / diffuse.a + specular.rgb / specular.a;
     vec3 light = albedo * diffuse.rgb / diffuse.a + mix(vec3(1.0), albedo, metalness) * specular.rgb / specular.a;
     // vec3 light = specular.rgb / specular.a;
     // vec3 light = diffuse.rgb / diffuse.a;
