@@ -88,7 +88,7 @@ vec3 glassImportanceSampleLight(SurfaceInteraction si, vec3 viewDir, bool lightR
     return li;
   }
 
-  vec3 irr = textureLinear(envmap, uv).xyz;
+  vec3 irr = textureLinear(envMap, uv).xyz;
 
   float scatteringPdf;
   vec3 brdf = lightRefract ?
@@ -119,9 +119,9 @@ vec3 glassImportanceSampleMaterial(SurfaceInteraction si, vec3 viewDir, bool lig
   }
 
   vec2 uv = cartesianToEquirect(lightDir);
-  float lightPdf = envmapPdf(uv);
+  float lightPdf = envMapPdf(uv);
 
-  vec3 irr = textureLinear(envmap, vec2(phi, theta)).rgb;
+  vec3 irr = textureLinear(envMap, vec2(phi, theta)).rgb;
 
   float scatteringPdf;
   vec3 brdf = lightRefract ?

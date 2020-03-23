@@ -1,6 +1,6 @@
 import { bvhAccel, flattenBvh } from './bvhAccel';
 import { generateEnvMapFromSceneComponents, generateBackgroundMapFromSceneBackground } from './envMapCreation';
-import { envmapDistribution } from './envmapDistribution';
+import { envMapDistribution } from './envMapDistribution';
 import fragment from './glsl/rayTrace.frag';
 import { makeRenderPass } from './RenderPass';
 import { makeStratifiedSamplerCombined } from './StratifiedSamplerCombined';
@@ -42,7 +42,7 @@ export function makeRayTracePass(gl, {
 
   // noiseImage is a 32-bit PNG image
   function setNoise(noiseImage) {
-    renderPass.setTexture('noise', makeTexture(gl, {
+    renderPass.setTexture('noiseTex', makeTexture(gl, {
       data: noiseImage,
       wrapS: gl.REPEAT,
       wrapT: gl.REPEAT,
@@ -152,13 +152,13 @@ function makeRenderPassFromScene({
   renderPass.setTexture('normalMap', materialBuffer.textures.normalMap);
   renderPass.setTexture('pbrMap', materialBuffer.textures.pbrMap);
 
-  renderPass.setTexture('positions', makeDataTexture(gl, geometry.getAttribute('position').array, 3));
+  renderPass.setTexture('positionBuffer', makeDataTexture(gl, geometry.getAttribute('position').array, 3));
 
-  renderPass.setTexture('normals', makeDataTexture(gl, geometry.getAttribute('normal').array, 3));
+  renderPass.setTexture('normalBuffer', makeDataTexture(gl, geometry.getAttribute('normal').array, 3));
 
-  renderPass.setTexture('uvs', makeDataTexture(gl, geometry.getAttribute('uv').array, 2));
+  renderPass.setTexture('uvBuffer', makeDataTexture(gl, geometry.getAttribute('uv').array, 2));
 
-  renderPass.setTexture('bvh', makeDataTexture(gl, flattenedBvh.buffer, 4));
+  renderPass.setTexture('bvhBuffer', makeDataTexture(gl, flattenedBvh.buffer, 4));
 
   const envImage = generateEnvMapFromSceneComponents(directionalLights, ambientLights, environmentLights);
   const envImageTextureObject = makeTexture(gl, {
@@ -170,7 +170,7 @@ function makeRenderPassFromScene({
     height: envImage.height,
   });
 
-  renderPass.setTexture('envmap', envImageTextureObject);
+  renderPass.setTexture('envMap', envImageTextureObject);
 
   let backgroundImageTextureObject;
   if (background) {
@@ -189,9 +189,9 @@ function makeRenderPassFromScene({
 
   renderPass.setTexture('backgroundMap', backgroundImageTextureObject);
 
-  const distribution = envmapDistribution(envImage);
+  const distribution = envMapDistribution(envImage);
 
-  renderPass.setTexture('envmapDistribution', makeTexture(gl, {
+  renderPass.setTexture('envMapDistribution', makeTexture(gl, {
     data: distribution.data,
     storage: 'halfFloat',
     width: distribution.width,

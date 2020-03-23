@@ -37,7 +37,7 @@ void sampleMaterial(SurfaceInteraction si, int bounce, inout Path path) {
       lightDirSpecular(si.faceNormal, viewDir, basis, si.roughness, lightDirSample);
 
     uv = cartesianToEquirect(lightDir);
-    lightPdf = envmapPdf(uv);
+    lightPdf = envMapPdf(uv);
     brdfSample = true;
   } else {
     lightDir = sampleEnvmap(lightDirSample, uv, lightPdf);
@@ -64,7 +64,7 @@ void sampleMaterial(SurfaceInteraction si, int bounce, inout Path path) {
     }
   }
 
-  vec3 irr = textureLinear(envmap, uv).rgb;
+  vec3 irr = textureLinear(envMap, uv).rgb;
 
   MaterialBrdf brdf = getMaterialBrdf(si, viewDir, lightDir, cosThetaL, diffuseWeight);
 
@@ -117,7 +117,7 @@ void sampleMaterial(SurfaceInteraction si, int bounce, inout Path path) {
   scatteringPdf = mix(brdf.specularPdf, brdf.diffusePdf, probDiffuse);
 
   uv = cartesianToEquirect(lightDir);
-  lightPdf = envmapPdf(uv);
+  lightPdf = envMapPdf(uv);
 
   path.misWeight = powerHeuristic(scatteringPdf, lightPdf);
 

@@ -6,7 +6,7 @@ import materialBuffer from './chunks/materialBuffer.glsl';
 import intersect from './chunks/intersect.glsl';
 import surfaceInteractionDirect from './chunks/surfaceInteractionDirect.glsl';
 import random from './chunks/random.glsl';
-import envmap from './chunks/envmap.glsl';
+import envMap from './chunks/envMap.glsl';
 import bsdf from './chunks/bsdf.glsl';
 import sample from './chunks/sample.glsl';
 import sampleMaterial from './chunks/sampleMaterial.glsl';
@@ -22,7 +22,7 @@ includes: [
   intersect,
   surfaceInteractionDirect,
   random,
-  envmap,
+  envMap,
   bsdf,
   sample,
   sampleMaterial,

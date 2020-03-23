@@ -1,9 +1,9 @@
 export default `
 
-uniform sampler2D positions;
-uniform sampler2D normals;
-uniform sampler2D uvs;
-uniform sampler2D bvh;
+uniform sampler2D positionBuffer;
+uniform sampler2D normalBuffer;
+uniform sampler2D uvBuffer;
+uniform sampler2D bvhBuffer;
 
 struct Triangle {
   vec3 p0;
@@ -19,15 +19,15 @@ void surfaceInteractionFromBVH(inout SurfaceInteraction si, Triangle tri, vec3 b
   ivec2 i1 = unpackTexel(index.y, VERTEX_COLUMNS);
   ivec2 i2 = unpackTexel(index.z, VERTEX_COLUMNS);
 
-  vec3 n0 = texelFetch(normals, i0, 0).xyz;
-  vec3 n1 = texelFetch(normals, i1, 0).xyz;
-  vec3 n2 = texelFetch(normals, i2, 0).xyz;
+  vec3 n0 = texelFetch(normalBuffer, i0, 0).xyz;
+  vec3 n1 = texelFetch(normalBuffer, i1, 0).xyz;
+  vec3 n2 = texelFetch(normalBuffer, i2, 0).xyz;
   vec3 normal = normalize(barycentric.x * n0 + barycentric.y * n1 + barycentric.z * n2);
 
   #if defined(NUM_DIFFUSE_MAPS) || defined(NUM_NORMAL_MAPS) || defined(NUM_PBR_MAPS)
-    vec2 uv0 = texelFetch(uvs, i0, 0).xy;
-    vec2 uv1 = texelFetch(uvs, i1, 0).xy;
-    vec2 uv2 = texelFetch(uvs, i2, 0).xy;
+    vec2 uv0 = texelFetch(uvBuffer, i0, 0).xy;
+    vec2 uv1 = texelFetch(uvBuffer, i1, 0).xy;
+    vec2 uv2 = texelFetch(uvBuffer, i2, 0).xy;
     vec2 uv = fract(barycentric.x * uv0 + barycentric.y * uv1 + barycentric.z * uv2);
   #else
     vec2 uv = vec2(0.0);
@@ -170,8 +170,8 @@ void intersectScene(inout Ray ray, inout SurfaceInteraction si) {
   while(stack >= 0) {
     int i = nodesToVisit[stack--];
 
-    vec4 r1 = fetchData(bvh, i, BVH_COLUMNS);
-    vec4 r2 = fetchData(bvh, i + 1, BVH_COLUMNS);
+    vec4 r1 = fetchData(bvhBuffer, i, BVH_COLUMNS);
+    vec4 r2 = fetchData(bvhBuffer, i + 1, BVH_COLUMNS);
 
     int splitAxisOrNumPrimitives = floatBitsToInt(r1.w);
 
@@ -194,9 +194,9 @@ void intersectScene(inout Ray ray, inout SurfaceInteraction si) {
     } else {
       ivec3 index = floatBitsToInt(r1.xyz);
       Triangle tri = Triangle(
-        fetchData(positions, index.x, VERTEX_COLUMNS).xyz,
-        fetchData(positions, index.y, VERTEX_COLUMNS).xyz,
-        fetchData(positions, index.z, VERTEX_COLUMNS).xyz
+        fetchData(positionBuffer, index.x, VERTEX_COLUMNS).xyz,
+        fetchData(positionBuffer, index.y, VERTEX_COLUMNS).xyz,
+        fetchData(positionBuffer, index.z, VERTEX_COLUMNS).xyz
       );
       TriangleIntersect hit = intersectTriangle(ray, tri, maxDim, shear);
 
@@ -236,8 +236,8 @@ bool intersectSceneShadow(inout Ray ray) {
   while(stack >= 0) {
     int i = nodesToVisit[stack--];
 
-    vec4 r1 = fetchData(bvh, i, BVH_COLUMNS);
-    vec4 r2 = fetchData(bvh, i + 1, BVH_COLUMNS);
+    vec4 r1 = fetchData(bvhBuffer, i, BVH_COLUMNS);
+    vec4 r2 = fetchData(bvhBuffer, i + 1, BVH_COLUMNS);
 
     int splitAxisOrNumPrimitives = floatBitsToInt(r1.w);
 
@@ -258,9 +258,9 @@ bool intersectSceneShadow(inout Ray ray) {
     } else {
       ivec3 index = floatBitsToInt(r1.xyz);
       Triangle tri = Triangle(
-        fetchData(positions, index.x, VERTEX_COLUMNS).xyz,
-        fetchData(positions, index.y, VERTEX_COLUMNS).xyz,
-        fetchData(positions, index.z, VERTEX_COLUMNS).xyz
+        fetchData(positionBuffer, index.x, VERTEX_COLUMNS).xyz,
+        fetchData(positionBuffer, index.y, VERTEX_COLUMNS).xyz,
+        fetchData(positionBuffer, index.z, VERTEX_COLUMNS).xyz
       );
 
       if (intersectTriangle(ray, tri, maxDim, shear).t > 0.0) {

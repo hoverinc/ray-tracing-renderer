@@ -48,14 +48,14 @@ source: `
       vec2 pCoord = (vec2(texels[i]) + 0.5) / sizef;
       float isValid = getMeshId(positionTex, pCoord) == meshId ? 1.0 : 0.0;
       float weight = isValid * weights[i];
-      // upscaledLight += weight * texelFetch(light, texels[i], 0);
+      // upscaledLight += weight * texelFetch(diffuseSpecularTex, texels[i], 0);
       sum += weight;
     }
 
     if (sum > 0.0) {
       upscaledLight /= sum;
     } else {
-      // upscaledLight = texture(light, lightScale * coord);
+      // upscaledLight = texture(diffuseSpecularTex, lightScale * coord);
     }
 
     return upscaledLight;

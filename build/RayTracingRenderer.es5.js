@@ -2774,6 +2774,69 @@
     return newArray;
   }
 
+  function makeRenderSize(gl) {
+    var desiredMsPerFrame = 20;
+    var fullWidth;
+    var fullHeight;
+    var renderWidth;
+    var renderHeight;
+    var scale = new THREE$1.Vector2(1, 1);
+    var pixelsPerFrame = pixelsPerFrameEstimate(gl);
+
+    function setSize(w, h) {
+      fullWidth = w;
+      fullHeight = h;
+      calcDimensions();
+    }
+
+    function calcDimensions() {
+      var aspectRatio = fullWidth / fullHeight;
+      renderWidth = Math.round(clamp(Math.sqrt(pixelsPerFrame * aspectRatio), 1, fullWidth));
+      renderHeight = Math.round(clamp(renderWidth / aspectRatio, 1, fullHeight));
+      scale.set(renderWidth / fullWidth, renderHeight / fullHeight);
+    }
+
+    function adjustSize(elapsedFrameMs) {
+      if (!elapsedFrameMs) {
+        return;
+      } // tweak to find balance. higher = faster convergence, lower = less fluctuations to microstutters
+
+
+      var strength = 600;
+      var error = desiredMsPerFrame - elapsedFrameMs;
+      pixelsPerFrame += strength * error;
+      pixelsPerFrame = clamp(pixelsPerFrame, 8192, fullWidth * fullHeight);
+      calcDimensions();
+    }
+
+    return {
+      adjustSize: adjustSize,
+      setSize: setSize,
+      scale: scale,
+
+      get width() {
+        return renderWidth;
+      },
+
+      get height() {
+        return renderHeight;
+      }
+
+    };
+  }
+
+  function pixelsPerFrameEstimate(gl) {
+    var maxRenderbufferSize = gl.getParameter(gl.MAX_RENDERBUFFER_SIZE);
+
+    if (maxRenderbufferSize <= 8192) {
+      return 80000;
+    } else if (maxRenderbufferSize === 16384) {
+      return 150000;
+    } else if (maxRenderbufferSize >= 32768) {
+      return 400000;
+    }
+  }
+
   var fragment$2 = {
     outputs: ['light'],
     includes: [textureLinear],
@@ -2879,6 +2942,7 @@
   // the time it takes to render an arbitrarily-set tile size and adjusting the size according to the benchmark.
 
   function makeTileRender(gl) {
+    var desiredMsPerTile = 21;
     var currentTile = -1;
     var numTiles = 1;
     var tileWidth;
@@ -2886,77 +2950,60 @@
     var columns;
     var rows;
     var width = 0;
-    var height = 0; // initial number of pixels per rendered tile
+    var height = 0;
+    var totalElapsedMs; // initial number of pixels per rendered tile
     // based on correlation between system performance and max supported render buffer size
     // adjusted dynamically according to system performance
 
     var pixelsPerTile = pixelsPerTileEstimate(gl);
-    var pixelsPerTileQuantized = pixelsPerTile;
-    var desiredTimePerTile = 20;
-    var timePerPixel = desiredTimePerTile / pixelsPerTile;
-    var lastTime = 0;
-    var timeElapsed = 0;
-
-    function updateTime(time) {
-      if (lastTime) {
-        timeElapsed = time - lastTime;
-      }
-
-      lastTime = time;
-    }
 
     function reset() {
       currentTile = -1;
-      timeElapsed = 0;
-      lastTime = 0;
+      totalElapsedMs = NaN;
     }
 
     function setSize(w, h) {
       width = w;
       height = h;
       reset();
+      calcTileDimensions();
     }
 
-    function setTileDimensions(pixelsPerTile) {
+    function calcTileDimensions() {
       var aspectRatio = width / height; // quantize the width of the tile so that it evenly divides the entire window
 
       tileWidth = Math.ceil(width / Math.round(width / Math.sqrt(pixelsPerTile * aspectRatio)));
       tileHeight = Math.ceil(tileWidth / aspectRatio);
-      pixelsPerTileQuantized = tileWidth * tileHeight;
       columns = Math.ceil(width / tileWidth);
       rows = Math.ceil(height / tileHeight);
       numTiles = columns * rows;
     }
 
-    function initTiles() {
-      if (timeElapsed) {
-        var timePerTile = timeElapsed / numTiles;
-        var expAvg = 0.5;
-        var newPixelsPerTile = pixelsPerTile * desiredTimePerTile / timePerTile;
-        pixelsPerTile = expAvg * pixelsPerTile + (1 - expAvg) * newPixelsPerTile;
-        var newTimePerPixel = timePerTile / pixelsPerTileQuantized;
-        timePerPixel = expAvg * timePerPixel + (1 - expAvg) * newTimePerPixel;
-      }
+    function updatePixelsPerTile() {
+      var msPerTile = totalElapsedMs / numTiles;
+      var error = desiredMsPerTile - msPerTile; // tweak to find balance. higher = faster convergence, lower = less fluctuations to microstutters
 
+      var strength = 5000; // sqrt prevents massive fluctuations in pixelsPerTile for the occasional stutter
+
+      pixelsPerTile += strength * Math.sign(error) * Math.sqrt(Math.abs(error));
       pixelsPerTile = clamp(pixelsPerTile, 8192, width * height);
-      setTileDimensions(pixelsPerTile);
     }
 
-    function nextTile() {
+    function nextTile(elapsedFrameMs) {
       currentTile++;
+      totalElapsedMs += elapsedFrameMs;
 
       if (currentTile % numTiles === 0) {
-        initTiles();
+        if (totalElapsedMs) {
+          updatePixelsPerTile();
+          calcTileDimensions();
+        }
+
+        totalElapsedMs = 0;
         currentTile = 0;
-        timeElapsed = 0;
       }
 
       var isLastTile = currentTile === numTiles - 1;
-
-      if (isLastTile) {
-        requestAnimationFrame(updateTime);
-      }
-
       var x = currentTile % columns;
       var y = Math.floor(currentTile / columns) % rows;
       return {
@@ -2970,9 +3017,6 @@
     }
 
     return {
-      getTimePerPixel: function getTimePerPixel() {
-        return timePerPixel;
-      },
       nextTile: nextTile,
       reset: reset,
       setSize: setSize
@@ -3004,8 +3048,13 @@
     var numUniformSamples = 4; // how many partitions of stratified noise should be created
     // higher number results in faster convergence over time, but with lower quality initial samples
 
-    var strataCount = 6;
-    var desiredTimeForPreview = 14;
+    var strataCount = 6; // tile rendering can cause the GPU to stutter, throwing off future benchmarks for the preview frames
+    // wait to measure performance until this number of frames have been rendered
+
+    var previewFramesBeforeBenchmark = 2; // used to sample only a portion of the scene to the HDR Buffer to prevent the GPU from locking up from excessive computation
+
+    var tileRender = makeTileRender(gl);
+    var previewSize = makeRenderSize(gl);
     var decomposedScene = decomposeScene(scene);
     var mergedMesh = mergeMeshesToGeometry(decomposedScene.meshes);
     var materialBuffer = makeMaterialBuffer(gl, mergedMesh.materials);
@@ -3030,9 +3079,7 @@
     var gBufferPass = makeGBufferPass(gl, {
       materialBuffer: materialBuffer,
       mergedMesh: mergedMesh
-    }); // used to sample only a portion of the scene to the HDR Buffer to prevent the GPU from locking up from excessive computation
-
-    var tileRender = makeTileRender(gl);
+    });
     var ready = false;
     var noiseImage = new Image();
     noiseImage.src = noiseBase64;
@@ -3042,7 +3089,11 @@
       ready = true;
     };
 
+    var frameTime;
+    var elapsedFrameTime;
     var sampleCount = 0;
+    var numPreviewsRendered = 0;
+    var firstFrame = true;
 
     var sampleRenderedCallback = function sampleRenderedCallback() {};
 
@@ -3051,10 +3102,8 @@
     lastCamera.updateMatrixWorld();
     var screenWidth = 0;
     var screenHeight = 0;
-    var previewWidth = 0;
-    var previewHeight = 0;
-    var previewScale = new THREE$1.Vector2(1, 1);
     var fullscreenScale = new THREE$1.Vector2(1, 1);
+    var lastToneMappedScale = fullscreenScale;
     var hdrBuffer;
     var hdrBackBuffer;
     var reprojectBuffer;
@@ -3062,7 +3111,6 @@
     var gBuffer;
     var gBufferBack;
     var lastToneMappedTexture;
-    var lastToneMappedScale;
 
     function initFrameBuffers(width, height) {
       var makeHdrBuffer = function makeHdrBuffer() {
@@ -3137,7 +3185,6 @@
       gBuffer = makeGBuffer();
       gBufferBack = makeGBuffer();
       lastToneMappedTexture = hdrBuffer.color[rayTracePass.outputLocs.light];
-      lastToneMappedScale = fullscreenScale;
     }
 
     function swapReprojectBuffer() {
@@ -3170,19 +3217,19 @@
       screenWidth = w;
       screenHeight = h;
       tileRender.setSize(w, h);
+      previewSize.setSize(w, h);
       initFrameBuffers(w, h);
-    }
+      firstFrame = true;
+    } // called every frame to update clock
 
-    function setPreviewBufferDimensions() {
-      var numPixelsForPreview = desiredTimeForPreview / tileRender.getTimePerPixel();
-      var aspectRatio = screenWidth / screenHeight;
-      previewWidth = Math.round(clamp(Math.sqrt(numPixelsForPreview * aspectRatio), 1, screenWidth));
-      previewHeight = Math.round(clamp(previewWidth / aspectRatio, 1, screenHeight));
-      previewScale.set(previewWidth / screenWidth, previewHeight / screenHeight);
+
+    function time(newTime) {
+      elapsedFrameTime = newTime - frameTime;
+      frameTime = newTime;
     }
 
     function areCamerasEqual(cam1, cam2) {
-      return numberArraysEqual(cam1.matrixWorld.elements, cam2.matrixWorld.elements) && cam1.aspect === cam2.aspect && cam1.fov === cam2.fov && cam1.focus === cam2.focus;
+      return numberArraysEqual(cam1.matrixWorld.elements, cam2.matrixWorld.elements) && cam1.aspect === cam2.aspect && cam1.fov === cam2.fov;
     }
 
     function updateSeed(width, height) {
@@ -3235,7 +3282,7 @@
         position: gBuffer.color[gBufferPass.outputLocs.position]
       });
       lastToneMappedTexture = lightTexture;
-      lastToneMappedScale = lightScale;
+      lastToneMappedScale = lightScale.clone();
     }
 
     function renderGBuffer() {
@@ -3260,40 +3307,44 @@
       gl.disable(gl.SCISSOR_TEST);
     }
 
-    function drawPreview(camera, lastCamera) {
-      if (sampleCount > 0) {
-        swapBuffers();
-      }
-
-      sampleCount = 0;
-      tileRender.reset();
-      setPreviewBufferDimensions();
-      updateSeed(previewWidth, previewHeight, false);
+    function setCameras(camera, lastCamera) {
       rayTracePass.setCamera(camera);
       gBufferPass.setCamera(camera);
       reprojectPass.setPreviousCamera(lastCamera);
       lastCamera.copy(camera);
+    }
+
+    function drawPreview() {
+      if (sampleCount > 0) {
+        swapBuffers();
+      }
+
+      if (numPreviewsRendered >= previewFramesBeforeBenchmark) {
+        previewSize.adjustSize(elapsedFrameTime);
+      }
+
+      updateSeed(previewSize.width, previewSize.height, false);
       renderGBuffer();
       rayTracePass.bindTextures();
-      newSampleToBuffer(hdrBuffer, previewWidth, previewHeight);
+      newSampleToBuffer(hdrBuffer, previewSize.width, previewSize.height);
       reprojectBuffer.bind();
-      gl.viewport(0, 0, previewWidth, previewHeight);
+      gl.viewport(0, 0, previewSize.width, previewSize.height);
       reprojectPass.draw({
         blendAmount: 1.0,
         light: hdrBuffer.color[0],
-        lightScale: previewScale,
+        lightScale: previewSize.scale,
         position: gBuffer.color[gBufferPass.outputLocs.position],
         previousLight: lastToneMappedTexture,
         previousLightScale: lastToneMappedScale,
         previousPosition: gBufferBack.color[gBufferPass.outputLocs.position]
       });
       reprojectBuffer.unbind();
-      toneMapToScreen(reprojectBuffer.color[0], previewScale);
+      toneMapToScreen(reprojectBuffer.color[0], previewSize.scale);
       swapBuffers();
     }
 
     function drawTile() {
-      var _tileRender$nextTile = tileRender.nextTile(),
+      var _tileRender$nextTile = tileRender.nextTile(elapsedFrameTime),
           x = _tileRender$nextTile.x,
           y = _tileRender$nextTile.y,
           tileWidth = _tileRender$nextTile.tileWidth,
@@ -3329,7 +3380,7 @@
             lightScale: fullscreenScale,
             position: gBuffer.color[gBufferPass.outputLocs.position],
             previousLight: reprojectBackBuffer.color[0],
-            previousLightScale: previewScale,
+            previousLightScale: previewSize.scale,
             previousPosition: gBufferBack.color[gBufferPass.outputLocs.position]
           });
           reprojectBuffer.unbind();
@@ -3348,9 +3399,20 @@
       }
 
       if (!areCamerasEqual(camera, lastCamera)) {
-        drawPreview(camera, lastCamera);
+        setCameras(camera, lastCamera);
+
+        if (firstFrame) {
+          firstFrame = false;
+        } else {
+          drawPreview();
+          numPreviewsRendered++;
+        }
+
+        tileRender.reset();
+        sampleCount = 0;
       } else {
         drawTile();
+        numPreviewsRendered = 0;
       }
     } // debug draw call to measure performance
     // use full resolution buffers every frame
@@ -3365,20 +3427,14 @@
       swapGBuffer();
       swapReprojectBuffer();
 
-      if (sampleCount === 0) {
-        reprojectPass.setPreviousCamera(lastCamera);
-      }
-
       if (!areCamerasEqual(camera, lastCamera)) {
         sampleCount = 0;
-        rayTracePass.setCamera(camera);
-        gBufferPass.setCamera(camera);
-        lastCamera.copy(camera);
         clearBuffer(hdrBuffer);
       } else {
         sampleCount++;
       }
 
+      setCameras(camera, lastCamera);
       updateSeed(screenWidth, screenHeight, true);
       renderGBuffer();
       rayTracePass.bindTextures();
@@ -3401,8 +3457,8 @@
     return {
       draw: draw,
       drawFull: drawFull,
-      restartTimer: tileRender.reset,
       setSize: setSize,
+      time: time,
       getTotalSamplesRendered: function getTotalSamplesRendered() {
         return sampleCount;
       },
@@ -3444,7 +3500,6 @@
       needsUpdate: true,
       onSampleRendered: null,
       renderWhenOffFocus: true,
-      renderToScreen: true,
       toneMapping: THREE$1.LinearToneMapping,
       toneMappingExposure: 1,
       toneMappingWhitePoint: 1
@@ -3474,12 +3529,6 @@
 
       module.setSize(size.width, size.height);
       module.needsUpdate = false;
-    }
-
-    function restartTimer() {
-      if (pipeline) {
-        pipeline.restartTimer();
-      }
     }
 
     module.setSize = function (width, height) {
@@ -3525,10 +3574,18 @@
       }
     };
 
-    module.sendToScreen = function () {
-      if (pipeline) {
-        pipeline.hdrBufferToScreen();
-      }
+    var isValidTime = 1;
+    var currentTime = NaN;
+    var syncWarning = false;
+
+    function restartTimer() {
+      isValidTime = NaN;
+    }
+
+    module.sync = function (t) {
+      // the first call to the callback of requestAnimationFrame does not have a time parameter
+      // use performance.now() in this case
+      currentTime = t || performance.now();
     };
 
     var lastFocus = false;
@@ -3550,18 +3607,26 @@
         initScene(scene);
       }
 
+      if (isNaN(currentTime)) {
+        if (!syncWarning) {
+          console.warn('Ray Tracing Renderer warning: For improved performance, please call renderer.sync(time) before render.render(scene, camera), with the time parameter equalling the parameter passed to the callback of requestAnimationFrame');
+          syncWarning = true;
+        }
+
+        currentTime = performance.now(); // less accurate than requestAnimationFrame's time parameter
+      }
+
+      pipeline.time(isValidTime * currentTime);
+      isValidTime = 1;
+      currentTime = NaN;
       camera.updateMatrixWorld();
 
-      if (module.renderToScreen) {
-        if (module.maxHardwareUsage) {
-          // render new sample for the entire screen
-          pipeline.drawFull(camera);
-        } else {
-          // render new sample for a tiled subset of the screen
-          pipeline.draw(camera);
-        }
+      if (module.maxHardwareUsage) {
+        // render new sample for the entire screen
+        pipeline.drawFull(camera);
       } else {
-        pipeline.drawOffscreenTile(camera);
+        // render new sample for a tiled subset of the screen
+        pipeline.draw(camera);
       }
     }; // Assume module.render is called using requestAnimationFrame.
     // This means that when the user is on a different browser tab, module.render won't be called.

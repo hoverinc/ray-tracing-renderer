@@ -5,6 +5,7 @@ renderer.toneMappingExposure = 1.5;
 renderer.toneMappingWhitePoint = 5;
 renderer.maxHardwareUsage = true;
 renderer.renderWhenOffFocus = false;
+renderer.bounces = 3;
 
 document.body.appendChild(renderer.domElement);
 
@@ -61,6 +62,8 @@ function init() {
   const envmap = new THREE.RGBELoader().load('envmap.hdr');
   const envLight = new THREE.EnvironmentLight(envmap);
   scene.add(envLight);
+
+  scene.background = new THREE.Color(0.111111);
 
   const model = new THREE.Object3D();
   model.rotateY(-Math.PI / 2);
@@ -197,7 +200,8 @@ function init() {
   {
     const geo = new THREE.PlaneBufferGeometry(1000, 1000);
     const mat = new THREE.MeshStandardMaterial();
-    mat.shadowCatcher = true;
+    // mat.shadowCatcher = true;
+    mat.color.set(0x555555);
     mat.roughness = 0.5;
     mat.metalness = 0.0;
     const mesh = new THREE.Mesh(geo, mat);
