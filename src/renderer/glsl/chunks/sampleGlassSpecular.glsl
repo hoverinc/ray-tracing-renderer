@@ -20,12 +20,14 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
 
   if (reflectionOrRefraction < F) {
     lightDir = reflect(-viewDir, si.normal);
+    path.specularBounce = false;
   } else {
     lightDir = si.materialType == THIN_GLASS ?
       refract(-viewDir, sign(cosTheta) * si.normal, INV_IOR_THIN) : // thin glass
       refract(-viewDir, sign(cosTheta) * si.normal, cosTheta < 0.0 ? IOR : INV_IOR); // thick glass
 
     path.beta *= si.albedo;
+    path.specularBounce = true;
   }
 
   path.misWeight = 1.0;
@@ -39,7 +41,6 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
   path.diffuse += path.diffuseBeta * li;
   path.specular += path.specularBeta * li;
 
-  path.specularBounce = true;
 }
 
 #endif
