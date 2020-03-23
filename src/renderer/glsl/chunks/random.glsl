@@ -2,7 +2,7 @@ export default `
 
 // Noise texture used to generate a different random number for each pixel.
 // We use blue noise in particular, but any type of noise will work.
-uniform sampler2D noise;
+uniform sampler2D noiseTex;
 
 uniform float stratifiedSamples[SAMPLING_DIMENSIONS];
 uniform float strataSize;
@@ -15,10 +15,10 @@ int sampleIndex = 0;
 float pixelSeed;
 
 void initRandom() {
-  vec2 noiseSize = vec2(textureSize(noise, 0));
+  vec2 noiseSize = vec2(textureSize(noiseTex, 0));
 
   // tile the small noise texture across the entire screen
-  pixelSeed = texture(noise, vCoord / (pixelSize * noiseSize)).r;
+  pixelSeed = texture(noiseTex, vCoord / (pixelSize * noiseSize)).r;
 }
 
 float randomSample() {

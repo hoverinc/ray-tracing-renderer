@@ -26,7 +26,7 @@ void sampleShadowCatcher(SurfaceInteraction si, int bounce, inout Path path) {
       lightDirDiffuse(si.faceNormal, viewDir, basis, lightDirSample) :
       lightDirSpecular(si.faceNormal, viewDir, basis, si.roughness, lightDirSample);
     uv = cartesianToEquirect(lightDir);
-    lightPdf = envmapPdf(uv);
+    lightPdf = envMapPdf(uv);
     brdfSample = true;
   } else {
     lightDir = sampleEnvmap(lightDirSample, uv, lightPdf);
@@ -47,7 +47,7 @@ void sampleShadowCatcher(SurfaceInteraction si, int bounce, inout Path path) {
     occluded = 0.0;
   }
 
-  float irr = dot(luminance, textureLinear(envmap, uv).rgb);
+  float irr = dot(luminance, textureLinear(envMap, uv).rgb);
 
   float scatteringPdf;
   vec3 brdf = materialBrdf(si, viewDir, lightDir, cosThetaL, 1.0, scatteringPdf);
@@ -84,7 +84,7 @@ void sampleShadowCatcher(SurfaceInteraction si, int bounce, inout Path path) {
   brdf = materialBrdf(si, viewDir, lightDir, cosThetaL, 1.0, scatteringPdf);
 
   uv = cartesianToEquirect(lightDir);
-  lightPdf = envmapPdf(uv);
+  lightPdf = envMapPdf(uv);
 
   path.misWeight = 0.0;
 

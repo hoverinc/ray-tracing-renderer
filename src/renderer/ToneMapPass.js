@@ -46,8 +46,8 @@ export function makeToneMapPass(gl, params) {
       renderPassNative;
 
     renderPass.setUniform('lightScale', lightScale.x, lightScale.y);
-    renderPass.setTexture('light', light);
-    renderPass.setTexture('position', position);
+    renderPass.setTexture('lightTex', light);
+    renderPass.setTexture('positionTex', position);
 
     renderPass.useProgram();
     fullscreenQuad.draw();

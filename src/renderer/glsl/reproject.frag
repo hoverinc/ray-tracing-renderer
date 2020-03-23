@@ -6,13 +6,13 @@ includes: [textureLinear],
 source: `
   in vec2 vCoord;
 
-  uniform mediump sampler2D light;
-  uniform mediump sampler2D position;
+  uniform mediump sampler2D lightTex;
+  uniform mediump sampler2D positionTex;
   uniform vec2 lightScale;
   uniform vec2 previousLightScale;
 
-  uniform mediump sampler2D previousLight;
-  uniform mediump sampler2D previousPosition;
+  uniform mediump sampler2D previousLightTex;
+  uniform mediump sampler2D previousPositionTex;
 
   uniform mat4 historyCamera;
   uniform float blendAmount;
@@ -28,10 +28,10 @@ source: `
   }
 
   void main() {
-    vec3 currentPosition = textureLinear(position, vCoord).xyz;
-    float currentMeshId = getMeshId(position, vCoord);
+    vec3 currentPosition = textureLinear(positionTex, vCoord).xyz;
+    float currentMeshId = getMeshId(positionTex, vCoord);
 
-    vec4 currentLight = texture(light, lightScale * vCoord);
+    vec4 currentLight = texture(lightTex, lightScale * vCoord);
 
     if (currentMeshId == 0.0) {
       out_light = currentLight;
@@ -40,7 +40,7 @@ source: `
 
     vec2 hCoord = reproject(currentPosition) - jitter;
 
-    vec2 hSizef = previousLightScale * vec2(textureSize(previousLight, 0));
+    vec2 hSizef = previousLightScale * vec2(textureSize(previousLightTex, 0));
     vec2 hSizeInv = 1.0 / hSizef;
     ivec2 hSize = ivec2(hSizef);
 
@@ -69,12 +69,12 @@ source: `
     for (int i = 0; i < 4; i++) {
       vec2 gCoord = (vec2(texel[i]) + 0.5) * hSizeInv;
 
-      float histMeshId = getMeshId(previousPosition, gCoord);
+      float histMeshId = getMeshId(previousPositionTex, gCoord);
 
       float isValid = histMeshId != currentMeshId || any(greaterThanEqual(texel[i], hSize)) ? 0.0 : 1.0;
 
       float weight = isValid * weights[i];
-      history += weight * texelFetch(previousLight, texel[i], 0);
+      history += weight * texelFetch(previousLightTex, texel[i], 0);
       sum += weight;
     }
 
@@ -89,12 +89,12 @@ source: `
           ivec2 texel = hTexel + ivec2(x, y);
           vec2 gCoord = (vec2(texel) + 0.5) * hSizeInv;
 
-          float histMeshId = getMeshId(previousPosition, gCoord);
+          float histMeshId = getMeshId(previousPositionTex, gCoord);
 
           float isValid = histMeshId != currentMeshId || any(greaterThanEqual(texel, hSize)) ? 0.0 : 1.0;
 
           float weight = isValid;
-          vec4 h = texelFetch(previousLight, texel, 0);
+          vec4 h = texelFetch(previousLightTex, texel, 0);
           history += weight * h;
           sum += weight;
         }
