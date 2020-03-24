@@ -1,4 +1,5 @@
 import { decomposeScene } from './decomposeScene';
+import { makeEnvMap } from './envMap';
 import { makeFramebuffer } from './Framebuffer';
 import { makeFullscreenQuad } from './FullscreenQuad';
 import { makeGBufferPass } from './GBufferPass';
@@ -46,9 +47,11 @@ export function makeRenderingPipeline({
 
   const materialBuffer = makeMaterialBuffer(gl, mergedMesh.materials);
 
+  const envMapTextures = makeEnvMap(gl, { decomposedScene, optionalExtensions });
+
   const fullscreenQuad = makeFullscreenQuad(gl);
 
-  const rayTracePass = makeRayTracePass(gl, { bounces, decomposedScene, fullscreenQuad, materialBuffer, mergedMesh, optionalExtensions, scene });
+  const rayTracePass = makeRayTracePass(gl, { bounces, envMapTextures, fullscreenQuad, materialBuffer, mergedMesh, optionalExtensions });
 
   const reprojectPass = makeReprojectPass(gl, { fullscreenQuad, maxReprojectedSamples });
 
