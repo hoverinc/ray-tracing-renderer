@@ -56,16 +56,10 @@ export function makeReprojectPass(gl, params) {
     renderPass.setUniform('jitter', jitterX, jitterY);
     renderPass.setUniform('historyCamera', historyCamera.elements);
 
-<<<<<<< HEAD
     renderPass.setTexture('diffuseSpecularTex', light);
     renderPass.setTexture('positionTex', position);
     renderPass.setTexture('matPropsTex', matProps);
     renderPass.setTexture('previousDiffuseSpecularTex', previousLight);
-=======
-    renderPass.setTexture('lightTex', light);
-    renderPass.setTexture('positionTex', position);
-    renderPass.setTexture('previousLightTex', previousLight);
->>>>>>> master
     renderPass.setTexture('previousPositionTex', previousPosition);
 
     renderPass.useProgram();
