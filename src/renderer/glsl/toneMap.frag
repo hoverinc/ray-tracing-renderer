@@ -1,9 +1,10 @@
+import camera from './chunks/camera.glsl';
 import constants from './chunks/constants.glsl';
 import textureLinear from './chunks/textureLinear.glsl';
 import toneMapOperators from './chunks/toneMapOperators.glsl';
 
 export default {
-includes: [constants, textureLinear, toneMapOperators],
+includes: [constants, camera, textureLinear, toneMapOperators],
 outputs: ['color'],
 source: `
   in vec2 vCoord;
@@ -13,8 +14,9 @@ source: `
   uniform sampler2D positionTex;
 
   uniform vec2 lightScale;
+  uniform bool edgeAwareUpscale;
 
-  #ifdef EDGE_PRESERVING_UPSCALE
+  uniform sampler2D backgroundMap;
 
   float getMeshId(sampler2D meshIdTex, vec2 vCoord) {
     return floor(texture(meshIdTex, vCoord).w);
@@ -60,14 +62,19 @@ source: `
 
     return upscaledLight;
   }
-  #endif
+
+  uniform Camera camera;
 
   void main() {
-    // #ifdef EDGE_PRESERVING_UPSCALE
-    //   vec4 upscaledLight = getUpscaledLight(vCoord);
-    // #else
-    //   vec4 upscaledLight = texture(diffuseSpecularTex, vec3(lightScale * vCoord, 0));
-    // #endif
+
+    // vec4 upscaledLight = edgeAwareUpscale ?
+    //   getUpscaledLight(vCoord) :
+    //   texture(diffuseSpecularTex, vec3(lightScale * vCoord, 0));
+
+    vec3 direction = getCameraDirection(camera, vCoord);
+    vec2 backgroundUv = cartesianToEquirect(direction);
+    vec3 background = texture(backgroundMap, backgroundUv).rgb;
+
     vec4 diffuse = texture(diffuseSpecularTex, vec3(lightScale * vCoord, 0));
     vec4 specular = texture(diffuseSpecularTex, vec3(lightScale * vCoord, 1));
     vec3 albedo = texture(albedoTex, vCoord).rgb;
@@ -83,6 +90,7 @@ source: `
     // vec3 light = specular.rgb / specular.a;
     // vec3 light = diffuse.rgb / diffuse.a;
 
+    light += step(1.0, 1.0 - dot(albedo, albedo)) * background;
 
     light *= EXPOSURE;
 
@@ -91,7 +99,6 @@ source: `
     light = pow(light, vec3(1.0 / 2.2)); // gamma correction
 
     out_color = vec4(light, 1.0);
-    // out_color = vec4(texture(albedo, vCoord).rgb, 1.0);
   }
 `
 }

@@ -38,10 +38,10 @@ export function makeUniformSetter(gl, program) {
       return;
     }
 
-    uni.v0 = v0;
-    uni.v1 = v1;
-    uni.v2 = v2;
-    uni.v3 = v3;
+    uni.v0 = boolToInt(v0);
+    uni.v1 = boolToInt(v1);
+    uni.v2 = boolToInt(v2);
+    uni.v3 = boolToInt(v3);
     needsUpload.push(uni);
   }
 
@@ -73,6 +73,16 @@ export function makeUniformSetter(gl, program) {
   };
 }
 
+function boolToInt(v) {
+  if (v === true) {
+    return 1.0;
+  } else if (v === false) {
+    return 0.0;
+  } else {
+    return v;
+  }
+}
+
 function initTypeMap(gl) {
   return {
     [gl.FLOAT]: glName(1, 'f'),
@@ -83,6 +93,10 @@ function initTypeMap(gl) {
     [gl.INT_VEC2]: glName(2, 'i'),
     [gl.INT_VEC3]: glName(3, 'i'),
     [gl.INT_VEC4]: glName(4, 'i'),
+    [gl.BOOL]: glName(1, 'i'),
+    [gl.BOOL_VEC2]: glName(2, 'i'),
+    [gl.BOOL_VEC3]: glName(3, 'i'),
+    [gl.BOOL_VEC4]: glName(4, 'i'),
     [gl.SAMPLER_2D]: glName(1, 'i'),
     [gl.SAMPLER_2D_ARRAY]: glName(1, 'i'),
     [gl.FLOAT_MAT2]: glNameMatrix(2, 2),

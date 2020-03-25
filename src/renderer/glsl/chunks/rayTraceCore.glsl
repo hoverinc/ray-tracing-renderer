@@ -35,14 +35,6 @@ export default `
     int materialType;
   };
 
-  struct Camera {
-    mat4 transform;
-    float aspect;
-    float fov;
-    float focus;
-    float aperture;
-  };
-
   void initRay(inout Ray ray, vec3 origin, vec3 direction) {
     ray.o = origin;
     ray.d = direction;

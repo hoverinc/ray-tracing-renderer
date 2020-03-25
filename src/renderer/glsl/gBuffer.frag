@@ -20,13 +20,16 @@ source: `
     return cross(fdx, fdy);
   }
 
+  const float minByte = 1.0 / 255.0;
+
   void main() {
     int materialIndex = vMaterialMeshIndex.x;
     int meshIndex = vMaterialMeshIndex.y;
 
     vec2 uv = fract(vUv);
 
-    vec3 albedo = getMatAlbedo(materialIndex, uv);
+    vec3 albedo = getMatAlbedo(materialIndex, uv) + minByte;
+
     float roughness = getMatRoughness(materialIndex, uv);
     float metalness = getMatMetalness(materialIndex, uv);
     float materialType = getMatType(materialIndex);

@@ -55,7 +55,7 @@ export function makeRenderingPipeline({
 
   const reprojectPass = makeReprojectPass(gl, { fullscreenQuad, maxReprojectedSamples });
 
-  const toneMapPass = makeToneMapPass(gl, { fullscreenQuad, toneMappingParams });
+  const toneMapPass = makeToneMapPass(gl, { envMapTextures, fullscreenQuad, toneMappingParams });
 
   const gBufferPass = makeGBufferPass(gl, { materialBuffer, mergedMesh });
 
@@ -195,6 +195,7 @@ export function makeRenderingPipeline({
   function setCameras(camera, lastCamera) {
     rayTracePass.setCamera(camera);
     gBufferPass.setCamera(camera);
+    toneMapPass.setCamera(camera);
     reprojectPass.setPreviousCamera(lastCamera);
     lastCamera.copy(camera);
   }

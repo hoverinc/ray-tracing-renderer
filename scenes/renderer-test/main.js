@@ -63,7 +63,7 @@ function init() {
   const envLight = new THREE.EnvironmentLight(envmap);
   scene.add(envLight);
 
-  scene.background = new THREE.Color(0.111111);
+  // scene.background = new THREE.Color(0x111111);
 
   const model = new THREE.Object3D();
   model.rotateY(-Math.PI / 2);

@@ -1,5 +1,6 @@
 import { unrollLoop } from '../glslUtil';
 import constants from './chunks/constants.glsl';
+import camera from './chunks/camera.glsl';
 import rayTraceCore from './chunks/rayTraceCore.glsl';
 import textureLinear from './chunks/textureLinear.glsl';
 import materialBuffer from './chunks/materialBuffer.glsl';
@@ -16,8 +17,9 @@ import sampleGlass from './chunks/sampleGlassSpecular.glsl';
 export default {
 includes: [
   constants,
-  rayTraceCore,
   textureLinear,
+  camera,
+  rayTraceCore,
   materialBuffer,
   intersect,
   surfaceInteractionDirect,
@@ -112,21 +114,8 @@ source: (defines) => `
 
     vec2 vCoordAntiAlias = vCoord + jitter;
 
-    vec3 direction = normalize(vec3(vCoordAntiAlias - 0.5, -1.0) * vec3(camera.aspect, 1.0, camera.fov));
-
-    // Thin lens model with depth-of-field
-    // http://www.pbr-book.org/3ed-2018/Camera_Models/Projective_Camera_Models.html#TheThinLensModelandDepthofField
-    // vec2 lensPoint = camera.aperture * sampleCircle(randomSampleVec2());
-    // vec3 focusPoint = -direction * camera.focus / direction.z; // intersect ray direction with focus plane
-
-    // vec3 origin = vec3(lensPoint, 0.0);
-    // direction = normalize(focusPoint - origin);
-
-    // origin = vec3(camera.transform * vec4(origin, 1.0));
-    // direction = mat3(camera.transform) * direction;
-
     vec3 origin = camera.transform[3].xyz;
-    direction = mat3(camera.transform) * direction;
+    vec3 direction = getCameraDirection(camera, vCoordAntiAlias);
 
     Ray cam;
     initRay(cam, origin, direction);

@@ -51,7 +51,7 @@ export function makeRayTracePass(gl, {
   function setCamera(camera) {
     renderPass.setUniform('camera.transform', camera.matrixWorld.elements);
     renderPass.setUniform('camera.aspect', camera.aspect);
-    renderPass.setUniform('camera.fov', 0.5 / Math.tan(0.5 * Math.PI * camera.fov / 180));
+    renderPass.setUniform('camera.focalLength', 0.5 / Math.tan(0.5 * Math.PI * camera.fov / 180));
   }
 
   function setJitter(x, y) {
