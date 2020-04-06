@@ -1730,6 +1730,12 @@ vec3 getMatNormal(int materialIndex, vec2 uv, vec3 normal, vec3 dp1, vec3 dp2, v
           }
           return b <= minCostSplitBucket;
         }, start, end);
+        
+        // Avoid a recursive loop
+        // This happens when all primitive centroids are equal
+        if ( mid > end) {
+          return makeLeafNode(primitiveInfo.slice(start, end), bounds);
+        }
       }
 
       return makeInteriorNode(
