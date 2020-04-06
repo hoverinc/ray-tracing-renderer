@@ -215,6 +215,12 @@ function recursiveBuild(primitiveInfo, start, end) {
         }
         return b <= minCostSplitBucket;
       }, start, end);
+      
+      // Avoid a recursive loop
+      // This happens when all primitive centroids are equal
+      if ( mid+1 >= end) {
+        return makeLeafNode(primitiveInfo.slice(start, end), bounds);
+      }
     }
 
     return makeInteriorNode(
