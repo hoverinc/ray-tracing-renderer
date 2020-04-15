@@ -13,6 +13,7 @@ source: `
   uniform sampler2D albedoTex;
   uniform sampler2D positionTex;
 
+  uniform float sampleCount;
   uniform vec2 lightScale;
   uniform bool edgeAwareUpscale;
 
@@ -90,9 +91,9 @@ source: `
     // vec3 light = specular.rgb / specular.a;
     // vec3 light = diffuse.rgb / diffuse.a;
 
-    light += step(1.0, 1.0 - dot(albedo, albedo)) * background;
+    // light *= EXPOSURE;
 
-    light *= EXPOSURE;
+    // vec3 light = albedo;
 
     light = TONE_MAPPING(light);
 

@@ -114,9 +114,9 @@ source: `
       vec4 specularHistory = texture(previousDiffuseSpecularTex, vec3(previousLightScale * vCoord, 1));
     #endif
 
-    if (diffuseHistory.w > 500.0) {
-      diffuseHistory.xyz *= 500.0 / diffuseHistory.w;
-      diffuseHistory.w = 500.0;
+    if (diffuseHistory.w > 100.0) {
+      diffuseHistory.xyz *= 100.0 / diffuseHistory.w;
+      diffuseHistory.w = 100.0;
     }
 
     float roughness = texture(matPropsTex, vCoord).x;

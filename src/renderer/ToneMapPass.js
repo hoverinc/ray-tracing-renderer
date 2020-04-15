@@ -35,11 +35,13 @@ export function makeToneMapPass(gl, params) {
       light,
       lightScale,
       albedo,
-      position
+      position,
+      sampleCount
     } = params;
 
     renderPass.setUniform('edgeAwareUpscale', lightScale.x < 1 || lightScale.y < 1);
     renderPass.setUniform('lightScale', lightScale.x, lightScale.y);
+    renderPass.setUniform('sampleCount', sampleCount);
     renderPass.setTexture('diffuseSpecularTex', light);
     renderPass.setTexture('positionTex', position);
     renderPass.setTexture('albedoTex', albedo);

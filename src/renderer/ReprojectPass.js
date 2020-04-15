@@ -48,7 +48,7 @@ export function makeReprojectPass(gl, params) {
       reprojectHistory,
     } = params;
 
-    const renderPass = reprojectHistory ?  renderPassBlend : renderPassReproject;
+    const renderPass = reprojectHistory ? renderPassReproject : renderPassBlend;
 
     renderPass.setUniform('blendAmount', blendAmount);
     renderPass.setUniform('lightScale', lightScale.x, lightScale.y);
