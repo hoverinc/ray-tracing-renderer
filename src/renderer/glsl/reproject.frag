@@ -120,7 +120,7 @@ source: `
     }
 
     float roughness = texture(matPropsTex, vCoord).x;
-    float maxSpecularSamples = mix(6.0, 40.0, roughness * roughness);
+    float maxSpecularSamples = mix(5.0, 40.0, roughness * roughness);
     if (specularHistory.w > maxSpecularSamples) {
       specularHistory.xyz *= maxSpecularSamples / specularHistory.w;
       specularHistory.w = maxSpecularSamples;

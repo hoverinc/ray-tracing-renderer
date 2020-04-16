@@ -34,17 +34,15 @@ export function makeToneMapPass(gl, params) {
     const {
       light,
       lightScale,
-      albedo,
+      diffuseSpecularAlbedo,
       position,
-      sampleCount
     } = params;
 
     renderPass.setUniform('edgeAwareUpscale', lightScale.x < 1 || lightScale.y < 1);
     renderPass.setUniform('lightScale', lightScale.x, lightScale.y);
-    renderPass.setUniform('sampleCount', sampleCount);
     renderPass.setTexture('diffuseSpecularTex', light);
     renderPass.setTexture('positionTex', position);
-    renderPass.setTexture('albedoTex', albedo);
+    renderPass.setTexture('diffuseSpecularAlbedoTex', diffuseSpecularAlbedo);
 
     renderPass.useProgram();
     fullscreenQuad.draw();
