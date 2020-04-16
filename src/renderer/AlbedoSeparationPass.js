@@ -17,14 +17,14 @@ export function makeAlbedoSeparationPass(gl, params) {
         uniform sampler2D matPropsTex;
 
         void main() {
-          vec3 albedo = texture(albedoTex, vCoord).rgb;
+          vec4 albedo = texture(albedoTex, vCoord);
           float metalness = texture(matPropsTex, vCoord).g;
 
-          vec3 diffuseAlbedo = (1.0 - metalness) * albedo;
-          vec3 specularAlbedo = mix(vec3(1.0), albedo, metalness);
+          vec3 diffuseAlbedo = (1.0 - metalness) * albedo.rgb;
+          vec3 specularAlbedo = mix(vec3(1.0), albedo.rgb, metalness);
 
-          out_diffuseAlbedo = vec4(diffuseAlbedo, 1.0);
-          out_specularAlbedo = vec4(specularAlbedo, 1.0);
+          out_diffuseAlbedo = vec4(diffuseAlbedo, albedo.a);
+          out_specularAlbedo = vec4(specularAlbedo, albedo.a);
         }
       `
     }

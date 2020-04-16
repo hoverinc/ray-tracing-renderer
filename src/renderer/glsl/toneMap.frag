@@ -77,18 +77,20 @@ source: `
 
     vec4 diffuse = texture(diffuseSpecularTex, vec3(lightScale * vCoord, 0));
     vec4 specular = texture(diffuseSpecularTex, vec3(lightScale * vCoord, 1));
-    vec3 diffuseAlbedo = texture(diffuseSpecularAlbedoTex, vec3(vCoord, 0)).rgb;
-    vec3 specularAlbedo = texture(diffuseSpecularAlbedoTex, vec3(vCoord, 1)).rgb;
+    vec4 diffuseAlbedo = texture(diffuseSpecularAlbedoTex, vec3(vCoord, 0));
+    vec4 specularAlbedo = texture(diffuseSpecularAlbedoTex, vec3(vCoord, 1));
 
     // alpha channel stores the number of samples progressively rendered
     // divide the sum of light by alpha to obtain average contribution of light
 
-    vec3 light = diffuseAlbedo * diffuse.rgb / diffuse.a + specularAlbedo * specular.rgb / specular.a;
+    vec3 light = diffuseAlbedo.rgb * diffuse.rgb / diffuse.a + specularAlbedo.rgb * specular.rgb / specular.a;
     // vec3 light = specular.rgb / specular.a;
     // vec3 light = diffuse.rgb / diffuse.a;
     // vec3 light = diffuse.rgb / diffuse.a + specular.rgb / specular.a;
     // vec3 light = diffuseAlbedo * diffuse.rgb / diffuse.a;
     // vec3 light = specularAlbedo * specular.rgb / specular.a;
+
+    light += (1.0 - diffuseAlbedo.a) * background;
 
     light *= EXPOSURE;
 
