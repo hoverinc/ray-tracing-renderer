@@ -91,7 +91,7 @@ export function makeRenderingPipeline({
 
   let lastToneMappedScale = fullscreenScale;
 
-  // TODO: Move frame buffer creation to module
+  // TODO: Move frame buffer creation to respective program file
 
   let hdrBuffer;
   let hdrBackBuffer;
@@ -225,7 +225,7 @@ export function makeRenderingPipeline({
     rayTracePass.setJitter(jitterX, jitterY);
     reprojectPass.setJitter(jitterX, jitterY);
 
-    if (sampleCount === 1) {
+    if (sampleCount === 0) {
       rayTracePass.setStrataCount(1);
     } else if (sampleCount === numUniformSamples) {
       rayTracePass.setStrataCount(strataCount);
@@ -271,7 +271,7 @@ export function makeRenderingPipeline({
     gBuffer.unbind();
 
     diffuseSpecularAlbedoBuffer.bind();
-    const cumulativeAvg = 1.0 / sampleCount;
+    const cumulativeAvg = 1.0 / (sampleCount + 1);
     gl.blendFunc(gl.CONSTANT_COLOR, gl.ONE_MINUS_CONSTANT_COLOR);
     gl.blendColor(cumulativeAvg, cumulativeAvg, cumulativeAvg, cumulativeAvg);
     gl.enable(gl.BLEND);
@@ -334,13 +334,13 @@ export function makeRenderingPipeline({
       swapBuffers();
     }
 
-    if (numPreviewsRendered >= previewFramesBeforeBenchmark) {
-      previewSize.adjustSize(elapsedFrameTime);
-    }
+    // if (numPreviewsRendered >= previewFramesBeforeBenchmark) {
+    //   previewSize.adjustSize(elapsedFrameTime);
+    // }
 
     updateSeed(previewSize, false);
 
-    renderGBuffer();
+    renderGBuffer(sampleCount);
 
     rayTracePass.bindTextures();
     newSampleToBuffer(hdrBuffer, previewSize);
@@ -350,7 +350,8 @@ export function makeRenderingPipeline({
       blendAmount: 1.0,
       lightScale: previewSize.scale,
       previousLight: lastToneMappedTexture,
-      previousLightScale: lastToneMappedScale
+      previousLightScale: lastToneMappedScale,
+      reprojectHistory: true
     });
 
     toneMapToScreen(reprojectBuffer.color[0], previewSize.scale);
@@ -369,7 +370,7 @@ export function makeRenderingPipeline({
       }
 
       updateSeed(screenSize, true);
-      renderGBuffer();
+      renderGBuffer(sampleCount);
       rayTracePass.bindTextures();
     }
 
@@ -389,6 +390,7 @@ export function makeRenderingPipeline({
           lightScale: fullscreenScale,
           previousLight: reprojectBackBuffer.color[0],
           previousLightScale: previewSize.scale,
+          reprojectHistory: sampleCount === 0
         });
 
         toneMapToScreen(reprojectBuffer.color[0], fullscreenScale);
@@ -434,7 +436,7 @@ export function makeRenderingPipeline({
     swapReprojectBuffer();
 
     if (!areCamerasEqual(camera, lastCamera)) {
-      sampleCount = 1;
+      sampleCount = 0;
       clearBuffer(hdrBuffer);
     } else {
       sampleCount++;
@@ -456,7 +458,7 @@ export function makeRenderingPipeline({
       lightScale: fullscreenScale,
       previousLight: reprojectBackBuffer.color[0],
       previousLightScale: fullscreenScale,
-      reprojectHistory: sampleCount <= 1
+      reprojectHistory: sampleCount === 0
     });
 
     toneMapToScreen(reprojectBuffer.color[0], fullscreenScale);
@@ -464,7 +466,7 @@ export function makeRenderingPipeline({
   }
 
   return {
-    draw: drawFull,
+    draw,
     drawFull,
     setSize,
     sync,

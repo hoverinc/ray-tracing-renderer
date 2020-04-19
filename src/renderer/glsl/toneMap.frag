@@ -22,11 +22,16 @@ source: `
     return floor(texture(meshIdTex, vCoord).w);
   }
 
-  vec4 getUpscaledLight(vec2 coord) {
-    float meshId = getMeshId(positionTex, coord);
+  struct Light {
+    vec4 diffuse;
+    vec4 specular;
+  };
+
+  Light getUpscaledLight() {
+    float meshId = getMeshId(positionTex, vCoord);
 
     vec2 sizef = lightScale * vec2(textureSize(positionTex, 0));
-    vec2 texelf = coord * sizef - 0.5;
+    vec2 texelf = vCoord * sizef - 0.5;
     ivec2 texel = ivec2(texelf);
     vec2 f = fract(texelf);
 
@@ -44,61 +49,66 @@ source: `
       f.x * f.y
     );
 
-    vec4 upscaledLight;
+    Light light;
     float sum;
     for (int i = 0; i < 4; i++) {
       vec2 pCoord = (vec2(texels[i]) + 0.5) / sizef;
       float isValid = getMeshId(positionTex, pCoord) == meshId ? 1.0 : 0.0;
       float weight = isValid * weights[i];
-      // upscaledLight += weight * texelFetch(diffuseSpecularTex, texels[i], 0);
+      light.diffuse += weight * texelFetch(diffuseSpecularTex, ivec3(texels[i], 0), 0);
+      light.specular += weight * texelFetch(diffuseSpecularTex, ivec3(texels[i], 1), 0);
       sum += weight;
     }
 
     if (sum > 0.0) {
-      upscaledLight /= sum;
+      light.diffuse /= sum;
+      light.specular /= sum;
     } else {
-      // upscaledLight = texture(diffuseSpecularTex, lightScale * coord);
+      light.diffuse = texture(diffuseSpecularTex, vec3(lightScale * vCoord, 0));
+      light.specular = texture(diffuseSpecularTex, vec3(lightScale * vCoord, 1));
     }
 
-    return upscaledLight;
+    return light;
   }
 
   uniform Camera camera;
 
   void main() {
+    Light light;
 
-    // vec4 upscaledLight = edgeAwareUpscale ?
-    //   getUpscaledLight(vCoord) :
-    //   texture(diffuseSpecularTex, vec3(lightScale * vCoord, 0));
+    if (edgeAwareUpscale) {
+      light = getUpscaledLight();
+    } else {
+      light.diffuse = texture(diffuseSpecularTex, vec3(lightScale * vCoord, 0));
+      light.specular = texture(diffuseSpecularTex, vec3(lightScale * vCoord, 1));
+    }
 
     vec3 direction = getCameraDirection(camera, vCoord);
     vec2 backgroundUv = cartesianToEquirect(direction);
     vec3 background = texture(backgroundMap, backgroundUv).rgb;
 
-    vec4 diffuse = texture(diffuseSpecularTex, vec3(lightScale * vCoord, 0));
-    vec4 specular = texture(diffuseSpecularTex, vec3(lightScale * vCoord, 1));
     vec4 diffuseAlbedo = texture(diffuseSpecularAlbedoTex, vec3(vCoord, 0));
     vec4 specularAlbedo = texture(diffuseSpecularAlbedoTex, vec3(vCoord, 1));
 
     // alpha channel stores the number of samples progressively rendered
     // divide the sum of light by alpha to obtain average contribution of light
 
-    vec3 light = diffuseAlbedo.rgb * diffuse.rgb / diffuse.a + specularAlbedo.rgb * specular.rgb / specular.a;
-    // vec3 light = specular.rgb / specular.a;
-    // vec3 light = diffuse.rgb / diffuse.a;
-    // vec3 light = diffuse.rgb / diffuse.a + specular.rgb / specular.a;
-    // vec3 light = diffuseAlbedo * diffuse.rgb / diffuse.a;
-    // vec3 light = specularAlbedo * specular.rgb / specular.a;
+    vec3 color = diffuseAlbedo.rgb * light.diffuse.rgb / light.diffuse.a + specularAlbedo.rgb * light.specular.rgb / light.specular.a;
+    // vec3 color = specular.rgb / specular.a;
+    // vec3 color = diffuse.rgb / diffuse.a;
+    // vec3 color = diffuse.rgb / diffuse.a + specular.rgb / specular.a;
+    // vec3 color = diffuseAlbedo * diffuse.rgb / diffuse.a;
+    // vec3 color = specularAlbedo * specular.rgb / specular.a;
 
-    light += (1.0 - diffuseAlbedo.a) * background;
+    color += (1.0 - diffuseAlbedo.a) * background;
 
-    light *= EXPOSURE;
+    color *= EXPOSURE;
 
-    light = TONE_MAPPING(light);
+    color = TONE_MAPPING(color);
 
-    light = pow(light, vec3(1.0 / 2.2)); // gamma correction
+    color = pow(color, vec3(1.0 / 2.2)); // gamma correction
 
-    out_color = vec4(light, 1.0);
+    out_color = vec4(color, 1.0);
   }
 `
 }
