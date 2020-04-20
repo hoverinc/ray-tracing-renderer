@@ -40,7 +40,10 @@ vec3 getMatAlbedo(int materialIndex, vec2 uv) {
     int diffuseMapIndex = materials.diffuse_normal_roughness_metalness_mapIndex[materialIndex].x;
     if (diffuseMapIndex >= 0) {
       vec3 texAlbedo = texture(diffuseMap, vec3(uv * materials.diffuse_normal_mapSize[diffuseMapIndex].xy, diffuseMapIndex)).rgb;
-      texAlbedo = pow(texAlbedo, vec3(2.2));
+
+      // gamma correction done automatically by sRGB texture
+      // texAlbedo = pow(texAlbedo, vec3(2.2));
+
       albedo *= texAlbedo;
     }
   #endif

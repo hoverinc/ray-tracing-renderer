@@ -83,23 +83,17 @@ source: `
       light.specular = texture(diffuseSpecularTex, vec3(lightScale * vCoord, 1));
     }
 
-    vec3 direction = getCameraDirection(camera, vCoord);
-    vec2 backgroundUv = cartesianToEquirect(direction);
-    vec3 background = texture(backgroundMap, backgroundUv).rgb;
-
     vec4 diffuseAlbedo = texture(diffuseSpecularAlbedoTex, vec3(vCoord, 0));
     vec4 specularAlbedo = texture(diffuseSpecularAlbedoTex, vec3(vCoord, 1));
 
     // alpha channel stores the number of samples progressively rendered
     // divide the sum of light by alpha to obtain average contribution of light
-
     vec3 color = diffuseAlbedo.rgb * light.diffuse.rgb / light.diffuse.a + specularAlbedo.rgb * light.specular.rgb / light.specular.a;
-    // vec3 color = specular.rgb / specular.a;
-    // vec3 color = diffuse.rgb / diffuse.a;
-    // vec3 color = diffuse.rgb / diffuse.a + specular.rgb / specular.a;
-    // vec3 color = diffuseAlbedo * diffuse.rgb / diffuse.a;
-    // vec3 color = specularAlbedo * specular.rgb / specular.a;
 
+    // add background map to areas where geometry is not rendered
+    vec3 direction = getCameraDirection(camera, vCoord);
+    vec2 backgroundUv = cartesianToEquirect(direction);
+    vec3 background = texture(backgroundMap, backgroundUv).rgb;
     color += (1.0 - diffuseAlbedo.a) * background;
 
     color *= EXPOSURE;

@@ -5,12 +5,14 @@ import * as THREE from 'three';
 export function makeReprojectPass(gl, params) {
   const {
     fullscreenQuad,
-    maxReprojectedSamples,
+    maxRoughSurfaceSamples,
+    maxSmoothSurfaceSamples,
   } = params;
 
   const renderPassParams = {
     defines: {
-      MAX_SAMPLES: maxReprojectedSamples.toFixed(1)
+      MAX_ROUGH_SURFACE_SAMPLES: maxRoughSurfaceSamples.toFixed(1),
+      MAX_SMOOTH_SURFACE_SAMPLES: maxSmoothSurfaceSamples.toFixed(1)
     },
     vertex: fullscreenQuad.vertexShader,
     fragment

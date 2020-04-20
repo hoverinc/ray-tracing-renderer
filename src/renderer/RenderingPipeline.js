@@ -24,7 +24,9 @@ export function makeRenderingPipeline({
     bounces, // number of global illumination bounces
   }) {
 
-  const maxReprojectedSamples = 400;
+  const maxSmoothSurfaceSamples = 5;
+  const maxRoughSurfaceSamples = 100;
+  const maxSamples = Math.max(maxRoughSurfaceSamples, maxSmoothSurfaceSamples);
 
   // how many samples to render with uniform noise before switching to stratified noise
   const numUniformSamples = 5;
@@ -54,7 +56,7 @@ export function makeRenderingPipeline({
 
   const rayTracePass = makeRayTracePass(gl, { bounces, envMapTextures, fullscreenQuad, materialBuffer, mergedMesh, optionalExtensions });
 
-  const reprojectPass = makeReprojectPass(gl, { fullscreenQuad, maxReprojectedSamples });
+  const reprojectPass = makeReprojectPass(gl, { fullscreenQuad, maxRoughSurfaceSamples, maxSmoothSurfaceSamples });
 
   const toneMapPass = makeToneMapPass(gl, { envMapTextures, fullscreenQuad, toneMappingParams });
 
@@ -334,9 +336,9 @@ export function makeRenderingPipeline({
       swapBuffers();
     }
 
-    // if (numPreviewsRendered >= previewFramesBeforeBenchmark) {
-    //   previewSize.adjustSize(elapsedFrameTime);
-    // }
+    if (numPreviewsRendered >= previewFramesBeforeBenchmark) {
+      previewSize.adjustSize(elapsedFrameTime);
+    }
 
     updateSeed(previewSize, false);
 
@@ -379,9 +381,8 @@ export function makeRenderingPipeline({
     if (isLastTile) {
       sampleCount++;
 
-      // let blendAmount = clamp(1.0 - sampleCount / maxReprojectedSamples, 0, 1);
-      // blendAmount *= blendAmount;
-      let blendAmount = 1.0;
+      let blendAmount = clamp(1.0 - sampleCount / maxSamples, 0, 1);
+      blendAmount *= blendAmount;
 
       if (blendAmount > 0.0) {
         reproject({

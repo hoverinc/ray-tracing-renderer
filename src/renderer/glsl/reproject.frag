@@ -114,13 +114,13 @@ source: `
       vec4 specularHistory = texture(previousDiffuseSpecularTex, vec3(previousLightScale * vCoord, 1));
     #endif
 
-    if (diffuseHistory.w > 100.0) {
-      diffuseHistory.xyz *= 100.0 / diffuseHistory.w;
-      diffuseHistory.w = 100.0;
+    if (diffuseHistory.w > MAX_ROUGH_SURFACE_SAMPLES) {
+      diffuseHistory.xyz *= MAX_ROUGH_SURFACE_SAMPLES / diffuseHistory.w;
+      diffuseHistory.w = MAX_ROUGH_SURFACE_SAMPLES;
     }
 
     float roughness = texture(matPropsTex, vCoord).x;
-    float maxSpecularSamples = mix(5.0, 40.0, roughness * roughness);
+    float maxSpecularSamples = mix(MAX_SMOOTH_SURFACE_SAMPLES, MAX_ROUGH_SURFACE_SAMPLES, roughness);
     if (specularHistory.w > maxSpecularSamples) {
       specularHistory.xyz *= maxSpecularSamples / specularHistory.w;
       specularHistory.w = maxSpecularSamples;
