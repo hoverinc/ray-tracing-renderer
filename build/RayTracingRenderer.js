@@ -2040,10 +2040,10 @@ vec3 getMatNormal(int materialIndex, vec2 uv, vec3 normal, vec3 dp1, vec3 dp2, v
     return target;
   }
 
-  // Create a piecewise 2D cumulative distribution function of light intensity from an envmap
+  // Create a piecewise 2D cumulative distribution function of light intensity from an env map
   // http://www.pbr-book.org/3ed-2018/Monte_Carlo_Integration/2D_Sampling_with_Multidimensional_Transformations.html#Piecewise-Constant2DDistributions
 
-  function envmapDistribution(image) {
+  function envMapDistribution(image) {
     const data = image.data;
 
     const cdfImage = {
@@ -2228,10 +2228,10 @@ vec4 textureLinear(sampler2D map, vec2 uv) {
 
   var intersect = `
 
-uniform sampler2D positions;
-uniform sampler2D normals;
-uniform sampler2D uvs;
-uniform sampler2D bvh;
+uniform sampler2D positionBuffer;
+uniform sampler2D normalBuffer;
+uniform sampler2D uvBuffer;
+uniform sampler2D bvhBuffer;
 
 struct Triangle {
   vec3 p0;
@@ -2247,15 +2247,15 @@ void surfaceInteractionFromBVH(inout SurfaceInteraction si, Triangle tri, vec3 b
   ivec2 i1 = unpackTexel(index.y, VERTEX_COLUMNS);
   ivec2 i2 = unpackTexel(index.z, VERTEX_COLUMNS);
 
-  vec3 n0 = texelFetch(normals, i0, 0).xyz;
-  vec3 n1 = texelFetch(normals, i1, 0).xyz;
-  vec3 n2 = texelFetch(normals, i2, 0).xyz;
+  vec3 n0 = texelFetch(normalBuffer, i0, 0).xyz;
+  vec3 n1 = texelFetch(normalBuffer, i1, 0).xyz;
+  vec3 n2 = texelFetch(normalBuffer, i2, 0).xyz;
   vec3 normal = normalize(barycentric.x * n0 + barycentric.y * n1 + barycentric.z * n2);
 
   #if defined(NUM_DIFFUSE_MAPS) || defined(NUM_NORMAL_MAPS) || defined(NUM_PBR_MAPS)
-    vec2 uv0 = texelFetch(uvs, i0, 0).xy;
-    vec2 uv1 = texelFetch(uvs, i1, 0).xy;
-    vec2 uv2 = texelFetch(uvs, i2, 0).xy;
+    vec2 uv0 = texelFetch(uvBuffer, i0, 0).xy;
+    vec2 uv1 = texelFetch(uvBuffer, i1, 0).xy;
+    vec2 uv2 = texelFetch(uvBuffer, i2, 0).xy;
     vec2 uv = fract(barycentric.x * uv0 + barycentric.y * uv1 + barycentric.z * uv2);
   #else
     vec2 uv = vec2(0.0);
@@ -2398,8 +2398,8 @@ void intersectScene(inout Ray ray, inout SurfaceInteraction si) {
   while(stack >= 0) {
     int i = nodesToVisit[stack--];
 
-    vec4 r1 = fetchData(bvh, i, BVH_COLUMNS);
-    vec4 r2 = fetchData(bvh, i + 1, BVH_COLUMNS);
+    vec4 r1 = fetchData(bvhBuffer, i, BVH_COLUMNS);
+    vec4 r2 = fetchData(bvhBuffer, i + 1, BVH_COLUMNS);
 
     int splitAxisOrNumPrimitives = floatBitsToInt(r1.w);
 
@@ -2422,9 +2422,9 @@ void intersectScene(inout Ray ray, inout SurfaceInteraction si) {
     } else {
       ivec3 index = floatBitsToInt(r1.xyz);
       Triangle tri = Triangle(
-        fetchData(positions, index.x, VERTEX_COLUMNS).xyz,
-        fetchData(positions, index.y, VERTEX_COLUMNS).xyz,
-        fetchData(positions, index.z, VERTEX_COLUMNS).xyz
+        fetchData(positionBuffer, index.x, VERTEX_COLUMNS).xyz,
+        fetchData(positionBuffer, index.y, VERTEX_COLUMNS).xyz,
+        fetchData(positionBuffer, index.z, VERTEX_COLUMNS).xyz
       );
       TriangleIntersect hit = intersectTriangle(ray, tri, maxDim, shear);
 
@@ -2464,8 +2464,8 @@ bool intersectSceneShadow(inout Ray ray) {
   while(stack >= 0) {
     int i = nodesToVisit[stack--];
 
-    vec4 r1 = fetchData(bvh, i, BVH_COLUMNS);
-    vec4 r2 = fetchData(bvh, i + 1, BVH_COLUMNS);
+    vec4 r1 = fetchData(bvhBuffer, i, BVH_COLUMNS);
+    vec4 r2 = fetchData(bvhBuffer, i + 1, BVH_COLUMNS);
 
     int splitAxisOrNumPrimitives = floatBitsToInt(r1.w);
 
@@ -2486,9 +2486,9 @@ bool intersectSceneShadow(inout Ray ray) {
     } else {
       ivec3 index = floatBitsToInt(r1.xyz);
       Triangle tri = Triangle(
-        fetchData(positions, index.x, VERTEX_COLUMNS).xyz,
-        fetchData(positions, index.y, VERTEX_COLUMNS).xyz,
-        fetchData(positions, index.z, VERTEX_COLUMNS).xyz
+        fetchData(positionBuffer, index.x, VERTEX_COLUMNS).xyz,
+        fetchData(positionBuffer, index.y, VERTEX_COLUMNS).xyz,
+        fetchData(positionBuffer, index.z, VERTEX_COLUMNS).xyz
       );
 
       if (intersectTriangle(ray, tri, maxDim, shear).t > 0.0) {
@@ -2538,7 +2538,7 @@ bool intersectSceneShadow(inout Ray ray) {
 
 // Noise texture used to generate a different random number for each pixel.
 // We use blue noise in particular, but any type of noise will work.
-uniform sampler2D noise;
+uniform sampler2D noiseTex;
 
 uniform float stratifiedSamples[SAMPLING_DIMENSIONS];
 uniform float strataSize;
@@ -2551,10 +2551,10 @@ int sampleIndex = 0;
 float pixelSeed;
 
 void initRandom() {
-  vec2 noiseSize = vec2(textureSize(noise, 0));
+  vec2 noiseSize = vec2(textureSize(noiseTex, 0));
 
   // tile the small noise texture across the entire screen
-  pixelSeed = texture(noise, vCoord / (pixelSize * noiseSize)).r;
+  pixelSeed = texture(noiseTex, vCoord / (pixelSize * noiseSize)).r;
 }
 
 float randomSample() {
@@ -2590,10 +2590,10 @@ MaterialSamples getRandomMaterialSamples() {
   // Sample the environment map using a cumulative distribution function as described in
   // http://www.pbr-book.org/3ed-2018/Light_Transport_I_Surface_Reflection/Sampling_Light_Sources.html#InfiniteAreaLights
 
-  var envmap = `
+  var envMap = `
 
-uniform sampler2D envmap;
-uniform sampler2D envmapDistribution;
+uniform sampler2D envMap;
+uniform sampler2D envMapDistribution;
 uniform sampler2D backgroundMap;
 
 vec2 cartesianToEquirect(vec3 pointOnSphere) {
@@ -2603,13 +2603,13 @@ vec2 cartesianToEquirect(vec3 pointOnSphere) {
 }
 
 float getEnvmapV(float u, out int vOffset, out float pdf) {
-  ivec2 size = textureSize(envmap, 0);
+  ivec2 size = textureSize(envMap, 0);
 
   int left = 0;
-  int right = size.y + 1; // cdf length is the length of the envmap + 1
+  int right = size.y + 1; // cdf length is the length of the env map + 1
   while (left < right) {
     int mid = (left + right) >> 1;
-    float s = texelFetch(envmapDistribution, ivec2(0, mid), 0).x;
+    float s = texelFetch(envMapDistribution, ivec2(0, mid), 0).x;
     if (s <= u) {
       left = mid + 1;
     } else {
@@ -2618,10 +2618,10 @@ float getEnvmapV(float u, out int vOffset, out float pdf) {
   }
   vOffset = left - 1;
 
-  // x channel is cumulative distribution of envmap luminance
-  // y channel is partial probability density of envmap luminance
-  vec2 s0 = texelFetch(envmapDistribution, ivec2(0, vOffset), 0).xy;
-  vec2 s1 = texelFetch(envmapDistribution, ivec2(0, vOffset + 1), 0).xy;
+  // x channel is cumulative distribution of env map luminance
+  // y channel is partial probability density of env map luminance
+  vec2 s0 = texelFetch(envMapDistribution, ivec2(0, vOffset), 0).xy;
+  vec2 s1 = texelFetch(envMapDistribution, ivec2(0, vOffset + 1), 0).xy;
 
   pdf = s0.y;
 
@@ -2629,13 +2629,13 @@ float getEnvmapV(float u, out int vOffset, out float pdf) {
 }
 
 float getEnvmapU(float u, int vOffset, out float pdf) {
-  ivec2 size = textureSize(envmap, 0);
+  ivec2 size = textureSize(envMap, 0);
 
   int left = 0;
-  int right = size.x + 1; // cdf length is the length of the envmap + 1
+  int right = size.x + 1; // cdf length is the length of the env map + 1
   while (left < right) {
     int mid = (left + right) >> 1;
-    float s = texelFetch(envmapDistribution, ivec2(1 + mid, vOffset), 0).x;
+    float s = texelFetch(envMapDistribution, ivec2(1 + mid, vOffset), 0).x;
     if (s <= u) {
       left = mid + 1;
     } else {
@@ -2644,10 +2644,10 @@ float getEnvmapU(float u, int vOffset, out float pdf) {
   }
   int uOffset = left - 1;
 
-  // x channel is cumulative distribution of envmap luminance
-  // y channel is partial probability density of envmap luminance
-  vec2 s0 = texelFetch(envmapDistribution, ivec2(1 + uOffset, vOffset), 0).xy;
-  vec2 s1 = texelFetch(envmapDistribution, ivec2(1 + uOffset + 1, vOffset), 0).xy;
+  // x channel is cumulative distribution of env map luminance
+  // y channel is partial probability density of env map luminance
+  vec2 s0 = texelFetch(envMapDistribution, ivec2(1 + uOffset, vOffset), 0).xy;
+  vec2 s1 = texelFetch(envMapDistribution, ivec2(1 + uOffset + 1, vOffset), 0).xy;
 
   pdf = s0.y;
 
@@ -2676,22 +2676,22 @@ vec3 sampleEnvmap(vec2 random, out vec2 uv, out float pdf) {
   return dir;
 }
 
-float envmapPdf(vec2 uv) {
-  vec2 size = vec2(textureSize(envmap, 0));
+float envMapPdf(vec2 uv) {
+  vec2 size = vec2(textureSize(envMap, 0));
 
   float sinTheta = sin(uv.y * PI);
 
   uv *= size;
 
-  float partialX = texelFetch(envmapDistribution, ivec2(1.0 + uv.x, uv.y), 0).y;
-  float partialY = texelFetch(envmapDistribution, ivec2(0, uv.y), 0).y;
+  float partialX = texelFetch(envMapDistribution, ivec2(1.0 + uv.x, uv.y), 0).y;
+  float partialY = texelFetch(envMapDistribution, ivec2(0, uv.y), 0).y;
 
   return partialX * partialY * INVPI2 / (2.0 * sinTheta);
 }
 
 vec3 sampleEnvmapFromDirection(vec3 d) {
   vec2 uv = cartesianToEquirect(d);
-  return textureLinear(envmap, uv).rgb;
+  return textureLinear(envMap, uv).rgb;
 }
 
 vec3 sampleBackgroundFromDirection(vec3 d) {
@@ -2885,7 +2885,7 @@ void sampleMaterial(SurfaceInteraction si, int bounce, inout Path path) {
       lightDirSpecular(si.faceNormal, viewDir, basis, si.roughness, lightDirSample);
 
     uv = cartesianToEquirect(lightDir);
-    lightPdf = envmapPdf(uv);
+    lightPdf = envMapPdf(uv);
     brdfSample = true;
   } else {
     lightDir = sampleEnvmap(lightDirSample, uv, lightPdf);
@@ -2912,7 +2912,7 @@ void sampleMaterial(SurfaceInteraction si, int bounce, inout Path path) {
     }
   }
 
-  vec3 irr = textureLinear(envmap, uv).rgb;
+  vec3 irr = textureLinear(envMap, uv).rgb;
 
   float scatteringPdf;
   vec3 brdf = materialBrdf(si, viewDir, lightDir, cosThetaL, diffuseWeight, scatteringPdf);
@@ -2950,7 +2950,7 @@ void sampleMaterial(SurfaceInteraction si, int bounce, inout Path path) {
   brdf = materialBrdf(si, viewDir, lightDir, cosThetaL, 1.0, scatteringPdf);
 
   uv = cartesianToEquirect(lightDir);
-  lightPdf = envmapPdf(uv);
+  lightPdf = envMapPdf(uv);
 
   path.misWeight = powerHeuristic(scatteringPdf, lightPdf);
 
@@ -2990,7 +2990,7 @@ void sampleShadowCatcher(SurfaceInteraction si, int bounce, inout Path path) {
       lightDirDiffuse(si.faceNormal, viewDir, basis, lightDirSample) :
       lightDirSpecular(si.faceNormal, viewDir, basis, si.roughness, lightDirSample);
     uv = cartesianToEquirect(lightDir);
-    lightPdf = envmapPdf(uv);
+    lightPdf = envMapPdf(uv);
     brdfSample = true;
   } else {
     lightDir = sampleEnvmap(lightDirSample, uv, lightPdf);
@@ -3011,7 +3011,7 @@ void sampleShadowCatcher(SurfaceInteraction si, int bounce, inout Path path) {
     occluded = 0.0;
   }
 
-  float irr = dot(luminance, textureLinear(envmap, uv).rgb);
+  float irr = dot(luminance, textureLinear(envMap, uv).rgb);
 
   float scatteringPdf;
   vec3 brdf = materialBrdf(si, viewDir, lightDir, cosThetaL, 1.0, scatteringPdf);
@@ -3048,7 +3048,7 @@ void sampleShadowCatcher(SurfaceInteraction si, int bounce, inout Path path) {
   brdf = materialBrdf(si, viewDir, lightDir, cosThetaL, 1.0, scatteringPdf);
 
   uv = cartesianToEquirect(lightDir);
-  lightPdf = envmapPdf(uv);
+  lightPdf = envMapPdf(uv);
 
   path.misWeight = 0.0;
 
@@ -3113,7 +3113,7 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
     intersect,
     surfaceInteractionDirect,
     random,
-    envmap,
+    envMap,
     bsdf,
     sample,
     sampleMaterial,
@@ -3389,7 +3389,7 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
 
     // noiseImage is a 32-bit PNG image
     function setNoise(noiseImage) {
-      renderPass.setTexture('noise', makeTexture(gl, {
+      renderPass.setTexture('noiseTex', makeTexture(gl, {
         data: noiseImage,
         wrapS: gl.REPEAT,
         wrapT: gl.REPEAT,
@@ -3499,13 +3499,13 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
     renderPass.setTexture('normalMap', materialBuffer.textures.normalMap);
     renderPass.setTexture('pbrMap', materialBuffer.textures.pbrMap);
 
-    renderPass.setTexture('positions', makeDataTexture(gl, geometry.getAttribute('position').array, 3));
+    renderPass.setTexture('positionBuffer', makeDataTexture(gl, geometry.getAttribute('position').array, 3));
 
-    renderPass.setTexture('normals', makeDataTexture(gl, geometry.getAttribute('normal').array, 3));
+    renderPass.setTexture('normalBuffer', makeDataTexture(gl, geometry.getAttribute('normal').array, 3));
 
-    renderPass.setTexture('uvs', makeDataTexture(gl, geometry.getAttribute('uv').array, 2));
+    renderPass.setTexture('uvBuffer', makeDataTexture(gl, geometry.getAttribute('uv').array, 2));
 
-    renderPass.setTexture('bvh', makeDataTexture(gl, flattenedBvh.buffer, 4));
+    renderPass.setTexture('bvhBuffer', makeDataTexture(gl, flattenedBvh.buffer, 4));
 
     const envImage = generateEnvMapFromSceneComponents(directionalLights, ambientLights, environmentLights);
     const envImageTextureObject = makeTexture(gl, {
@@ -3517,7 +3517,7 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
       height: envImage.height,
     });
 
-    renderPass.setTexture('envmap', envImageTextureObject);
+    renderPass.setTexture('envMap', envImageTextureObject);
 
     let backgroundImageTextureObject;
     if (background) {
@@ -3536,9 +3536,9 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
 
     renderPass.setTexture('backgroundMap', backgroundImageTextureObject);
 
-    const distribution = envmapDistribution(envImage);
+    const distribution = envMapDistribution(envImage);
 
-    renderPass.setTexture('envmapDistribution', makeTexture(gl, {
+    renderPass.setTexture('envMapDistribution', makeTexture(gl, {
       data: distribution.data,
       storage: 'halfFloat',
       width: distribution.width,
@@ -3647,13 +3647,13 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
   source: `
   in vec2 vCoord;
 
-  uniform mediump sampler2D light;
-  uniform mediump sampler2D position;
+  uniform mediump sampler2D lightTex;
+  uniform mediump sampler2D positionTex;
   uniform vec2 lightScale;
   uniform vec2 previousLightScale;
 
-  uniform mediump sampler2D previousLight;
-  uniform mediump sampler2D previousPosition;
+  uniform mediump sampler2D previousLightTex;
+  uniform mediump sampler2D previousPositionTex;
 
   uniform mat4 historyCamera;
   uniform float blendAmount;
@@ -3669,10 +3669,10 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
   }
 
   void main() {
-    vec3 currentPosition = textureLinear(position, vCoord).xyz;
-    float currentMeshId = getMeshId(position, vCoord);
+    vec3 currentPosition = textureLinear(positionTex, vCoord).xyz;
+    float currentMeshId = getMeshId(positionTex, vCoord);
 
-    vec4 currentLight = texture(light, lightScale * vCoord);
+    vec4 currentLight = texture(lightTex, lightScale * vCoord);
 
     if (currentMeshId == 0.0) {
       out_light = currentLight;
@@ -3681,7 +3681,7 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
 
     vec2 hCoord = reproject(currentPosition) - jitter;
 
-    vec2 hSizef = previousLightScale * vec2(textureSize(previousLight, 0));
+    vec2 hSizef = previousLightScale * vec2(textureSize(previousLightTex, 0));
     vec2 hSizeInv = 1.0 / hSizef;
     ivec2 hSize = ivec2(hSizef);
 
@@ -3710,12 +3710,12 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
     for (int i = 0; i < 4; i++) {
       vec2 gCoord = (vec2(texel[i]) + 0.5) * hSizeInv;
 
-      float histMeshId = getMeshId(previousPosition, gCoord);
+      float histMeshId = getMeshId(previousPositionTex, gCoord);
 
       float isValid = histMeshId != currentMeshId || any(greaterThanEqual(texel[i], hSize)) ? 0.0 : 1.0;
 
       float weight = isValid * weights[i];
-      history += weight * texelFetch(previousLight, texel[i], 0);
+      history += weight * texelFetch(previousLightTex, texel[i], 0);
       sum += weight;
     }
 
@@ -3730,12 +3730,12 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
           ivec2 texel = hTexel + ivec2(x, y);
           vec2 gCoord = (vec2(texel) + 0.5) * hSizeInv;
 
-          float histMeshId = getMeshId(previousPosition, gCoord);
+          float histMeshId = getMeshId(previousPositionTex, gCoord);
 
           float isValid = histMeshId != currentMeshId || any(greaterThanEqual(texel, hSize)) ? 0.0 : 1.0;
 
           float weight = isValid;
-          vec4 h = texelFetch(previousLight, texel, 0);
+          vec4 h = texelFetch(previousLightTex, texel, 0);
           history += weight * h;
           sum += weight;
         }
@@ -3794,10 +3794,10 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
       renderPass.setUniform('lightScale', lightScale.x, lightScale.y);
       renderPass.setUniform('previousLightScale', previousLightScale.x, previousLightScale.y);
 
-      renderPass.setTexture('light', light);
-      renderPass.setTexture('position', position);
-      renderPass.setTexture('previousLight', previousLight);
-      renderPass.setTexture('previousPosition', previousPosition);
+      renderPass.setTexture('lightTex', light);
+      renderPass.setTexture('positionTex', position);
+      renderPass.setTexture('previousLightTex', previousLight);
+      renderPass.setTexture('previousPositionTex', previousPosition);
 
       renderPass.useProgram();
       fullscreenQuad.draw();
@@ -3816,8 +3816,8 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
   source: `
   in vec2 vCoord;
 
-  uniform sampler2D light;
-  uniform sampler2D position;
+  uniform sampler2D lightTex;
+  uniform sampler2D positionTex;
 
   uniform vec2 lightScale;
 
@@ -3855,9 +3855,9 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
   }
 
   vec4 getUpscaledLight(vec2 coord) {
-    float meshId = getMeshId(position, coord);
+    float meshId = getMeshId(positionTex, coord);
 
-    vec2 sizef = lightScale * vec2(textureSize(position, 0));
+    vec2 sizef = lightScale * vec2(textureSize(positionTex, 0));
     vec2 texelf = coord * sizef - 0.5;
     ivec2 texel = ivec2(texelf);
     vec2 f = fract(texelf);
@@ -3880,16 +3880,16 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
     float sum;
     for (int i = 0; i < 4; i++) {
       vec2 pCoord = (vec2(texels[i]) + 0.5) / sizef;
-      float isValid = getMeshId(position, pCoord) == meshId ? 1.0 : 0.0;
+      float isValid = getMeshId(positionTex, pCoord) == meshId ? 1.0 : 0.0;
       float weight = isValid * weights[i];
-      upscaledLight += weight * texelFetch(light, texels[i], 0);
+      upscaledLight += weight * texelFetch(lightTex, texels[i], 0);
       sum += weight;
     }
 
     if (sum > 0.0) {
       upscaledLight /= sum;
     } else {
-      upscaledLight = texture(light, lightScale * coord);
+      upscaledLight = texture(lightTex, lightScale * coord);
     }
 
     return upscaledLight;
@@ -3900,14 +3900,14 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
     #ifdef EDGE_PRESERVING_UPSCALE
       vec4 upscaledLight = getUpscaledLight(vCoord);
     #else
-      vec4 upscaledLight = texture(light, lightScale * vCoord);
+      vec4 upscaledLight = texture(lightTex, lightScale * vCoord);
     #endif
 
     // alpha channel stores the number of samples progressively rendered
     // divide the sum of light by alpha to obtain average contribution of light
 
     // in addition, alpha contains a scale factor for the shadow catcher material
-    // dividing by alpha normalizes the brightness of the shadow catcher to match the background envmap.
+    // dividing by alpha normalizes the brightness of the shadow catcher to match the background env map.
     vec3 light = upscaledLight.rgb / upscaledLight.a;
 
     light *= EXPOSURE;
@@ -3965,8 +3965,8 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
         renderPassNative;
 
       renderPass.setUniform('lightScale', lightScale.x, lightScale.y);
-      renderPass.setTexture('light', light);
-      renderPass.setTexture('position', position);
+      renderPass.setTexture('lightTex', light);
+      renderPass.setTexture('positionTex', position);
 
       renderPass.useProgram();
       fullscreenQuad.draw();
@@ -4150,6 +4150,7 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
 
     let frameTime;
     let elapsedFrameTime;
+    let sampleTime;
 
     let sampleCount = 0;
     let numPreviewsRendered = 0;
@@ -4394,6 +4395,9 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
         if (sampleCount === 0) { // previous rendered image was a preview image
           clearBuffer(hdrBuffer);
           reprojectPass.setPreviousCamera(lastCamera);
+        } else {
+          sampleRenderedCallback(sampleCount, frameTime - sampleTime || NaN);
+          sampleTime = frameTime;
         }
 
         updateSeed(screenWidth, screenHeight, true);
@@ -4427,8 +4431,6 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
         } else {
           toneMapToScreen(hdrBuffer.color[0], fullscreenScale);
         }
-
-        sampleRenderedCallback(sampleCount);
       }
     }
 

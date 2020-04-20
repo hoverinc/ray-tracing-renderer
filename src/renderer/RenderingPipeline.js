@@ -75,6 +75,7 @@ export function makeRenderingPipeline({
 
   let frameTime;
   let elapsedFrameTime;
+  let sampleTime;
 
   let sampleCount = 0;
   let numPreviewsRendered = 0;
@@ -369,6 +370,9 @@ export function makeRenderingPipeline({
       if (sampleCount === 0) { // previous rendered image was a preview image
         clearBuffer(hdrBuffer);
         reprojectPass.setPreviousCamera(lastCamera);
+      } else {
+        sampleRenderedCallback(sampleCount, frameTime - sampleTime || NaN);
+        sampleTime = frameTime;
       }
 
       updateSeed(screenSize, true);
@@ -398,8 +402,6 @@ export function makeRenderingPipeline({
       } else {
         toneMapToScreen(hdrBuffer.color[0], fullscreenScale);
       }
-
-      sampleRenderedCallback(sampleCount);
     }
   }
 
