@@ -59,10 +59,11 @@ export function makeTexture(gl, params) {
   gl.texParameteri(target, gl.TEXTURE_MIN_FILTER, minFilter);
   gl.texParameteri(target, gl.TEXTURE_MAG_FILTER, magFilter);
 
-  if (minFilter === gl.LINEAR_MIPMAP_LINEAR) {
-    const anisotropy = gl.getParameter(MAX_TEXTURE_MAX_ANISOTROPY_EXT);
-    gl.texParameteri(target, TEXTURE_MAX_ANISOTROPY_EXT, anisotropy);
-  }
+  // disable anisotropic filtering until there's more testing
+  // if (minFilter === gl.LINEAR_MIPMAP_LINEAR) {
+  //   const anisotropy = gl.getParameter(MAX_TEXTURE_MAX_ANISOTROPY_EXT);
+  //   gl.texParameteri(target, TEXTURE_MAX_ANISOTROPY_EXT, anisotropy);
+  // }
 
   width = width || data.width || 0;
   height = height || data.height || 0;

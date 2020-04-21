@@ -14,8 +14,11 @@ export function makeMaterialBuffer(gl, materials) {
   const bufferData = {};
 
   bufferData.albedo = materials.map(m => m.color);
+
+  // Set roughness and metalness for glass materials to these values so that albedo separation and filtering works
   bufferData.roughness = materials.map(m => m.transparent ? 0.0 : m.roughness);
   bufferData.metalness = materials.map(m => m.transparent ? 1.0 : m.metalness);
+
   bufferData.normalScale = materials.map(m => m.normalScale);
 
   bufferData.type = materials.map(m => {
@@ -84,11 +87,10 @@ function makeTextureArray(gl, textures, gammaCorrection = false) {
   const texture = makeTexture(gl, {
     width: maxSize.width,
     height: maxSize.height,
-    gammaCorrection, // does not work with mip mapping?
+    gammaCorrection,
     data: images,
     flipY,
     channels: 3,
-    // minFilter: gl.LINEAR_MIPMAP_LINEAR,
     minFilter: gl.LINEAR,
     magFilter: gl.LINEAR,
   });

@@ -7,6 +7,7 @@ export function makeEnvMap(gl, { decomposedScene, optionalExtensions } ) {
   const { OES_texture_float_linear } = optionalExtensions;
   const { background, directionalLights, ambientLights, environmentLights } = decomposedScene;
 
+  // the env map provides a light source for surfaces
   const envImage = generateEnvMapFromSceneComponents(directionalLights, ambientLights, environmentLights);
   const envMap = makeTexture(gl, {
     data: envImage.data,
@@ -17,6 +18,7 @@ export function makeEnvMap(gl, { decomposedScene, optionalExtensions } ) {
     height: envImage.height,
   });
 
+  // background map purely acts as the background for the rendered image
   let backgroundMap;
   if (background) {
     const backgroundImage = generateBackgroundMapFromSceneBackground(background);

@@ -94,7 +94,7 @@ export function makeRenderingPipeline({
 
   let lastToneMappedScale = fullscreenScale;
 
-  // TODO: Move frame buffer creation to respective program file
+  // TODO refactor: Move frame buffer creation to respective shader pass
 
   let hdrBuffer;
   let hdrBackBuffer;
@@ -151,6 +151,7 @@ export function makeRenderingPipeline({
     gBuffer = makeGBuffer();
     gBufferBack = makeGBuffer();
 
+    // halfFloat enables more precise antialiasing over byte
     const diffuseSpecularAlbedo = makeTexture(gl, { width, height, length: 2, storage: 'halfFloat' });
 
     diffuseSpecularAlbedoBuffer = makeFramebuffer(gl, {
@@ -273,11 +274,14 @@ export function makeRenderingPipeline({
     gBufferPass.draw();
     gBuffer.unbind();
 
+    // separate albedo into diffuse and specular component
+    // antialias results by blending
     diffuseSpecularAlbedoBuffer.bind();
     const cumulativeAvg = 1.0 / (sampleCount + 1);
     gl.blendFunc(gl.CONSTANT_COLOR, gl.ONE_MINUS_CONSTANT_COLOR);
     gl.blendColor(cumulativeAvg, cumulativeAvg, cumulativeAvg, cumulativeAvg);
     gl.enable(gl.BLEND);
+
     albedoSeparationPass.draw({
       albedo: gBuffer.color[gBufferPass.outputLocs.albedo],
       matProps: gBuffer.color[gBufferPass.outputLocs.matProps]
@@ -295,7 +299,7 @@ export function makeRenderingPipeline({
     });
   }
 
-  function reproject({ size, blendAmount, lightScale, previousLight, previousLightScale, reprojectHistory = true }) {
+  function reproject({ size, blendAmount, lightScale, previousLight, previousLightScale, reprojectPosition = true }) {
     reprojectBuffer.bind();
     gl.viewport(0, 0, size.width, size.height);
     reprojectPass.draw({
@@ -307,7 +311,7 @@ export function makeRenderingPipeline({
       previousLight,
       previousLightScale,
       previousPosition: gBufferBack.color[gBufferPass.outputLocs.position],
-      reprojectHistory
+      reprojectPosition
     });
     reprojectBuffer.unbind();
   }
@@ -354,7 +358,7 @@ export function makeRenderingPipeline({
       lightScale: previewSize.scale,
       previousLight: lastToneMappedTexture,
       previousLightScale: lastToneMappedScale,
-      reprojectHistory: true
+      reprojectPosition: true
     });
 
     toneMapToScreen(reprojectBuffer.color[0], previewSize.scale);
@@ -395,7 +399,7 @@ export function makeRenderingPipeline({
           lightScale: fullscreenScale,
           previousLight: reprojectBackBuffer.color[0],
           previousLightScale: previewSize.scale,
-          reprojectHistory: sampleCount === 0
+          reprojectPosition: sampleCount === 0 // Only blend frames and don't reproject positions after camera stays still
         });
 
         toneMapToScreen(reprojectBuffer.color[0], fullscreenScale);
@@ -461,7 +465,7 @@ export function makeRenderingPipeline({
       lightScale: fullscreenScale,
       previousLight: reprojectBackBuffer.color[0],
       previousLightScale: fullscreenScale,
-      reprojectHistory: sampleCount === 0
+      reprojectPosition: sampleCount === 0
     });
 
     toneMapToScreen(reprojectBuffer.color[0], fullscreenScale);

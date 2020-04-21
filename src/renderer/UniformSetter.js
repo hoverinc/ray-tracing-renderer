@@ -38,10 +38,10 @@ export function makeUniformSetter(gl, program) {
       return;
     }
 
-    uni.v0 = boolToInt(v0);
-    uni.v1 = boolToInt(v1);
-    uni.v2 = boolToInt(v2);
-    uni.v3 = boolToInt(v3);
+    uni.v0 = ifBoolConvertToInt(v0);
+    uni.v1 = ifBoolConvertToInt(v1);
+    uni.v2 = ifBoolConvertToInt(v2);
+    uni.v3 = ifBoolConvertToInt(v3);
     needsUpload.push(uni);
   }
 
@@ -73,7 +73,7 @@ export function makeUniformSetter(gl, program) {
   };
 }
 
-function boolToInt(v) {
+function ifBoolConvertToInt(v) {
   if (v === true) {
     return 1.0;
   } else if (v === false) {
