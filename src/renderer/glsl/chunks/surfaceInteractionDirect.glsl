@@ -13,12 +13,12 @@ export default `
 
     float meshIndex = positionAndMeshIndex.w;
 
-    vec4 normalMaterialType = texture(gNormal, coord);
+    si.normal = normalize(texture(gNormal, coord).xyz);
 
-    si.normal = normalize(normalMaterialType.xyz);
-    si.materialType = int(normalMaterialType.w);
+    vec4 faceNormalAndMaterialType = texture(gNormal, coord);
 
-    si.faceNormal = normalize(texture(gFaceNormal, coord).xyz);
+    si.faceNormal = normalize(faceNormalAndMaterialType.xyz);
+    si.materialType = int(faceNormalAndMaterialType.w);
 
     si.albedo = vec3(1.0);
 

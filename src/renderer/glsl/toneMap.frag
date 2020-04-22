@@ -76,19 +76,20 @@ source: `
   void main() {
     Light light;
 
-    if (edgeAwareUpscale) {
-      light = getUpscaledLight();
-    } else {
+    // if (edgeAwareUpscale) {
+    //   light = getUpscaledLight();
+    // } else {
       light.diffuse = texture(diffuseSpecularTex, vec3(lightScale * vCoord, 0));
       light.specular = texture(diffuseSpecularTex, vec3(lightScale * vCoord, 1));
-    }
+    // }
 
     vec4 diffuseAlbedo = texture(diffuseSpecularAlbedoTex, vec3(vCoord, 0));
     vec4 specularAlbedo = texture(diffuseSpecularAlbedoTex, vec3(vCoord, 1));
 
     // alpha channel stores the number of samples progressively rendered
     // divide the sum of light by alpha to obtain average contribution of light
-    vec3 color = diffuseAlbedo.rgb * light.diffuse.rgb / light.diffuse.a + specularAlbedo.rgb * light.specular.rgb / light.specular.a;
+    // vec3 color = diffuseAlbedo.rgb * light.diffuse.rgb / light.diffuse.a + specularAlbedo.rgb * light.specular.rgb / light.specular.a;
+    vec3 color = light.diffuse.rgb / light.diffuse.a + light.specular.rgb / light.specular.a;
 
     // add background map to areas where geometry is not rendered
     vec3 direction = getCameraDirection(camera, vCoord);

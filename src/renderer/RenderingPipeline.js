@@ -126,7 +126,7 @@ export function makeRenderingPipeline({
     reprojectBuffer = makeHdrBuffer(reprojectPass.outputLocs);
     reprojectBackBuffer = makeHdrBuffer(reprojectPass.outputLocs);
 
-    const normalBuffer = makeTexture(gl, { width, height, storage: 'halfFloat' });
+    // const normalBuffer = makeTexture(gl, { width, height, storage: 'halfFloat' });
     const faceNormalBuffer = makeTexture(gl, { width, height, storage: 'halfFloat' });
     const albedoBuffer = makeTexture(gl, { width, height, storage: 'byte', channels: 4});
     const matProps = makeTexture(gl, { width, height, storage: 'byte', channels: 2 });
@@ -135,6 +135,7 @@ export function makeRenderingPipeline({
 
     function makeGBuffer() {
       const positionBuffer = makeTexture(gl, { width, height, storage: 'float' });
+      const normalBuffer = makeTexture(gl, { width, height, storage: 'halfFloat' });
 
       return makeFramebuffer(gl, {
         colorAttachments: [
@@ -307,10 +308,12 @@ export function makeRenderingPipeline({
       light: hdrBuffer.color[0],
       lightScale,
       position: gBuffer.color[gBufferPass.outputLocs.position],
+      normal: gBuffer.color[gBufferPass.outputLocs.normal],
       matProps: gBuffer.color[gBufferPass.outputLocs.matProps],
       previousLight,
       previousLightScale,
       previousPosition: gBufferBack.color[gBufferPass.outputLocs.position],
+      previousNormal: gBufferBack.color[gBufferPass.outputLocs.normal],
       reprojectPosition
     });
     reprojectBuffer.unbind();
@@ -341,9 +344,9 @@ export function makeRenderingPipeline({
       swapBuffers();
     }
 
-    if (numPreviewsRendered >= previewFramesBeforeBenchmark) {
-      previewSize.adjustSize(elapsedFrameTime);
-    }
+    // if (numPreviewsRendered >= previewFramesBeforeBenchmark) {
+    //   previewSize.adjustSize(elapsedFrameTime);
+    // }
 
     updateSeed(previewSize, false);
 
@@ -474,7 +477,7 @@ export function makeRenderingPipeline({
 
   return {
     draw,
-    drawFull,
+    drawFull: draw,
     setSize,
     sync,
     getTotalSamplesRendered() {
