@@ -37,12 +37,9 @@ source: `
     vec3 currentPosition = positionAndDiff.xyz;
     float posDiff = positionAndDiff.w * max(bufferSize.x, bufferSize.y);
 
-    vec4 normalAndDiff = texture(normalTex, vCoord);
-    vec3 currentNormal = normalize(normalAndDiff.xyz);
-    float normalDiff = normalAndDiff.w * max(bufferSize.x, bufferSize.y);
-
-
-    // float currentMeshId = getMeshId(positionTex, vCoord);
+    vec4 normalAndMeshId = texture(normalTex, vCoord);
+    vec3 currentNormal = normalize(normalAndMeshId.xyz);
+    int currentMeshId = int(normalAndMeshId.w);
 
     vec4 currentDiffuse = texture(diffuseSpecularTex, vec3(lightScale * vCoord, 0));
     vec4 currentSpecular = texture(diffuseSpecularTex, vec3(lightScale * vCoord, 1));
@@ -86,18 +83,16 @@ source: `
       for (int i = 0; i < 4; i++) {
         vec2 gCoord = (vec2(texel[i]) + 0.5) * hSizeInv;
 
-        // float histMeshId = getMeshId(previousPositionTex, gCoord);
-        // float isValid = histMeshId != currentMeshId || any(greaterThanEqual(texel[i], hSize)) ? 0.0 : 1.0;
-
         vec3 previousPosition = textureLinear(previousPositionTex, gCoord).xyz;
-        vec3 previousNormal = normalize(texture(previousNormalTex, gCoord).xyz);
+        vec4 previousNormalAndMeshId = texture(previousNormalTex, gCoord);
+        vec3 previousNormal = normalize(previousNormalAndMeshId.xyz);
+        int previousMeshId = int(previousNormalAndMeshId.w);
 
         float isValid =
-          distance(previousPosition, currentPosition) / (posDiff + 0.001) > 0.004 ||
-          distance(previousNormal, currentNormal) / (normalDiff + 0.001) > 0.005 ||
+          distance(previousPosition, currentPosition) / posDiff > 0.003 ||
+          distance(previousNormal, currentNormal) > 1. ||
+          previousMeshId != currentMeshId ||
           any(greaterThanEqual(texel[i], hSize)) ? 0.0 : 1.0;
-
-        // isValid = 1.0;
 
         float weight = isValid * weights[i];
         diffuseHistory += weight * texelFetch(previousDiffuseSpecularTex, ivec3(texel[i], 0), 0);
@@ -114,11 +109,15 @@ source: `
       //       ivec2 texel = hTexel + ivec2(x, y);
       //       vec2 gCoord = (vec2(texel) + 0.5) * hSizeInv;
 
-      //       // float histMeshId = getMeshId(previousPositionTex, gCoord);
-      //       // float isValid = histMeshId != currentMeshId || any(greaterThanEqual(texel, hSize)) ? 0.0 : 1.0;
       //       vec3 previousPosition = textureLinear(previousPositionTex, gCoord).xyz;
+      //       vec4 previousNormalAndMeshId = texture(previousNormalTex, gCoord);
+      //       vec3 previousNormal = normalize(previousNormalAndMeshId.xyz);
+      //       int previousMeshId = int(previousNormalAndMeshId.w);
+
       //       float isValid =
-      //         distance(previousPosition, currentPosition) / (posDiff + 0.01) > 0.0025 ||
+      //         distance(previousPosition, currentPosition) / posDiff > 0.003 ||
+      //         distance(previousNormal, currentNormal) > 1. ||
+      //         previousMeshId != currentMeshId ||
       //         any(greaterThanEqual(texel, hSize)) ? 0.0 : 1.0;
 
       //       float weight = isValid;
@@ -152,7 +151,7 @@ source: `
 
     out_diffuse = blendAmount * diffuseHistory + currentDiffuse;
     out_specular = blendAmount * specularHistory + currentSpecular;
-    // out_diffuse = vec4(0.5 * textureLinear(pre) + 0.5, 1.0);
+    // out_diffuse = vec4(normalDiff, normalDiff, normalDiff, 1.0);
     // out_specular = vec4(0, 0, 0, 1);
   }
 `

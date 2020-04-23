@@ -48,11 +48,11 @@ source: `
     #endif
 
     float positionDiff = max(length(dFdx(vPosition)), length(dFdy(vPosition)));
-    float normalDiff = max(length(dFdx(normal)), length(dFdy(normal)));
+    float normalDiff = max(length(dFdx(faceNormal)), length(dFdy(faceNormal)));
 
     out_position = vec4(vPosition, positionDiff);
-    out_normal = vec4(normal, normalDiff);
-    out_faceNormal = vec4(faceNormal, materialType);
+    out_normal = vec4(normal, materialType);
+    out_faceNormal = vec4(faceNormal, float(meshIndex) + EPS);
     out_albedo = vec4(albedo, 1.0);
     out_matProps = vec4(roughness, metalness, 0, 0);
   }
