@@ -37,7 +37,7 @@ export function makeRenderingPipeline({
 
   // tile rendering can cause the GPU to stutter, throwing off future benchmarks for the preview frames
   // wait to measure performance until this number of frames have been rendered
-  const previewFramesBeforeBenchmark = 2;
+  const previewFramesBeforeBenchmark = 3;
 
   // used to sample only a portion of the scene to the HDR Buffer to prevent the GPU from locking up from excessive computation
   const tileRender = makeTileRender(gl);
@@ -126,7 +126,7 @@ export function makeRenderingPipeline({
     reprojectBuffer = makeHdrBuffer(reprojectPass.outputLocs);
     reprojectBackBuffer = makeHdrBuffer(reprojectPass.outputLocs);
 
-    // const normalBuffer = makeTexture(gl, { width, height, storage: 'halfFloat' });
+    const normalBuffer = makeTexture(gl, { width, height, storage: 'halfFloat' });
     // const faceNormalBuffer = makeTexture(gl, { width, height, storage: 'halfFloat' });
     const albedoBuffer = makeTexture(gl, { width, height, storage: 'byte', channels: 4});
     const matProps = makeTexture(gl, { width, height, storage: 'byte', channels: 2 });
@@ -135,7 +135,7 @@ export function makeRenderingPipeline({
 
     function makeGBuffer() {
       const positionBuffer = makeTexture(gl, { width, height, storage: 'float' });
-      const normalBuffer = makeTexture(gl, { width, height, storage: 'halfFloat' });
+      // const normalBuffer = makeTexture(gl, { width, height, storage: 'halfFloat' });
       const faceNormalBuffer = makeTexture(gl, { width, height, storage: 'halfFloat' });
 
       return makeFramebuffer(gl, {
@@ -333,6 +333,7 @@ export function makeRenderingPipeline({
       light: lightTexture,
       lightScale,
       position: gBuffer.color[gBufferPass.outputLocs.position],
+      normal: gBuffer.color[gBufferPass.outputLocs.faceNormal],
       diffuseSpecularAlbedo: diffuseSpecularAlbedoBuffer.color[0],
     });
 
@@ -403,7 +404,7 @@ export function makeRenderingPipeline({
           lightScale: fullscreenScale,
           previousLight: reprojectBackBuffer.color[0],
           previousLightScale: previewSize.scale,
-          reprojectPosition: sampleCount === 0 // Only blend frames and don't reproject positions after camera stays still
+          // reprojectPosition: sampleCount <= 1 // Only blend frames and don't reproject positions after camera stays still
         });
 
         toneMapToScreen(reprojectBuffer.color[0], fullscreenScale);

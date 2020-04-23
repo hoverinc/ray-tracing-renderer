@@ -10,6 +10,7 @@ source: `
   uniform mediump sampler2D positionTex;
   uniform mediump sampler2D normalTex;
   uniform mediump sampler2D matPropsTex;
+
   uniform vec2 lightScale;
   uniform vec2 previousLightScale;
 
@@ -24,10 +25,6 @@ source: `
   vec2 project3Dto2D(vec3 position) {
     vec4 historyCoord = historyCamera * vec4(position, 1.0);
     return 0.5 * historyCoord.xy / historyCoord.w + 0.5;
-  }
-
-  float getMeshId(sampler2D meshIdTex, vec2 vCoord) {
-    return floor(texture(meshIdTex, vCoord).w);
   }
 
   void main() {
@@ -89,8 +86,8 @@ source: `
         int previousMeshId = int(previousNormalAndMeshId.w);
 
         float isValid =
-          distance(previousPosition, currentPosition) / posDiff > 0.003 ||
-          distance(previousNormal, currentNormal) > 1. ||
+          distance(previousPosition, currentPosition) / (posDiff + 0.001) > 0.005 ||
+          distance(previousNormal, currentNormal) > 1.0 ||
           previousMeshId != currentMeshId ||
           any(greaterThanEqual(texel[i], hSize)) ? 0.0 : 1.0;
 
@@ -115,8 +112,8 @@ source: `
       //       int previousMeshId = int(previousNormalAndMeshId.w);
 
       //       float isValid =
-      //         distance(previousPosition, currentPosition) / posDiff > 0.003 ||
-      //         distance(previousNormal, currentNormal) > 1. ||
+      //         distance(previousPosition, currentPosition) / (posDiff + 0.001) > 0.005 ||
+      //         // distance(previousNormal, currentNormal) > 1. ||
       //         previousMeshId != currentMeshId ||
       //         any(greaterThanEqual(texel, hSize)) ? 0.0 : 1.0;
 
