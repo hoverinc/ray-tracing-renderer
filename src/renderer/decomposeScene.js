@@ -8,8 +8,8 @@ export function decomposeScene(scene) {
 
   scene.traverse(child => {
     if (child.isMesh) {
-      if (!child.geometry || !child.geometry.getAttribute('position')) {
-        console.warn(child, 'must have a geometry property with a position attribute');
+      if (!child.geometry) {
+        console.warn(child, 'must have a geometry property');
       }
       else if (!(child.material.isMeshStandardMaterial)) {
         console.warn(child, 'must use MeshStandardMaterial in order to be rendered.');
