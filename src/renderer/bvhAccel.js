@@ -149,6 +149,10 @@ function recursiveBuild(primitiveInfo, start, end) {
     }
     const dim = maximumExtent(centroidBounds);
 
+    if (centroidBounds.max[dim] === centroidBounds.min[dim]) {
+      return makeLeafNode(primitiveInfo.slice(start, end), bounds);
+    }
+
     let mid = Math.floor((start + end) / 2);
 
     // middle split method
