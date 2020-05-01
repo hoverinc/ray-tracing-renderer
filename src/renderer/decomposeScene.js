@@ -17,13 +17,13 @@ export function decomposeScene(scene) {
         meshes.push(child);
       }
     }
-    if (child.isDirectionalLight) {
+    else if (child.isDirectionalLight) {
       directionalLights.push(child);
     }
-    if (child.isAmbientLight) {
+    else if (child.isAmbientLight) {
       ambientLights.push(child);
     }
-    if (child.isEnvironmentLight) {
+    else if (child.isEnvironmentLight) {
       if (environmentLights.length > 1) {
         console.warn(environmentLights, 'only one environment light can be used per scene');
       }
