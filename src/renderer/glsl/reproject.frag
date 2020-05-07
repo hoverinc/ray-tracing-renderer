@@ -22,33 +22,31 @@ source: `
   uniform float blendAmount;
   uniform vec2 jitter;
 
-  vec2 project3Dto2D(vec3 position) {
-    vec4 historyCoord = historyCamera * vec4(position, 1.0);
-    return 0.5 * historyCoord.xy / historyCoord.w + 0.5;
-  }
-
   void main() {
     vec2 bufferSize = vec2(textureSize(diffuseSpecularTex, 0));
 
-    vec4 positionAndDiff = textureLinear(positionTex, vCoord);
-    vec3 currentPosition = positionAndDiff.xyz;
-    float posDiff = positionAndDiff.w * max(bufferSize.x, bufferSize.y);
+    vec3 currentPosition = texture(positionTex, vCoord).xyz;
+    float currentDepth = texture(positionTex, vCoord).w;
 
-    vec4 normalAndMeshId = texture(normalTex, vCoord);
-    vec3 currentNormal = normalize(normalAndMeshId.xyz);
-    int currentMeshId = int(normalAndMeshId.w);
+    float depthWidth = texture(matPropsTex, vCoord).w / max(previousLightScale.x, previousLightScale.y);
+
+    vec3 currentNormal = normalize(texture(normalTex, vCoord).xyz);
+    float normalWidth = texture(normalTex, vCoord).w;
 
     vec4 currentDiffuse = texture(diffuseSpecularTex, vec3(lightScale * vCoord, 0));
     vec4 currentSpecular = texture(diffuseSpecularTex, vec3(lightScale * vCoord, 1));
 
-    if (posDiff == 0.0) {
+    vec4 matProps = texture(matPropsTex, vCoord);
+
+    if (currentDepth == 0.0) {
       out_diffuse = currentDiffuse;
       out_specular = currentSpecular;
       return;
     }
 
     #ifdef REPROJECT
-      vec2 hCoord = project3Dto2D(currentPosition) - jitter;
+      vec4 clipPos = historyCamera * vec4(currentPosition, 1.0);
+      vec2 hCoord = 0.5 * clipPos.xy / clipPos.w + 0.5 - jitter;
 
       vec2 hSizef = previousLightScale * bufferSize;
       vec2 hSizeInv = 1.0 / hSizef;
@@ -80,15 +78,11 @@ source: `
       for (int i = 0; i < 4; i++) {
         vec2 gCoord = (vec2(texel[i]) + 0.5) * hSizeInv;
 
-        vec3 previousPosition = textureLinear(previousPositionTex, gCoord).xyz;
-        vec4 previousNormalAndMeshId = texture(previousNormalTex, gCoord);
-        vec3 previousNormal = normalize(previousNormalAndMeshId.xyz);
-        int previousMeshId = int(previousNormalAndMeshId.w);
-
+        vec3 previousNormal = normalize(texture(previousNormalTex, gCoord).xyz);
+        float previousDepth = texture(previousPositionTex, gCoord).w;
         float isValid =
-          distance(previousPosition, currentPosition) / (posDiff + 0.001) > 0.005 ||
-          distance(previousNormal, currentNormal) > 1.0 ||
-          previousMeshId != currentMeshId ||
+          abs(clipPos.z  - previousDepth) / (depthWidth + 0.001) > 1.0 ||
+          distance(previousNormal, currentNormal) / (normalWidth + 0.001) > 20.0 ||
           any(greaterThanEqual(texel[i], hSize)) ? 0.0 : 1.0;
 
         float weight = isValid * weights[i];
@@ -106,15 +100,12 @@ source: `
       //       ivec2 texel = hTexel + ivec2(x, y);
       //       vec2 gCoord = (vec2(texel) + 0.5) * hSizeInv;
 
-      //       vec3 previousPosition = textureLinear(previousPositionTex, gCoord).xyz;
-      //       vec4 previousNormalAndMeshId = texture(previousNormalTex, gCoord);
-      //       vec3 previousNormal = normalize(previousNormalAndMeshId.xyz);
-      //       int previousMeshId = int(previousNormalAndMeshId.w);
+      //       vec3 previousNormal = normalize(texture(previousNormalTex, gCoord).xyz);
+      //       float previousDepth = texture(previousPositionTex, gCoord).w;
 
       //       float isValid =
-      //         distance(previousPosition, currentPosition) / (posDiff + 0.001) > 0.005 ||
-      //         // distance(previousNormal, currentNormal) > 1. ||
-      //         previousMeshId != currentMeshId ||
+      //         abs(clipPos.z  - previousDepth) / (depthWidth + 0.001) > 1.0 ||
+      //         distance(previousNormal, currentNormal) / (normalWidth + 0.001) > 20.0 ||
       //         any(greaterThanEqual(texel, hSize)) ? 0.0 : 1.0;
 
       //       float weight = isValid;
@@ -139,17 +130,16 @@ source: `
       diffuseHistory.w = MAX_ROUGH_SURFACE_SAMPLES;
     }
 
-    float roughness = texture(matPropsTex, vCoord).x;
+    float roughness = matProps.x;
     float maxSpecularSamples = mix(MAX_SMOOTH_SURFACE_SAMPLES, MAX_ROUGH_SURFACE_SAMPLES, roughness);
     if (specularHistory.w > maxSpecularSamples) {
       specularHistory.xyz *= maxSpecularSamples / specularHistory.w;
       specularHistory.w = maxSpecularSamples;
     }
 
+    // out_diffuse = vec4(currentDepth, currentDepth, currentDepth, 1.0);
     out_diffuse = blendAmount * diffuseHistory + currentDiffuse;
     out_specular = blendAmount * specularHistory + currentSpecular;
-    // out_diffuse = vec4(normalDiff, normalDiff, normalDiff, 1.0);
-    // out_specular = vec4(0, 0, 0, 1);
   }
 `
 }

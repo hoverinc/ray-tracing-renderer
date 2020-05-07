@@ -126,17 +126,15 @@ export function makeRenderingPipeline({
     reprojectBuffer = makeHdrBuffer(reprojectPass.outputLocs);
     reprojectBackBuffer = makeHdrBuffer(reprojectPass.outputLocs);
 
-    const normalBuffer = makeTexture(gl, { width, height, storage: 'halfFloat' });
-    // const faceNormalBuffer = makeTexture(gl, { width, height, storage: 'halfFloat' });
-    const albedoBuffer = makeTexture(gl, { width, height, storage: 'byte', channels: 4});
-    const matProps = makeTexture(gl, { width, height, storage: 'byte', channels: 2 });
+    const faceNormalBuffer = makeTexture(gl, { width, height, storage: 'halfFloat', magFilter: gl.LINEAR, minFilter: gl.LINEAR });
+    const albedoBuffer = makeTexture(gl, { width, height, storage: 'byte', channels: 4, magFilter: gl.LINEAR, minFilter: gl.LINEAR});
+    const matProps = makeTexture(gl, { width, height, storage: 'halfFloat', channels: 4, magFilter: gl.LINEAR, minFilter: gl.LINEAR});
 
     const depthTarget = makeDepthTarget(gl, width, height);
 
     function makeGBuffer() {
-      const positionBuffer = makeTexture(gl, { width, height, storage: 'float' });
-      // const normalBuffer = makeTexture(gl, { width, height, storage: 'halfFloat' });
-      const faceNormalBuffer = makeTexture(gl, { width, height, storage: 'halfFloat' });
+      const positionBuffer = makeTexture(gl, { width, height, storage: 'float', magFilter: gl.LINEAR, minFilter: gl.LINEAR });
+      const normalBuffer = makeTexture(gl, { width, height, storage: 'halfFloat', magFilter: gl.LINEAR, minFilter: gl.LINEAR });
 
       return makeFramebuffer(gl, {
         colorAttachments: [
@@ -309,12 +307,12 @@ export function makeRenderingPipeline({
       light: hdrBuffer.color[0],
       lightScale,
       position: gBuffer.color[gBufferPass.outputLocs.position],
-      normal: gBuffer.color[gBufferPass.outputLocs.faceNormal],
+      normal: gBuffer.color[gBufferPass.outputLocs.normal],
       matProps: gBuffer.color[gBufferPass.outputLocs.matProps],
       previousLight,
       previousLightScale,
       previousPosition: gBufferBack.color[gBufferPass.outputLocs.position],
-      previousNormal: gBufferBack.color[gBufferPass.outputLocs.faceNormal],
+      previousNormal: gBufferBack.color[gBufferPass.outputLocs.normal],
       reprojectPosition
     });
     reprojectBuffer.unbind();
@@ -333,7 +331,8 @@ export function makeRenderingPipeline({
       light: lightTexture,
       lightScale,
       position: gBuffer.color[gBufferPass.outputLocs.position],
-      normal: gBuffer.color[gBufferPass.outputLocs.faceNormal],
+      normal: gBuffer.color[gBufferPass.outputLocs.normal],
+
       diffuseSpecularAlbedo: diffuseSpecularAlbedoBuffer.color[0],
     });
 
@@ -446,17 +445,20 @@ export function makeRenderingPipeline({
 
     swapGBuffer();
     swapReprojectBuffer();
+    let useJitter;
 
     if (!areCamerasEqual(camera, lastCamera)) {
       sampleCount = 0;
       clearBuffer(hdrBuffer);
+      useJitter = false;
     } else {
       sampleCount++;
+      useJitter = true;
     }
 
     setCameras(camera, lastCamera);
 
-    updateSeed(screenSize, true);
+    updateSeed(screenSize, useJitter);
 
     renderGBuffer(sampleCount);
 
@@ -479,7 +481,7 @@ export function makeRenderingPipeline({
 
   return {
     draw,
-    drawFull: draw,
+    drawFull,
     setSize,
     sync,
     getTotalSamplesRendered() {

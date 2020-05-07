@@ -1,4 +1,4 @@
-import { ThinMaterial, ThickMaterial, ShadowCatcherMaterial } from '../constants';
+import { StandardMaterial, ThinMaterial, ThickMaterial, ShadowCatcherMaterial } from '../constants';
 import materialBufferChunk from './glsl/chunks/materialBuffer.glsl';
 import { makeUniformBuffer } from './UniformBuffer';
 import { makeRenderPass } from "./RenderPass";
@@ -24,9 +24,10 @@ export function makeMaterialBuffer(gl, materials) {
   bufferData.type = materials.map(m => {
     if (m.shadowCatcher) {
       return ShadowCatcherMaterial;
-    }
-    if (m.transparent) {
+    } else if (m.transparent) {
       return m.solid ? ThickMaterial : ThinMaterial;
+    } else {
+      return StandardMaterial;
     }
   });
 

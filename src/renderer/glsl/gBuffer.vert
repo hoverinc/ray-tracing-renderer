@@ -11,6 +11,7 @@ source: `
   out vec3 vPosition;
   out vec3 vNormal;
   out vec2 vUv;
+  out vec4 vClipPos;
   flat out ivec2 vMaterialMeshIndex;
 
   void main() {
@@ -18,7 +19,8 @@ source: `
     vNormal = aNormal;
     vUv = aUv;
     vMaterialMeshIndex = aMaterialMeshIndex;
-    gl_Position = projView * vec4(aPosition, 1);
+    vClipPos = projView * vec4(aPosition, 1);
+    gl_Position = vClipPos;
   }
 `
 }

@@ -14,6 +14,7 @@ source: `
 
   uniform sampler2D positionTex;
   uniform sampler2D normalTex;
+  uniform sampler2D matPropsTex;
 
   uniform vec2 lightScale;
   uniform bool edgeAwareUpscale;
@@ -71,13 +72,13 @@ source: `
   Light getUpscaledLight() {
     vec2 bufferSize = vec2(textureSize(diffuseSpecularTex, 0));
 
-    vec4 positionAndDiff = textureLinear(positionTex, vCoord);
-    vec3 currentPosition = positionAndDiff.xyz;
-    float posDiff = positionAndDiff.w * max(bufferSize.x, bufferSize.y);
+    vec3 currentPosition = texture(positionTex, vCoord).xyz;
+    float currentDepth = texture(positionTex, vCoord).w;
 
-    vec4 normalAndMeshId = texture(normalTex, vCoord);
-    vec3 currentNormal = normalize(normalAndMeshId.xyz);
-    int currentMeshId = int(normalAndMeshId.w);
+    float depthWidth = texture(matPropsTex, vCoord).w / max(lightScale.x, lightScale.y);
+
+    vec3 currentNormal = normalize(texture(normalTex, vCoord).xyz);
+    float normalWidth = texture(normalTex, vCoord).w;
 
     vec2 sizef = lightScale * bufferSize;
     vec2 texelf = vCoord * sizef - 0.5;
@@ -103,15 +104,12 @@ source: `
     for (int i = 0; i < 4; i++) {
       vec2 gCoord = (vec2(texels[i]) + 0.5) / sizef;
 
-      vec3 previousPosition = textureLinear(positionTex, gCoord).xyz;
-      vec4 previousNormalAndMeshId = texture(normalTex, gCoord);
-      vec3 previousNormal = normalize(previousNormalAndMeshId.xyz);
-      int previousMeshId = int(previousNormalAndMeshId.w);
+      vec3 bilinearNormal = normalize(texture(normalTex, gCoord).xyz);
+      float bilinearDepth = texture(positionTex, gCoord).w;
 
       float isValid =
-        distance(previousPosition, currentPosition) / (posDiff + 0.001) > 0.005 ||
-        distance(previousNormal, currentNormal) > 1.0 ||
-        previousMeshId != currentMeshId ||
+        abs(bilinearDepth - currentDepth) / (depthWidth + 0.001) > 1.0 ||
+        distance(bilinearNormal, currentNormal) / (normalWidth + 0.001) > 20.0 ||
         false ? 0.0 : 1.0;
 
       float weight = isValid * weights[i];
@@ -149,13 +147,14 @@ source: `
     // alpha channel stores the number of samples progressively rendered
     // divide the sum of light by alpha to obtain average contribution of light
     vec3 color = diffuseAlbedo.rgb * light.diffuse.rgb / light.diffuse.a + specularAlbedo.rgb * light.specular.rgb / light.specular.a;
+    // vec3 color = light.diffuse.rgb;
     // vec3 color = light.diffuse.rgb / light.diffuse.a + light.specular.rgb / light.specular.a;
 
     // add background map to areas where geometry is not rendered
-    vec3 direction = getCameraDirection(camera, vCoord);
-    vec2 backgroundUv = cartesianToEquirect(direction);
-    vec3 background = texture(backgroundMap, backgroundUv).rgb;
-    color += (1.0 - diffuseAlbedo.a) * background;
+    // vec3 direction = getCameraDirection(camera, vCoord);
+    // vec2 backgroundUv = cartesianToEquirect(direction);
+    // vec3 background = texture(backgroundMap, backgroundUv).rgb;
+    // color += (1.0 - diffuseAlbedo.a) * background;
 
     color *= EXPOSURE;
 

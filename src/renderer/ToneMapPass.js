@@ -37,6 +37,7 @@ export function makeToneMapPass(gl, params) {
       diffuseSpecularAlbedo,
       position,
       normal,
+      matProps,
     } = params;
 
     renderPass.setUniform('edgeAwareUpscale', lightScale.x < 1 || lightScale.y < 1);
@@ -44,6 +45,7 @@ export function makeToneMapPass(gl, params) {
     renderPass.setTexture('diffuseSpecularTex', light);
     renderPass.setTexture('positionTex', position);
     renderPass.setTexture('normalTex', normal);
+    renderPass.setTexture('matProps', matProps);
     renderPass.setTexture('diffuseSpecularAlbedoTex', diffuseSpecularAlbedo);
 
     renderPass.useProgram();

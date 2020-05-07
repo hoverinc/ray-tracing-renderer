@@ -56,7 +56,7 @@ export function makeRenderSize(gl) {
 
 function pixelsPerFrameEstimate(gl) {
   const maxRenderbufferSize = gl.getParameter(gl.MAX_RENDERBUFFER_SIZE);
-  return 50000;
+  return 40000;
   if (maxRenderbufferSize <= 8192) {
     return 80000;
   } else if (maxRenderbufferSize === 16384) {
