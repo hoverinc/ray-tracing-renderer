@@ -345,9 +345,9 @@ export function makeRenderingPipeline({
       swapBuffers();
     }
 
-    // if (numPreviewsRendered >= previewFramesBeforeBenchmark) {
-    //   previewSize.adjustSize(elapsedFrameTime);
-    // }
+    if (numPreviewsRendered >= previewFramesBeforeBenchmark) {
+      previewSize.adjustSize(elapsedFrameTime);
+    }
 
     updateSeed(previewSize, false);
 
@@ -403,7 +403,7 @@ export function makeRenderingPipeline({
           lightScale: fullscreenScale,
           previousLight: reprojectBackBuffer.color[0],
           previousLightScale: previewSize.scale,
-          // reprojectPosition: sampleCount <= 1 // Only blend frames and don't reproject positions after camera stays still
+          reprojectPosition: sampleCount <= 1 // Only blend frames and don't reproject positions after camera stays still
         });
 
         toneMapToScreen(reprojectBuffer.color[0], fullscreenScale);

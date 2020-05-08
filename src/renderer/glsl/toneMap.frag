@@ -151,10 +151,10 @@ source: `
     // vec3 color = light.diffuse.rgb / light.diffuse.a + light.specular.rgb / light.specular.a;
 
     // add background map to areas where geometry is not rendered
-    // vec3 direction = getCameraDirection(camera, vCoord);
-    // vec2 backgroundUv = cartesianToEquirect(direction);
-    // vec3 background = texture(backgroundMap, backgroundUv).rgb;
-    // color += (1.0 - diffuseAlbedo.a) * background;
+    vec3 direction = getCameraDirection(camera, vCoord);
+    vec2 backgroundUv = cartesianToEquirect(direction);
+    vec3 background = texture(backgroundMap, backgroundUv).rgb;
+    color += (1.0 - diffuseAlbedo.a) * background;
 
     color *= EXPOSURE;
 
