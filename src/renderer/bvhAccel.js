@@ -165,7 +165,7 @@ function recursiveBuild(primitiveInfo, start, end) {
     if (nPrimitives <= 4) {
       nthElement(primitiveInfo, (a, b) => a.center[dim] < b.center[dim], start, end, mid);
     } else if (centroidBounds.max[dim] === centroidBounds.min[dim]) {
-      // can't split nodes based on centroids. terminate.
+      // can't split primitives based on centroid bounds. terminate.
       return makeLeafNode(primitiveInfo.slice(start, end), bounds);
     } else {
 
