@@ -48,12 +48,15 @@ const tick = (time) => {
   requestAnimationFrame(tick);
 };
 
-const geo = new THREE.SphereBufferGeometry(4, 24, 24);
+const geo = new THREE.SphereBufferGeometry(1, 24, 24);
 
 function makeMesh() {
   const mat = new THREE.RayTracingMaterial();
   const mesh = new THREE.Mesh(geo, mat);
+
+  // test setting scale and position on mesh
   mesh.position.set(0, 4, 0);
+  mesh.scale.set(4, 4, 4);
   return mesh;
 }
 
@@ -205,9 +208,45 @@ function init() {
     model.add(mesh);
   }
 
+  // test box with .visible set to false
+  // should not be visible in the scene
+  {
+    const geo = new THREE.BoxBufferGeometry(5, 5, 5);
+    const mat = new THREE.MeshStandardMaterial();
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set(0, 10, 0);
+    mesh.visible = false;
+    model.add(mesh);
+  }
+
+  let unreadyMat;
+  {
+    // Create a test (non-buffer) Geometry
+    const geo = new THREE.BoxGeometry(6, 6, 6);
+    const mat = new THREE.MeshStandardMaterial();
+    mat.roughness = 0.2;
+    mat.metalness = 0.0;
+    mat.color.set(0x993311);
+    unreadyMat = mat;
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set(0, 3, 30);
+    model.add(mesh);
+  }
+
   scene.add(model);
 
-  THREE.DefaultLoadingManager.onLoad = tick;
+  THREE.DefaultLoadingManager.onLoad = () => {
+
+    // give material an unloaded async texture. the renderer should handle this
+    unreadyMat.map = new THREE.TextureLoader().load('diffuse.png');
+    unreadyMat.normalMap = new THREE.TextureLoader().load('normal.png');
+    const metalrough = new THREE.TextureLoader().load('metalrough.png');
+    unreadyMat.roughnessMap = metalrough;
+    unreadyMat.metalnessMap = metalrough;
+
+    THREE.DefaultLoadingManager.onLoad = undefined;
+    tick();
+  };
 }
 
 init();

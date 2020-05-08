@@ -31,7 +31,9 @@ function texturesFromMaterials(materials, textureName, textures) {
   const indices = [];
 
   for (const material of materials) {
-    if (!material[textureName]) {
+    const isTextureLoaded = material[textureName] && material[textureName].image;
+
+    if (!isTextureLoaded) {
       indices.push(-1);
     } else {
       let index = textures.length;
