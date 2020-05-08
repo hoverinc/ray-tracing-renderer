@@ -421,24 +421,18 @@
     var environmentLights = [];
     scene.traverse(function (child) {
       if (child.isMesh) {
-        if (!child.geometry || !child.geometry.getAttribute('position')) {
-          console.warn(child, 'must have a geometry property with a position attribute');
+        if (!child.geometry) {
+          console.warn(child, 'must have a geometry property');
         } else if (!child.material.isMeshStandardMaterial) {
           console.warn(child, 'must use MeshStandardMaterial in order to be rendered.');
         } else {
           meshes.push(child);
         }
-      }
-
-      if (child.isDirectionalLight) {
+      } else if (child.isDirectionalLight) {
         directionalLights.push(child);
-      }
-
-      if (child.isAmbientLight) {
+      } else if (child.isAmbientLight) {
         ambientLights.push(child);
-      }
-
-      if (child.isEnvironmentLight) {
+      } else if (child.isEnvironmentLight) {
         if (environmentLights.length > 1) {
           console.warn(environmentLights, 'only one environment light can be used per scene');
         } // Valid lights have HDR texture map in RGBEEncoding
@@ -1267,8 +1261,9 @@
     try {
       for (var _iterator3 = materials[Symbol.iterator](), _step3; !(_iteratorNormalCompletion3 = (_step3 = _iterator3.next()).done); _iteratorNormalCompletion3 = true) {
         var material = _step3.value;
+        var isTextureLoaded = material[textureName] && material[textureName].image;
 
-        if (!material[textureName]) {
+        if (!isTextureLoaded) {
           indices.push(-1);
         } else {
           var index = textures.length;
@@ -1574,7 +1569,13 @@
       for (var _iterator = meshes[Symbol.iterator](), _step; !(_iteratorNormalCompletion = (_step = _iterator.next()).done); _iteratorNormalCompletion = true) {
         var mesh = _step.value;
 
-        var _geometry = cloneBufferGeometry(mesh.geometry, ['position', 'normal', 'uv']);
+        if (!mesh.visible) {
+          continue;
+        }
+
+        var _geometry = mesh.geometry.isBufferGeometry ? cloneBufferGeometry(mesh.geometry, ['position', 'normal', 'uv']) : // BufferGeometry object
+        new THREE$1.BufferGeometry().fromGeometry(mesh.geometry); // Geometry object
+
 
         var index = _geometry.getIndex();
 
@@ -1933,6 +1934,11 @@
       }
 
       var dim = maximumExtent(centroidBounds);
+
+      if (centroidBounds.max[dim] === centroidBounds.min[dim]) {
+        return makeLeafNode(primitiveInfo.slice(start, end), bounds);
+      }
+
       var mid = Math.floor((start + end) / 2); // middle split method
       // const dimMid = (centroidBounds.max[dim] + centroidBounds.min[dim]) / 2;
       // mid = partition(primitiveInfo, p => p.center[dim] < dimMid, start, end);
