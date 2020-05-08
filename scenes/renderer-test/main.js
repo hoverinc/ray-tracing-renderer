@@ -196,6 +196,32 @@ function init() {
     model.add(mesh);
   }
 
+  let unreadyMat;
+  {
+    // Create a test (non-buffer) Geometry
+    const geo = new THREE.BoxGeometry(20, 6, 6);
+    const mat = new THREE.MeshStandardMaterial();
+    mat.roughness = 0.2;
+    mat.metalness = 0.0;
+    mat.color.set(0x993311);
+    unreadyMat = mat;
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set(0, 3, 30);
+    model.add(mesh);
+  }
+
+  // background mirror
+  // verifies BVH used in reflections
+  {
+    const geo = new THREE.PlaneBufferGeometry(40, 16);
+    const mat = new THREE.MeshStandardMaterial();
+    mat.roughness = 0.0;
+    mat.metalness = 1.0;
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.position.set(0, 8, 40);
+    model.add(mesh);
+  }
+
   // ground plane
   {
     const geo = new THREE.PlaneBufferGeometry(1000, 1000);
@@ -216,20 +242,6 @@ function init() {
     const mesh = new THREE.Mesh(geo, mat);
     mesh.position.set(0, 10, 0);
     mesh.visible = false;
-    model.add(mesh);
-  }
-
-  let unreadyMat;
-  {
-    // Create a test (non-buffer) Geometry
-    const geo = new THREE.BoxGeometry(6, 6, 6);
-    const mat = new THREE.MeshStandardMaterial();
-    mat.roughness = 0.2;
-    mat.metalness = 0.0;
-    mat.color.set(0x993311);
-    unreadyMat = mat;
-    const mesh = new THREE.Mesh(geo, mat);
-    mesh.position.set(0, 3, 30);
     model.add(mesh);
   }
 
