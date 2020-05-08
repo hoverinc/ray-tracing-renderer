@@ -149,9 +149,6 @@ function recursiveBuild(primitiveInfo, start, end) {
     }
     const dim = maximumExtent(centroidBounds);
 
-    if (centroidBounds.max[dim] === centroidBounds.min[dim]) {
-      return makeLeafNode(primitiveInfo.slice(start, end), bounds);
-    }
 
     let mid = Math.floor((start + end) / 2);
 
@@ -167,7 +164,11 @@ function recursiveBuild(primitiveInfo, start, end) {
     // surface area heuristic method
     if (nPrimitives <= 4) {
       nthElement(primitiveInfo, (a, b) => a.center[dim] < b.center[dim], start, end, mid);
+    } else if (centroidBounds.max[dim] === centroidBounds.min[dim]) {
+      // can't split nodes based on centroids. terminate.
+      return makeLeafNode(primitiveInfo.slice(start, end), bounds);
     } else {
+
       const buckets = [];
       for (let i = 0; i < 12; i++) {
         buckets.push({
