@@ -1934,11 +1934,6 @@
       }
 
       var dim = maximumExtent(centroidBounds);
-
-      if (centroidBounds.max[dim] === centroidBounds.min[dim]) {
-        return makeLeafNode(primitiveInfo.slice(start, end), bounds);
-      }
-
       var mid = Math.floor((start + end) / 2); // middle split method
       // const dimMid = (centroidBounds.max[dim] + centroidBounds.min[dim]) / 2;
       // mid = partition(primitiveInfo, p => p.center[dim] < dimMid, start, end);
@@ -1952,6 +1947,9 @@
         nthElement(primitiveInfo, function (a, b) {
           return a.center[dim] < b.center[dim];
         }, start, end, mid);
+      } else if (centroidBounds.max[dim] === centroidBounds.min[dim]) {
+        // can't split primitives based on centroid bounds. terminate.
+        return makeLeafNode(primitiveInfo.slice(start, end), bounds);
       } else {
         var buckets = [];
 

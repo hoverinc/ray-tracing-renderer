@@ -1672,9 +1672,6 @@ vec3 getMatNormal(int materialIndex, vec2 uv, vec3 normal, vec3 dp1, vec3 dp2, v
       }
       const dim = maximumExtent(centroidBounds);
 
-      if (centroidBounds.max[dim] === centroidBounds.min[dim]) {
-        return makeLeafNode(primitiveInfo.slice(start, end), bounds);
-      }
 
       let mid = Math.floor((start + end) / 2);
 
@@ -1690,7 +1687,11 @@ vec3 getMatNormal(int materialIndex, vec2 uv, vec3 normal, vec3 dp1, vec3 dp2, v
       // surface area heuristic method
       if (nPrimitives <= 4) {
         nthElement(primitiveInfo, (a, b) => a.center[dim] < b.center[dim], start, end, mid);
+      } else if (centroidBounds.max[dim] === centroidBounds.min[dim]) {
+        // can't split primitives based on centroid bounds. terminate.
+        return makeLeafNode(primitiveInfo.slice(start, end), bounds);
       } else {
+
         const buckets = [];
         for (let i = 0; i < 12; i++) {
           buckets.push({
