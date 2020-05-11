@@ -112,7 +112,6 @@ source: `
       specularHistory.w = maxSpecularSamples;
     }
 
-    // out_diffuse = vec4(currentDepth, currentDepth, currentDepth, 1.0);
     out_diffuse = blendAmount * diffuseHistory + currentDiffuse;
     out_specular = blendAmount * specularHistory + currentSpecular;
   }
