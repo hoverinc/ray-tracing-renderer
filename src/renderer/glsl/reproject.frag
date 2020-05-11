@@ -91,31 +91,6 @@ source: `
         sum += weight;
       }
 
-      // if (sum <= 0.0) {
-      //   // If all samples of bilinear fail, try a 3x3 box filter
-      //   hTexel = ivec2(hTexelf + 0.5);
-
-      //   for (int x = -1; x <= 1; x++) {
-      //     for (int y = -1; y <= 1; y++) {
-      //       ivec2 texel = hTexel + ivec2(x, y);
-      //       vec2 gCoord = (vec2(texel) + 0.5) * hSizeInv;
-
-      //       vec3 previousNormal = normalize(texture(previousNormalTex, gCoord).xyz);
-      //       float previousDepth = texture(previousPositionTex, gCoord).w;
-
-      //       float isValid =
-      //         abs(clipPos.z  - previousDepth) / (depthWidth + 0.001) > 1.0 ||
-      //         distance(previousNormal, currentNormal) / (normalWidth + 0.001) > 20.0 ||
-      //         any(greaterThanEqual(texel, hSize)) ? 0.0 : 1.0;
-
-      //       float weight = isValid;
-      //       diffuseHistory += weight * texelFetch(previousDiffuseSpecularTex, ivec3(texel, 0), 0);
-      //       specularHistory += weight * texelFetch(previousDiffuseSpecularTex, ivec3(texel, 1), 0);
-      //       sum += weight;
-      //     }
-      //   }
-      // }
-
       if (sum > 0.00001) {
         diffuseHistory /= sum;
         specularHistory /= sum;
