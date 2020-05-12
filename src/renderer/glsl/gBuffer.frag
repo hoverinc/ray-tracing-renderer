@@ -49,7 +49,7 @@ source: `
     #endif
 
     float linearDepth = vClipPos.z;
-    float linearDiff = max(abs(dFdx(linearDepth)), abs(dFdy(linearDepth)));
+    float linearDiff = length(fwidth(linearDepth));
     float normalWidth = length(fwidth(normal));
 
     out_position = vec4(vPosition, linearDepth);
