@@ -18,7 +18,7 @@
     "dat.gui": "^0.7.6",
     "http-server": "^0.12.3",
     "jest": "^26.0.1",
-    "release-it": "^12.4.3",
+    "release-it": "^13.6.1",
     "rollup": "^1.19.2",
     "rollup-plugin-babel": "^4.3.3",
     "rollup-plugin-node-resolve": "^5.2.0",
