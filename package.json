@@ -16,7 +16,7 @@
     "@babel/preset-env": "^7.5.5",
     "babel-jest": "^24.8.0",
     "dat.gui": "^0.7.6",
-    "http-server": "^0.11.1",
+    "http-server": "^0.12.3",
     "jest": "^26.0.1",
     "release-it": "^12.4.3",
     "rollup": "^1.19.2",
