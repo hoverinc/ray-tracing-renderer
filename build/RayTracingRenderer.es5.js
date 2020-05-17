@@ -182,14 +182,43 @@
     throw new TypeError("Invalid attempt to spread non-iterable instance");
   }
 
+  function _createSuper(Derived) {
+    function isNativeReflectConstruct() {
+      if (typeof Reflect === "undefined" || !Reflect.construct) return false;
+      if (Reflect.construct.sham) return false;
+      if (typeof Proxy === "function") return true;
+
+      try {
+        Date.prototype.toString.call(Reflect.construct(Date, [], function () {}));
+        return true;
+      } catch (e) {
+        return false;
+      }
+    }
+
+    return function () {
+      var Super = _getPrototypeOf(Derived),
+          result;
+
+      if (isNativeReflectConstruct()) {
+        var NewTarget = _getPrototypeOf(this).constructor;
+
+        result = Reflect.construct(Super, arguments, NewTarget);
+      } else {
+        result = Super.apply(this, arguments);
+      }
+
+      return _possibleConstructorReturn(this, result);
+    };
+  }
   var LensCamera =
   /*#__PURE__*/
   function (_PerspectiveCamera) {
     _inherits(LensCamera, _PerspectiveCamera);
 
-    function LensCamera() {
-      var _getPrototypeOf2;
+    var _super = _createSuper(LensCamera);
 
+    function LensCamera() {
       var _this;
 
       _classCallCheck(this, LensCamera);
@@ -198,7 +227,7 @@
         args[_key] = arguments[_key];
       }
 
-      _this = _possibleConstructorReturn(this, (_getPrototypeOf2 = _getPrototypeOf(LensCamera)).call.apply(_getPrototypeOf2, [this].concat(args)));
+      _this = _super.call.apply(_super, [this].concat(args));
       _this.aperture = 0.01;
       return _this;
     }
@@ -215,10 +244,41 @@
     return LensCamera;
   }(THREE$1.PerspectiveCamera);
 
+  function _createSuper$1(Derived) {
+    function isNativeReflectConstruct() {
+      if (typeof Reflect === "undefined" || !Reflect.construct) return false;
+      if (Reflect.construct.sham) return false;
+      if (typeof Proxy === "function") return true;
+
+      try {
+        Date.prototype.toString.call(Reflect.construct(Date, [], function () {}));
+        return true;
+      } catch (e) {
+        return false;
+      }
+    }
+
+    return function () {
+      var Super = _getPrototypeOf(Derived),
+          result;
+
+      if (isNativeReflectConstruct()) {
+        var NewTarget = _getPrototypeOf(this).constructor;
+
+        result = Reflect.construct(Super, arguments, NewTarget);
+      } else {
+        result = Super.apply(this, arguments);
+      }
+
+      return _possibleConstructorReturn(this, result);
+    };
+  }
   var SoftDirectionalLight =
   /*#__PURE__*/
   function (_DirectionalLight) {
     _inherits(SoftDirectionalLight, _DirectionalLight);
+
+    var _super = _createSuper$1(SoftDirectionalLight);
 
     function SoftDirectionalLight(color, intensity) {
       var _this;
@@ -227,7 +287,7 @@
 
       _classCallCheck(this, SoftDirectionalLight);
 
-      _this = _possibleConstructorReturn(this, _getPrototypeOf(SoftDirectionalLight).call(this, color, intensity));
+      _this = _super.call(this, color, intensity);
       _this.softness = softness;
       return _this;
     }
@@ -244,14 +304,43 @@
     return SoftDirectionalLight;
   }(THREE$1.DirectionalLight);
 
+  function _createSuper$2(Derived) {
+    function isNativeReflectConstruct() {
+      if (typeof Reflect === "undefined" || !Reflect.construct) return false;
+      if (Reflect.construct.sham) return false;
+      if (typeof Proxy === "function") return true;
+
+      try {
+        Date.prototype.toString.call(Reflect.construct(Date, [], function () {}));
+        return true;
+      } catch (e) {
+        return false;
+      }
+    }
+
+    return function () {
+      var Super = _getPrototypeOf(Derived),
+          result;
+
+      if (isNativeReflectConstruct()) {
+        var NewTarget = _getPrototypeOf(this).constructor;
+
+        result = Reflect.construct(Super, arguments, NewTarget);
+      } else {
+        result = Super.apply(this, arguments);
+      }
+
+      return _possibleConstructorReturn(this, result);
+    };
+  }
   var EnvironmentLight =
   /*#__PURE__*/
   function (_Light) {
     _inherits(EnvironmentLight, _Light);
 
-    function EnvironmentLight(map) {
-      var _getPrototypeOf2;
+    var _super = _createSuper$2(EnvironmentLight);
 
+    function EnvironmentLight(map) {
       var _this;
 
       _classCallCheck(this, EnvironmentLight);
@@ -260,7 +349,7 @@
         args[_key - 1] = arguments[_key];
       }
 
-      _this = _possibleConstructorReturn(this, (_getPrototypeOf2 = _getPrototypeOf(EnvironmentLight)).call.apply(_getPrototypeOf2, [this].concat(args)));
+      _this = _super.call.apply(_super, [this].concat(args));
       _this.map = map;
       _this.isEnvironmentLight = true;
       return _this;
@@ -278,14 +367,43 @@
     return EnvironmentLight;
   }(THREE$1.Light);
 
+  function _createSuper$3(Derived) {
+    function isNativeReflectConstruct() {
+      if (typeof Reflect === "undefined" || !Reflect.construct) return false;
+      if (Reflect.construct.sham) return false;
+      if (typeof Proxy === "function") return true;
+
+      try {
+        Date.prototype.toString.call(Reflect.construct(Date, [], function () {}));
+        return true;
+      } catch (e) {
+        return false;
+      }
+    }
+
+    return function () {
+      var Super = _getPrototypeOf(Derived),
+          result;
+
+      if (isNativeReflectConstruct()) {
+        var NewTarget = _getPrototypeOf(this).constructor;
+
+        result = Reflect.construct(Super, arguments, NewTarget);
+      } else {
+        result = Super.apply(this, arguments);
+      }
+
+      return _possibleConstructorReturn(this, result);
+    };
+  }
   var RayTracingMaterial =
   /*#__PURE__*/
   function (_MeshStandardMaterial) {
     _inherits(RayTracingMaterial, _MeshStandardMaterial);
 
-    function RayTracingMaterial() {
-      var _getPrototypeOf2;
+    var _super = _createSuper$3(RayTracingMaterial);
 
+    function RayTracingMaterial() {
       var _this;
 
       _classCallCheck(this, RayTracingMaterial);
@@ -294,7 +412,7 @@
         args[_key] = arguments[_key];
       }
 
-      _this = _possibleConstructorReturn(this, (_getPrototypeOf2 = _getPrototypeOf(RayTracingMaterial)).call.apply(_getPrototypeOf2, [this].concat(args)));
+      _this = _super.call.apply(_super, [this].concat(args));
       _this.solid = false;
       _this.shadowCatcher = false;
       return _this;
@@ -555,25 +673,25 @@
     function upload() {
       while (needsUpload.length > 0) {
         var _needsUpload$pop = needsUpload.pop(),
-            type = _needsUpload$pop.type,
-            location = _needsUpload$pop.location,
+            _type = _needsUpload$pop.type,
+            _location = _needsUpload$pop.location,
             v0 = _needsUpload$pop.v0,
             v1 = _needsUpload$pop.v1,
             v2 = _needsUpload$pop.v2,
             v3 = _needsUpload$pop.v3;
 
-        var glMethod = typeMap[type];
+        var glMethod = typeMap[_type];
 
         if (v0.length) {
           if (glMethod.matrix) {
             var array = v0;
             var transpose = v1 || false;
-            gl[glMethod.matrix](location, transpose, array);
+            gl[glMethod.matrix](_location, transpose, array);
           } else {
-            gl[glMethod.array](location, v0);
+            gl[glMethod.array](_location, v0);
           }
         } else {
-          gl[glMethod.values](location, v0, v1, v2, v3);
+          gl[glMethod.values](_location, v0, v1, v2, v3);
         }
       }
     }
@@ -610,7 +728,7 @@
     var vertexCompiled = vertex instanceof WebGLShader ? vertex : makeVertexShader(gl, params);
     var fragmentCompiled = fragment instanceof WebGLShader ? fragment : makeFragmentShader(gl, params);
     var program = createProgram(gl, vertexCompiled, fragmentCompiled);
-    return _objectSpread2({}, makeRenderPassFromProgram(gl, program), {
+    return _objectSpread2(_objectSpread2({}, makeRenderPassFromProgram(gl, program)), {}, {
       outputLocs: fragment.outputs ? getOutputLocations(fragment.outputs) : {}
     });
   }
