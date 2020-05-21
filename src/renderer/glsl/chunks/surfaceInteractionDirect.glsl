@@ -11,7 +11,6 @@ export default `
 
     si.normal = normalize(texture(gNormal, coord).xyz);
 
-
     si.faceNormal = normalize(texture(gFaceNormal, coord).xyz);
 
     si.albedo = vec3(1.0);

@@ -31,7 +31,7 @@ source: `
     float depthWidth = texture(matPropsTex, vCoord).w / max(previousLightScale.x, previousLightScale.y);
 
     vec3 currentNormal = normalize(texture(normalTex, vCoord).xyz);
-    float normalWidth = texture(normalTex, vCoord).w;
+    float normalWidth = texture(normalTex, vCoord).w / max(previousLightScale.x, previousLightScale.y);
 
     vec4 currentDiffuse = texture(diffuseSpecularTex, vec3(lightScale * vCoord, 0));
     vec4 currentSpecular = texture(diffuseSpecularTex, vec3(lightScale * vCoord, 1));
@@ -80,10 +80,19 @@ source: `
 
         vec3 previousNormal = normalize(texture(previousNormalTex, gCoord).xyz);
         float previousDepth = texture(previousPositionTex, gCoord).w;
+
+        float depthDiff = (clipPos.z  - previousDepth) / (depthWidth + 0.001);
+        float normalDiff = distance(previousNormal, currentNormal) / (normalWidth + 0.001);
+
+        normalDiff = !(normalDiff < 1.0e999 && normalDiff > -1.0e999) ? 0.0 : normalDiff;
+
         float isValid =
-          abs(clipPos.z  - previousDepth) / (depthWidth + 0.001) > 1.0 ||
-          distance(previousNormal, currentNormal) / (normalWidth + 0.001) > 20.0 ||
-          any(greaterThanEqual(texel[i], hSize)) ? 0.0 : 1.0;
+          exp(
+            -2.0 * depthDiff * depthDiff +
+            -1.0 * normalDiff * normalDiff
+          );
+
+        isValid = any(greaterThanEqual(texel[i], hSize)) ? 0.0 : isValid;
 
         float weight = isValid * weights[i];
         diffuseHistory += weight * texelFetch(previousDiffuseSpecularTex, ivec3(texel[i], 0), 0);
@@ -91,7 +100,7 @@ source: `
         sum += weight;
       }
 
-      if (sum > 0.00001) {
+      if (sum > 0.001) {
         diffuseHistory /= sum;
         specularHistory /= sum;
       }

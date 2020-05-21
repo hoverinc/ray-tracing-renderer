@@ -29,13 +29,9 @@ source: `
   Light getUpscaledLight() {
     vec2 bufferSize = vec2(textureSize(diffuseSpecularTex, 0));
 
-    vec3 currentPosition = texture(positionTex, vCoord).xyz;
-    float currentDepth = texture(positionTex, vCoord).w;
+    float centerDepth = texture(positionTex, vCoord).w;
 
-    float depthWidth = texture(matPropsTex, vCoord).w / max(lightScale.x, lightScale.y);
-
-    vec3 currentNormal = normalize(texture(normalTex, vCoord).xyz);
-    float normalWidth = texture(normalTex, vCoord).w;
+    float depthWidth = texture(matPropsTex, vCoord).w;
 
     vec2 sizef = lightScale * bufferSize;
     vec2 texelf = vCoord * sizef - 0.5;
@@ -59,15 +55,13 @@ source: `
     Light light;
     float sum;
     for (int i = 0; i < 4; i++) {
-      vec2 gCoord = (vec2(texels[i]) + 0.5) / sizef;
+      vec2 neighborCoord = (vec2(texels[i]) + 0.5) / sizef;
 
-      vec3 bilinearNormal = normalize(texture(normalTex, gCoord).xyz);
-      float bilinearDepth = texture(positionTex, gCoord).w;
+      float neighborDepth = texture(positionTex, neighborCoord).w;
 
-      float isValid =
-        abs(bilinearDepth - currentDepth) / (depthWidth + 0.001) > 1.0 ||
-        distance(bilinearNormal, currentNormal) / (normalWidth + 0.001) > 20.0 ||
-        false ? 0.0 : 1.0;
+      float depthDiff = (centerDepth - neighborDepth) / (depthWidth + 0.001);
+
+      float isValid = exp(-1.0 * depthDiff * depthDiff);
 
       float weight = isValid * weights[i];
       light.diffuse += weight * texelFetch(diffuseSpecularTex, ivec3(texels[i], 0), 0);
@@ -75,7 +69,7 @@ source: `
       sum += weight;
     }
 
-    if (sum > 0.0) {
+    if (sum > 0.001) {
       light.diffuse /= sum;
       light.specular /= sum;
     } else {

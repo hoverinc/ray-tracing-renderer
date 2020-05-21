@@ -49,14 +49,14 @@ source: `
     #endif
 
     float linearDepth = vClipPos.z;
-    float linearDiff = length(fwidth(linearDepth));
+    float linearWidth = length(fwidth(linearDepth));
     float normalWidth = length(fwidth(normal));
 
     out_position = vec4(vPosition, linearDepth);
     out_normal = vec4(normal, normalWidth);
-    out_faceNormal = vec4(faceNormal, normalWidth);
+    out_faceNormal = vec4(faceNormal, materialType);
     out_albedo = vec4(albedo, 1.0);
-    out_matProps = vec4(roughness, metalness, materialType, linearDiff);
+    out_matProps = vec4(roughness, metalness, materialType, linearWidth);
   }
 `
 
