@@ -30,8 +30,6 @@ export function makeToneMapPass(gl, params) {
 
   renderPass.setTexture('backgroundMap', envMapTextures.backgroundMap);
 
-
-
   function draw(params) {
     const {
       light,

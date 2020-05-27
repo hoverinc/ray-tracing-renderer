@@ -23,28 +23,27 @@ source: `
   uniform vec2 jitter;
 
   void main() {
-    vec2 bufferSize = vec2(textureSize(diffuseSpecularTex, 0));
-
-    vec3 currentPosition = texture(positionTex, vCoord).xyz;
-    float currentDepth = texture(positionTex, vCoord).w;
-
-    float depthWidth = texture(matPropsTex, vCoord).w / max(previousLightScale.x, previousLightScale.y);
-
-    vec3 currentNormal = normalize(texture(normalTex, vCoord).xyz);
-    float normalWidth = texture(normalTex, vCoord).w / max(previousLightScale.x, previousLightScale.y);
-
+    vec4 matProps = texture(matPropsTex, vCoord);
     vec4 currentDiffuse = texture(diffuseSpecularTex, vec3(lightScale * vCoord, 0));
     vec4 currentSpecular = texture(diffuseSpecularTex, vec3(lightScale * vCoord, 1));
 
-    vec4 matProps = texture(matPropsTex, vCoord);
-
-    if (currentDepth == 0.0) {
-      out_diffuse = currentDiffuse;
-      out_specular = currentSpecular;
-      return;
-    }
-
     #ifdef REPROJECT
+      vec2 bufferSize = vec2(textureSize(diffuseSpecularTex, 0));
+
+      vec3 currentPosition = texture(positionTex, vCoord).xyz;
+      float currentDepth = texture(positionTex, vCoord).w;
+
+      float depthWidth = texture(matPropsTex, vCoord).w / max(previousLightScale.x, previousLightScale.y);
+
+      vec3 currentNormal = normalize(texture(normalTex, vCoord).xyz);
+      float normalWidth = texture(normalTex, vCoord).w / max(previousLightScale.x, previousLightScale.y);
+
+      if (currentDepth == 0.0) {
+        out_diffuse = currentDiffuse;
+        out_specular = currentSpecular;
+        return;
+      }
+
       vec4 clipPos = historyCamera * vec4(currentPosition, 1.0);
       vec2 hCoord = 0.5 * clipPos.xy / clipPos.w + 0.5 - jitter;
 
@@ -82,13 +81,13 @@ source: `
         float previousDepth = texture(previousPositionTex, gCoord).w;
 
         float depthDiff = (clipPos.z  - previousDepth) / (depthWidth + 0.001);
-        float normalDiff = distance(previousNormal, currentNormal) / (normalWidth + 0.001);
+        float normalDiff = distance(previousNormal, currentNormal) / (normalWidth + 0.01);
 
         normalDiff = !(normalDiff < 1.0e999 && normalDiff > -1.0e999) ? 0.0 : normalDiff;
 
         float isValid =
           exp(
-            -2.0 * depthDiff * depthDiff +
+            -2.0 * depthDiff * depthDiff
             -1.0 * normalDiff * normalDiff
           );
 

@@ -25,7 +25,7 @@ export function makeRenderingPipeline({
   }) {
 
   const maxSmoothSurfaceSamples = 5;
-  const maxRoughSurfaceSamples = 100;
+  const maxRoughSurfaceSamples = 80;
   const maxSamples = Math.max(maxRoughSurfaceSamples, maxSmoothSurfaceSamples);
 
   // how many samples to render with uniform noise before switching to stratified noise
@@ -332,7 +332,6 @@ export function makeRenderingPipeline({
       lightScale,
       position: gBuffer.color[gBufferPass.outputLocs.position],
       normal: gBuffer.color[gBufferPass.outputLocs.normal],
-
       diffuseSpecularAlbedo: diffuseSpecularAlbedoBuffer.color[0],
     });
 
@@ -351,7 +350,7 @@ export function makeRenderingPipeline({
 
     updateSeed(previewSize, false);
 
-    renderGBuffer(sampleCount);
+    renderGBuffer(0);
 
     rayTracePass.bindTextures();
     newSampleToBuffer(hdrBuffer, previewSize);
@@ -397,13 +396,17 @@ export function makeRenderingPipeline({
       blendAmount *= blendAmount;
 
       if (blendAmount > 0.0) {
+        if (sampleCount === 2) {
+          swapReprojectBuffer();
+        }
+
         reproject({
           size: screenSize,
           blendAmount,
           lightScale: fullscreenScale,
           previousLight: reprojectBackBuffer.color[0],
-          previousLightScale: previewSize.scale,
-          reprojectPosition: sampleCount <= 1 // Only blend frames and don't reproject positions after camera stays still
+          previousLightScale: lastToneMappedScale,
+          reprojectPosition: sampleCount === 1 ? true : false
         });
 
         toneMapToScreen(reprojectBuffer.color[0], fullscreenScale);
@@ -467,7 +470,6 @@ export function makeRenderingPipeline({
 
     reproject({
       size: screenSize,
-      // blendAmount: 1.0,
       blendAmount: 1,
       lightScale: fullscreenScale,
       previousLight: reprojectBackBuffer.color[0],
@@ -476,7 +478,6 @@ export function makeRenderingPipeline({
     });
 
     toneMapToScreen(reprojectBuffer.color[0], fullscreenScale);
-    // toneMapToScreen(hdrBuffer.color[0], fullscreenScale);
   }
 
   return {
