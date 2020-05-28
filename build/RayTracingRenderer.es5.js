@@ -2,13 +2,14 @@
   typeof exports === 'object' && typeof module !== 'undefined' ? factory(exports, require('three')) :
   typeof define === 'function' && define.amd ? define(['exports', 'three'], factory) :
   (global = global || self, factory(global.RayTracingRenderer = {}, global.THREE));
-}(this, function (exports, THREE$1) { 'use strict';
+}(this, (function (exports, THREE$1) { 'use strict';
 
   var ThinMaterial = 1;
   var ThickMaterial = 2;
   var ShadowCatcherMaterial = 3;
 
   var constants = /*#__PURE__*/Object.freeze({
+    __proto__: null,
     ThinMaterial: ThinMaterial,
     ThickMaterial: ThickMaterial,
     ShadowCatcherMaterial: ShadowCatcherMaterial
@@ -70,13 +71,13 @@
       var source = arguments[i] != null ? arguments[i] : {};
 
       if (i % 2) {
-        ownKeys(source, true).forEach(function (key) {
+        ownKeys(Object(source), true).forEach(function (key) {
           _defineProperty(target, key, source[key]);
         });
       } else if (Object.getOwnPropertyDescriptors) {
         Object.defineProperties(target, Object.getOwnPropertyDescriptors(source));
       } else {
-        ownKeys(source).forEach(function (key) {
+        ownKeys(Object(source)).forEach(function (key) {
           Object.defineProperty(target, key, Object.getOwnPropertyDescriptor(source, key));
         });
       }
@@ -116,6 +117,19 @@
     return _setPrototypeOf(o, p);
   }
 
+  function _isNativeReflectConstruct() {
+    if (typeof Reflect === "undefined" || !Reflect.construct) return false;
+    if (Reflect.construct.sham) return false;
+    if (typeof Proxy === "function") return true;
+
+    try {
+      Date.prototype.toString.call(Reflect.construct(Date, [], function () {}));
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
   function _assertThisInitialized(self) {
     if (self === void 0) {
       throw new ReferenceError("this hasn't been initialised - super() hasn't been called");
@@ -130,6 +144,25 @@
     }
 
     return _assertThisInitialized(self);
+  }
+
+  function _createSuper(Derived) {
+    var hasNativeReflectConstruct = _isNativeReflectConstruct();
+
+    return function _createSuperInternal() {
+      var Super = _getPrototypeOf(Derived),
+          result;
+
+      if (hasNativeReflectConstruct) {
+        var NewTarget = _getPrototypeOf(this).constructor;
+
+        result = Reflect.construct(Super, arguments, NewTarget);
+      } else {
+        result = Super.apply(this, arguments);
+      }
+
+      return _possibleConstructorReturn(this, result);
+    };
   }
 
   function _superPropBase(object, property) {
@@ -163,57 +196,96 @@
   }
 
   function _toConsumableArray(arr) {
-    return _arrayWithoutHoles(arr) || _iterableToArray(arr) || _nonIterableSpread();
+    return _arrayWithoutHoles(arr) || _iterableToArray(arr) || _unsupportedIterableToArray(arr) || _nonIterableSpread();
   }
 
   function _arrayWithoutHoles(arr) {
-    if (Array.isArray(arr)) {
-      for (var i = 0, arr2 = new Array(arr.length); i < arr.length; i++) arr2[i] = arr[i];
-
-      return arr2;
-    }
+    if (Array.isArray(arr)) return _arrayLikeToArray(arr);
   }
 
   function _iterableToArray(iter) {
-    if (Symbol.iterator in Object(iter) || Object.prototype.toString.call(iter) === "[object Arguments]") return Array.from(iter);
+    if (typeof Symbol !== "undefined" && Symbol.iterator in Object(iter)) return Array.from(iter);
+  }
+
+  function _unsupportedIterableToArray(o, minLen) {
+    if (!o) return;
+    if (typeof o === "string") return _arrayLikeToArray(o, minLen);
+    var n = Object.prototype.toString.call(o).slice(8, -1);
+    if (n === "Object" && o.constructor) n = o.constructor.name;
+    if (n === "Map" || n === "Set") return Array.from(o);
+    if (n === "Arguments" || /^(?:Ui|I)nt(?:8|16|32)(?:Clamped)?Array$/.test(n)) return _arrayLikeToArray(o, minLen);
+  }
+
+  function _arrayLikeToArray(arr, len) {
+    if (len == null || len > arr.length) len = arr.length;
+
+    for (var i = 0, arr2 = new Array(len); i < len; i++) arr2[i] = arr[i];
+
+    return arr2;
   }
 
   function _nonIterableSpread() {
-    throw new TypeError("Invalid attempt to spread non-iterable instance");
+    throw new TypeError("Invalid attempt to spread non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.");
   }
 
-  function _createSuper(Derived) {
-    function isNativeReflectConstruct() {
-      if (typeof Reflect === "undefined" || !Reflect.construct) return false;
-      if (Reflect.construct.sham) return false;
-      if (typeof Proxy === "function") return true;
+  function _createForOfIteratorHelper(o, allowArrayLike) {
+    var it;
 
-      try {
-        Date.prototype.toString.call(Reflect.construct(Date, [], function () {}));
-        return true;
-      } catch (e) {
-        return false;
+    if (typeof Symbol === "undefined" || o[Symbol.iterator] == null) {
+      if (Array.isArray(o) || (it = _unsupportedIterableToArray(o)) || allowArrayLike && o && typeof o.length === "number") {
+        if (it) o = it;
+        var i = 0;
+
+        var F = function () {};
+
+        return {
+          s: F,
+          n: function () {
+            if (i >= o.length) return {
+              done: true
+            };
+            return {
+              done: false,
+              value: o[i++]
+            };
+          },
+          e: function (e) {
+            throw e;
+          },
+          f: F
+        };
       }
+
+      throw new TypeError("Invalid attempt to iterate non-iterable instance.\nIn order to be iterable, non-array objects must have a [Symbol.iterator]() method.");
     }
 
-    return function () {
-      var Super = _getPrototypeOf(Derived),
-          result;
-
-      if (isNativeReflectConstruct()) {
-        var NewTarget = _getPrototypeOf(this).constructor;
-
-        result = Reflect.construct(Super, arguments, NewTarget);
-      } else {
-        result = Super.apply(this, arguments);
+    var normalCompletion = true,
+        didErr = false,
+        err;
+    return {
+      s: function () {
+        it = o[Symbol.iterator]();
+      },
+      n: function () {
+        var step = it.next();
+        normalCompletion = step.done;
+        return step;
+      },
+      e: function (e) {
+        didErr = true;
+        err = e;
+      },
+      f: function () {
+        try {
+          if (!normalCompletion && it.return != null) it.return();
+        } finally {
+          if (didErr) throw err;
+        }
       }
-
-      return _possibleConstructorReturn(this, result);
     };
   }
-  var LensCamera =
-  /*#__PURE__*/
-  function (_PerspectiveCamera) {
+
+  var LensCamera = /*#__PURE__*/function (_PerspectiveCamera) {
     _inherits(LensCamera, _PerspectiveCamera);
 
     var _super = _createSuper(LensCamera);
@@ -244,41 +316,10 @@
     return LensCamera;
   }(THREE$1.PerspectiveCamera);
 
-  function _createSuper$1(Derived) {
-    function isNativeReflectConstruct() {
-      if (typeof Reflect === "undefined" || !Reflect.construct) return false;
-      if (Reflect.construct.sham) return false;
-      if (typeof Proxy === "function") return true;
-
-      try {
-        Date.prototype.toString.call(Reflect.construct(Date, [], function () {}));
-        return true;
-      } catch (e) {
-        return false;
-      }
-    }
-
-    return function () {
-      var Super = _getPrototypeOf(Derived),
-          result;
-
-      if (isNativeReflectConstruct()) {
-        var NewTarget = _getPrototypeOf(this).constructor;
-
-        result = Reflect.construct(Super, arguments, NewTarget);
-      } else {
-        result = Super.apply(this, arguments);
-      }
-
-      return _possibleConstructorReturn(this, result);
-    };
-  }
-  var SoftDirectionalLight =
-  /*#__PURE__*/
-  function (_DirectionalLight) {
+  var SoftDirectionalLight = /*#__PURE__*/function (_DirectionalLight) {
     _inherits(SoftDirectionalLight, _DirectionalLight);
 
-    var _super = _createSuper$1(SoftDirectionalLight);
+    var _super = _createSuper(SoftDirectionalLight);
 
     function SoftDirectionalLight(color, intensity) {
       var _this;
@@ -304,41 +345,10 @@
     return SoftDirectionalLight;
   }(THREE$1.DirectionalLight);
 
-  function _createSuper$2(Derived) {
-    function isNativeReflectConstruct() {
-      if (typeof Reflect === "undefined" || !Reflect.construct) return false;
-      if (Reflect.construct.sham) return false;
-      if (typeof Proxy === "function") return true;
-
-      try {
-        Date.prototype.toString.call(Reflect.construct(Date, [], function () {}));
-        return true;
-      } catch (e) {
-        return false;
-      }
-    }
-
-    return function () {
-      var Super = _getPrototypeOf(Derived),
-          result;
-
-      if (isNativeReflectConstruct()) {
-        var NewTarget = _getPrototypeOf(this).constructor;
-
-        result = Reflect.construct(Super, arguments, NewTarget);
-      } else {
-        result = Super.apply(this, arguments);
-      }
-
-      return _possibleConstructorReturn(this, result);
-    };
-  }
-  var EnvironmentLight =
-  /*#__PURE__*/
-  function (_Light) {
+  var EnvironmentLight = /*#__PURE__*/function (_Light) {
     _inherits(EnvironmentLight, _Light);
 
-    var _super = _createSuper$2(EnvironmentLight);
+    var _super = _createSuper(EnvironmentLight);
 
     function EnvironmentLight(map) {
       var _this;
@@ -367,41 +377,10 @@
     return EnvironmentLight;
   }(THREE$1.Light);
 
-  function _createSuper$3(Derived) {
-    function isNativeReflectConstruct() {
-      if (typeof Reflect === "undefined" || !Reflect.construct) return false;
-      if (Reflect.construct.sham) return false;
-      if (typeof Proxy === "function") return true;
-
-      try {
-        Date.prototype.toString.call(Reflect.construct(Date, [], function () {}));
-        return true;
-      } catch (e) {
-        return false;
-      }
-    }
-
-    return function () {
-      var Super = _getPrototypeOf(Derived),
-          result;
-
-      if (isNativeReflectConstruct()) {
-        var NewTarget = _getPrototypeOf(this).constructor;
-
-        result = Reflect.construct(Super, arguments, NewTarget);
-      } else {
-        result = Super.apply(this, arguments);
-      }
-
-      return _possibleConstructorReturn(this, result);
-    };
-  }
-  var RayTracingMaterial =
-  /*#__PURE__*/
-  function (_MeshStandardMaterial) {
+  var RayTracingMaterial = /*#__PURE__*/function (_MeshStandardMaterial) {
     _inherits(RayTracingMaterial, _MeshStandardMaterial);
 
-    var _super = _createSuper$3(RayTracingMaterial);
+    var _super = _createSuper(RayTracingMaterial);
 
     function RayTracingMaterial() {
       var _this;
@@ -433,28 +412,19 @@
 
   function loadExtensions(gl, extensions) {
     var supported = {};
-    var _iteratorNormalCompletion = true;
-    var _didIteratorError = false;
-    var _iteratorError = undefined;
+
+    var _iterator = _createForOfIteratorHelper(extensions),
+        _step;
 
     try {
-      for (var _iterator = extensions[Symbol.iterator](), _step; !(_iteratorNormalCompletion = (_step = _iterator.next()).done); _iteratorNormalCompletion = true) {
+      for (_iterator.s(); !(_step = _iterator.n()).done;) {
         var name = _step.value;
         supported[name] = gl.getExtension(name);
       }
     } catch (err) {
-      _didIteratorError = true;
-      _iteratorError = err;
+      _iterator.e(err);
     } finally {
-      try {
-        if (!_iteratorNormalCompletion && _iterator["return"] != null) {
-          _iterator["return"]();
-        }
-      } finally {
-        if (_didIteratorError) {
-          throw _iteratorError;
-        }
-      }
+      _iterator.f();
     }
 
     return supported;
@@ -849,12 +819,12 @@
 
   function addIncludes(includes, defines) {
     var str = '';
-    var _iteratorNormalCompletion = true;
-    var _didIteratorError = false;
-    var _iteratorError = undefined;
+
+    var _iterator = _createForOfIteratorHelper(includes),
+        _step;
 
     try {
-      for (var _iterator = includes[Symbol.iterator](), _step; !(_iteratorNormalCompletion = (_step = _iterator.next()).done); _iteratorNormalCompletion = true) {
+      for (_iterator.s(); !(_step = _iterator.n()).done;) {
         var include = _step.value;
 
         if (typeof include === 'function') {
@@ -864,18 +834,9 @@
         }
       }
     } catch (err) {
-      _didIteratorError = true;
-      _iteratorError = err;
+      _iterator.e(err);
     } finally {
-      try {
-        if (!_iteratorNormalCompletion && _iterator["return"] != null) {
-          _iterator["return"]();
-        }
-      } finally {
-        if (_didIteratorError) {
-          throw _iteratorError;
-        }
-      }
+      _iterator.f();
     }
 
     return str;
@@ -1307,12 +1268,12 @@
   // retrieve textures used by meshes, grouping textures from meshes shared by *the same* mesh property
   function getTexturesFromMaterials(meshes, textureNames) {
     var textureMap = {};
-    var _iteratorNormalCompletion = true;
-    var _didIteratorError = false;
-    var _iteratorError = undefined;
+
+    var _iterator = _createForOfIteratorHelper(textureNames),
+        _step;
 
     try {
-      for (var _iterator = textureNames[Symbol.iterator](), _step; !(_iteratorNormalCompletion = (_step = _iterator.next()).done); _iteratorNormalCompletion = true) {
+      for (_iterator.s(); !(_step = _iterator.n()).done;) {
         var name = _step.value;
         var textures = [];
         textureMap[name] = {
@@ -1321,18 +1282,9 @@
         };
       }
     } catch (err) {
-      _didIteratorError = true;
-      _iteratorError = err;
+      _iterator.e(err);
     } finally {
-      try {
-        if (!_iteratorNormalCompletion && _iterator["return"] != null) {
-          _iterator["return"]();
-        }
-      } finally {
-        if (_didIteratorError) {
-          throw _iteratorError;
-        }
-      }
+      _iterator.f();
     }
 
     return textureMap;
@@ -1343,28 +1295,19 @@
       textures: [],
       indices: {}
     };
-    var _iteratorNormalCompletion2 = true;
-    var _didIteratorError2 = false;
-    var _iteratorError2 = undefined;
+
+    var _iterator2 = _createForOfIteratorHelper(textureNames),
+        _step2;
 
     try {
-      for (var _iterator2 = textureNames[Symbol.iterator](), _step2; !(_iteratorNormalCompletion2 = (_step2 = _iterator2.next()).done); _iteratorNormalCompletion2 = true) {
+      for (_iterator2.s(); !(_step2 = _iterator2.n()).done;) {
         var name = _step2.value;
         textureMap.indices[name] = texturesFromMaterials(meshes, name, textureMap.textures);
       }
     } catch (err) {
-      _didIteratorError2 = true;
-      _iteratorError2 = err;
+      _iterator2.e(err);
     } finally {
-      try {
-        if (!_iteratorNormalCompletion2 && _iterator2["return"] != null) {
-          _iterator2["return"]();
-        }
-      } finally {
-        if (_didIteratorError2) {
-          throw _iteratorError2;
-        }
-      }
+      _iterator2.f();
     }
 
     return textureMap;
@@ -1372,12 +1315,12 @@
 
   function texturesFromMaterials(materials, textureName, textures) {
     var indices = [];
-    var _iteratorNormalCompletion3 = true;
-    var _didIteratorError3 = false;
-    var _iteratorError3 = undefined;
+
+    var _iterator3 = _createForOfIteratorHelper(materials),
+        _step3;
 
     try {
-      for (var _iterator3 = materials[Symbol.iterator](), _step3; !(_iteratorNormalCompletion3 = (_step3 = _iterator3.next()).done); _iteratorNormalCompletion3 = true) {
+      for (_iterator3.s(); !(_step3 = _iterator3.n()).done;) {
         var material = _step3.value;
         var isTextureLoaded = material[textureName] && material[textureName].image;
 
@@ -1403,18 +1346,9 @@
         }
       }
     } catch (err) {
-      _didIteratorError3 = true;
-      _iteratorError3 = err;
+      _iterator3.e(err);
     } finally {
-      try {
-        if (!_iteratorNormalCompletion3 && _iterator3["return"] != null) {
-          _iterator3["return"]();
-        }
-      } finally {
-        if (_didIteratorError3) {
-          throw _iteratorError3;
-        }
-      }
+      _iterator3.f();
     }
 
     return indices;
@@ -1539,55 +1473,37 @@
       width: 0,
       height: 0
     };
-    var _iteratorNormalCompletion = true;
-    var _didIteratorError = false;
-    var _iteratorError = undefined;
+
+    var _iterator = _createForOfIteratorHelper(images),
+        _step;
 
     try {
-      for (var _iterator = images[Symbol.iterator](), _step; !(_iteratorNormalCompletion = (_step = _iterator.next()).done); _iteratorNormalCompletion = true) {
+      for (_iterator.s(); !(_step = _iterator.n()).done;) {
         var image = _step.value;
         maxSize.width = Math.max(maxSize.width, image.width);
         maxSize.height = Math.max(maxSize.height, image.height);
       }
     } catch (err) {
-      _didIteratorError = true;
-      _iteratorError = err;
+      _iterator.e(err);
     } finally {
-      try {
-        if (!_iteratorNormalCompletion && _iterator["return"] != null) {
-          _iterator["return"]();
-        }
-      } finally {
-        if (_didIteratorError) {
-          throw _iteratorError;
-        }
-      }
+      _iterator.f();
     }
 
     var relativeSizes = [];
-    var _iteratorNormalCompletion2 = true;
-    var _didIteratorError2 = false;
-    var _iteratorError2 = undefined;
+
+    var _iterator2 = _createForOfIteratorHelper(images),
+        _step2;
 
     try {
-      for (var _iterator2 = images[Symbol.iterator](), _step2; !(_iteratorNormalCompletion2 = (_step2 = _iterator2.next()).done); _iteratorNormalCompletion2 = true) {
+      for (_iterator2.s(); !(_step2 = _iterator2.n()).done;) {
         var _image = _step2.value;
         relativeSizes.push(_image.width / maxSize.width);
         relativeSizes.push(_image.height / maxSize.height);
       }
     } catch (err) {
-      _didIteratorError2 = true;
-      _iteratorError2 = err;
+      _iterator2.e(err);
     } finally {
-      try {
-        if (!_iteratorNormalCompletion2 && _iterator2["return"] != null) {
-          _iterator2["return"]();
-        }
-      } finally {
-        if (_didIteratorError2) {
-          throw _iteratorError2;
-        }
-      }
+      _iterator2.f();
     }
 
     return {
@@ -1679,12 +1595,12 @@
     var indexCount = 0;
     var geometryAndMaterialIndex = [];
     var materialIndexMap = new Map();
-    var _iteratorNormalCompletion = true;
-    var _didIteratorError = false;
-    var _iteratorError = undefined;
+
+    var _iterator = _createForOfIteratorHelper(meshes),
+        _step;
 
     try {
-      for (var _iterator = meshes[Symbol.iterator](), _step; !(_iteratorNormalCompletion = (_step = _iterator.next()).done); _iteratorNormalCompletion = true) {
+      for (_iterator.s(); !(_step = _iterator.n()).done;) {
         var mesh = _step.value;
 
         if (!mesh.visible) {
@@ -1725,18 +1641,9 @@
         });
       }
     } catch (err) {
-      _didIteratorError = true;
-      _iteratorError = err;
+      _iterator.e(err);
     } finally {
-      try {
-        if (!_iteratorNormalCompletion && _iterator["return"] != null) {
-          _iterator["return"]();
-        }
-      } finally {
-        if (_didIteratorError) {
-          throw _iteratorError;
-        }
-      }
+      _iterator.f();
     }
 
     var geometry = mergeGeometry(geometryAndMaterialIndex, vertexCount, indexCount);
@@ -1761,12 +1668,12 @@
     var currentVertex = 0;
     var currentIndex = 0;
     var currentMesh = 1;
-    var _iteratorNormalCompletion2 = true;
-    var _didIteratorError2 = false;
-    var _iteratorError2 = undefined;
+
+    var _iterator2 = _createForOfIteratorHelper(geometryAndMaterialIndex),
+        _step2;
 
     try {
-      for (var _iterator2 = geometryAndMaterialIndex[Symbol.iterator](), _step2; !(_iteratorNormalCompletion2 = (_step2 = _iterator2.next()).done); _iteratorNormalCompletion2 = true) {
+      for (_iterator2.s(); !(_step2 = _iterator2.n()).done;) {
         var _step2$value = _step2.value,
             geometry = _step2$value.geometry,
             materialIndex = _step2$value.materialIndex;
@@ -1787,18 +1694,9 @@
         currentMesh++;
       }
     } catch (err) {
-      _didIteratorError2 = true;
-      _iteratorError2 = err;
+      _iterator2.e(err);
     } finally {
-      try {
-        if (!_iteratorNormalCompletion2 && _iterator2["return"] != null) {
-          _iterator2["return"]();
-        }
-      } finally {
-        if (_didIteratorError2) {
-          throw _iteratorError2;
-        }
-      }
+      _iterator2.f();
     }
 
     return mergedGeometry;
@@ -1808,12 +1706,12 @@
 
   function cloneBufferGeometry(bufferGeometry, attributes) {
     var newGeometry = new THREE$1.BufferGeometry();
-    var _iteratorNormalCompletion3 = true;
-    var _didIteratorError3 = false;
-    var _iteratorError3 = undefined;
+
+    var _iterator3 = _createForOfIteratorHelper(attributes),
+        _step3;
 
     try {
-      for (var _iterator3 = attributes[Symbol.iterator](), _step3; !(_iteratorNormalCompletion3 = (_step3 = _iterator3.next()).done); _iteratorNormalCompletion3 = true) {
+      for (_iterator3.s(); !(_step3 = _iterator3.n()).done;) {
         var name = _step3.value;
         var attrib = bufferGeometry.getAttribute(name);
 
@@ -1822,18 +1720,9 @@
         }
       }
     } catch (err) {
-      _didIteratorError3 = true;
-      _iteratorError3 = err;
+      _iterator3.e(err);
     } finally {
-      try {
-        if (!_iteratorNormalCompletion3 && _iterator3["return"] != null) {
-          _iterator3["return"]();
-        }
-      } finally {
-        if (_didIteratorError3) {
-          throw _iteratorError3;
-        }
-      }
+      _iterator3.f();
     }
 
     var index = bufferGeometry.getIndex();
@@ -2585,39 +2474,21 @@
     };
   }
 
-  /*
-  Stratified Sampling
-  http://www.pbr-book.org/3ed-2018/Sampling_and_Reconstruction/Stratified_Sampling.html
-
-  It is computationally unfeasible to compute stratified sampling for large dimensions (>2)
-  Instead, we can compute stratified sampling for lower dimensional patterns that sum to the high dimension
-  e.g. instead of sampling a 6D domain, we sample a 2D + 2D + 2D domain.
-  This reaps many benefits of stratification while still allowing for small strata sizes.
-  */
   function makeStratifiedSamplerCombined(strataCount, listOfDimensions) {
     var strataObjs = [];
-    var _iteratorNormalCompletion = true;
-    var _didIteratorError = false;
-    var _iteratorError = undefined;
+
+    var _iterator = _createForOfIteratorHelper(listOfDimensions),
+        _step;
 
     try {
-      for (var _iterator = listOfDimensions[Symbol.iterator](), _step; !(_iteratorNormalCompletion = (_step = _iterator.next()).done); _iteratorNormalCompletion = true) {
+      for (_iterator.s(); !(_step = _iterator.n()).done;) {
         var dim = _step.value;
         strataObjs.push(makeStratifiedSampler(strataCount, dim));
       }
     } catch (err) {
-      _didIteratorError = true;
-      _iteratorError = err;
+      _iterator.e(err);
     } finally {
-      try {
-        if (!_iteratorNormalCompletion && _iterator["return"] != null) {
-          _iterator["return"]();
-        }
-      } finally {
-        if (_didIteratorError) {
-          throw _iteratorError;
-        }
-      }
+      _iterator.f();
     }
 
     var combined = [];
@@ -2625,41 +2496,50 @@
     function next() {
       var i = 0;
 
-      for (var _i = 0, _strataObjs = strataObjs; _i < _strataObjs.length; _i++) {
-        var strata = _strataObjs[_i];
-        var nums = strata.next();
-        var _iteratorNormalCompletion2 = true;
-        var _didIteratorError2 = false;
-        var _iteratorError2 = undefined;
+      var _iterator2 = _createForOfIteratorHelper(strataObjs),
+          _step2;
 
-        try {
-          for (var _iterator2 = nums[Symbol.iterator](), _step2; !(_iteratorNormalCompletion2 = (_step2 = _iterator2.next()).done); _iteratorNormalCompletion2 = true) {
-            var num = _step2.value;
-            combined[i++] = num;
-          }
-        } catch (err) {
-          _didIteratorError2 = true;
-          _iteratorError2 = err;
-        } finally {
+      try {
+        for (_iterator2.s(); !(_step2 = _iterator2.n()).done;) {
+          var strata = _step2.value;
+          var nums = strata.next();
+
+          var _iterator3 = _createForOfIteratorHelper(nums),
+              _step3;
+
           try {
-            if (!_iteratorNormalCompletion2 && _iterator2["return"] != null) {
-              _iterator2["return"]();
+            for (_iterator3.s(); !(_step3 = _iterator3.n()).done;) {
+              var num = _step3.value;
+              combined[i++] = num;
             }
+          } catch (err) {
+            _iterator3.e(err);
           } finally {
-            if (_didIteratorError2) {
-              throw _iteratorError2;
-            }
+            _iterator3.f();
           }
         }
+      } catch (err) {
+        _iterator2.e(err);
+      } finally {
+        _iterator2.f();
       }
 
       return combined;
     }
 
     function restart() {
-      for (var _i2 = 0, _strataObjs2 = strataObjs; _i2 < _strataObjs2.length; _i2++) {
-        var strata = _strataObjs2[_i2];
-        strata.restart();
+      var _iterator4 = _createForOfIteratorHelper(strataObjs),
+          _step4;
+
+      try {
+        for (_iterator4.s(); !(_step4 = _iterator4.n()).done;) {
+          var strata = _step4.value;
+          strata.restart();
+        }
+      } catch (err) {
+        _iterator4.e(err);
+      } finally {
+        _iterator4.f();
       }
     }
 
@@ -3600,7 +3480,8 @@
 
   var glRequiredExtensions = ['EXT_color_buffer_float', // enables rendering to float buffers
   'EXT_float_blend'];
-  var glOptionalExtensions = ['OES_texture_float_linear'];
+  var glOptionalExtensions = ['OES_texture_float_linear' // enables gl.LINEAR texture filtering for float textures,
+  ];
   function RayTracingRenderer() {
     var params = arguments.length > 0 && arguments[0] !== undefined ? arguments[0] : {};
     var canvas = params.canvas || document.createElement('canvas');
@@ -3808,4 +3689,4 @@
 
   Object.defineProperty(exports, '__esModule', { value: true });
 
-}));
+})));
