@@ -23,7 +23,7 @@
     "rollup-plugin-babel": "^4.3.3",
     "rollup-plugin-node-resolve": "^5.2.0",
     "stats.js": "^0.17.0",
-    "three": "^0.107.0"
+    "three": "^0.117.1"
   },
   "repository": {
     "type": "git",
