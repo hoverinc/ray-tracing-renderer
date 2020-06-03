@@ -1,6 +1,6 @@
 {
   "name": "ray-tracing-renderer",
-  "version": "0.10.0",
+  "version": "0.10.1",
   "description": "A [Three.js](https://github.com/mrdoob/three.js/) renderer which utilizes path tracing to render a scene with true photorealism. The renderer supports global illumination, reflections, soft shadows, and realistic environment lighting.",
   "main": "build/RayTracingRenderer.js",
   "scripts": {
