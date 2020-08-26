@@ -4688,6 +4688,7 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
       if (module.needsUpdate) {
         initScene(scene);
       }
+      if (!pipeline) return;
 
       if (isNaN(currentTime)) {
         if (!syncWarning) {

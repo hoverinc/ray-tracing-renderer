@@ -3620,6 +3620,8 @@
         initScene(scene);
       }
 
+      if (!pipeline) return;
+
       if (isNaN(currentTime)) {
         if (!syncWarning) {
           console.warn('Ray Tracing Renderer warning: For improved performance, please call renderer.sync(time) before render.render(scene, camera), with the time parameter equalling the parameter passed to the callback of requestAnimationFrame');
