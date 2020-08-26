@@ -39,7 +39,6 @@ float getMatType(int materialIndex) {
 vec3 getMatColor(int materialIndex, vec2 uv, vec3 vertexColor) {
 
   if (materials.useVertexColors[materialIndex] != 0) {
-    // return vec3(0.,1.,0.);
     return vertexColor;
   }
 
