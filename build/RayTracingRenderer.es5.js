@@ -2717,7 +2717,7 @@
     renderPass.setTexture('positionBuffer', makeDataTexture(gl, geometry.getAttribute('position').array, 3));
     renderPass.setTexture('normalBuffer', makeDataTexture(gl, geometry.getAttribute('normal').array, 3));
     renderPass.setTexture('uvBuffer', makeDataTexture(gl, geometry.getAttribute('uv').array, 2));
-    renderPass.setTexture('vertexColorBuffer', makeDataTexture(gl, geometry.getAttribute('color').array, 3));
+    renderPass.setTexture('vertexColorBuffer', makeDataTexture(gl, geometry.getAttribute('color').array, 4));
     renderPass.setTexture('bvhBuffer', makeDataTexture(gl, flattenedBvh.buffer, 4));
     var envImage = generateEnvMapFromSceneComponents(directionalLights, ambientLights, environmentLights);
     var envImageTextureObject = makeTexture(gl, {
