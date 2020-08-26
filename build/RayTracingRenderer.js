@@ -624,7 +624,6 @@ float getMatType(int materialIndex) {
 vec3 getMatColor(int materialIndex, vec2 uv, vec3 vertexColor) {
 
   if (materials.useVertexColors[materialIndex] != 0) {
-    // return vec3(0.,1.,0.);
     return vertexColor;
   }
 
@@ -720,7 +719,6 @@ vec3 getMatNormal(int materialIndex, vec2 uv, vec3 normal, vec3 dp1, vec3 dp2, v
     vec2 uv = fract(vUv);
 
     vec3 color = getMatColor(materialIndex, uv, vVertexColor.rgb);
-    // vec3 color = getMatColor(materialIndex, uv, vec3(0.,1.,0.));
     float roughness = getMatRoughness(materialIndex, uv);
     float metalness = getMatMetalness(materialIndex, uv);
     float materialType = getMatType(materialIndex);
@@ -762,7 +760,6 @@ vec3 getMatNormal(int materialIndex, vec2 uv, vec3 normal, vec3 dp1, vec3 dp2, v
     renderPass.setTexture('pbrMap', materialBuffer.textures.pbrMap);
 
     const geometry = mergedMesh.geometry;
-    console.log(geometry);
     const elementCount = geometry.getIndex().count;
 
     const vao = gl.createVertexArray();
@@ -2300,7 +2297,7 @@ void surfaceInteractionFromBVH(inout SurfaceInteraction si, Triangle tri, vec3 b
   vec3 c1 = texelFetch(vertexColorBuffer, i1, 0).rgb;
   vec3 c2 = texelFetch(vertexColorBuffer, i2, 0).rgb;
   vec3 vertexColor = barycentric.x * c0 + barycentric.y * c1 + barycentric.z * c2;
-  // vertexColor = vec3(0., 1., 0.);
+
   si.materialType = int(getMatType(materialIndex));
   si.color = getMatColor(materialIndex, uv, vertexColor);
   si.roughness = getMatRoughness(materialIndex, uv);
