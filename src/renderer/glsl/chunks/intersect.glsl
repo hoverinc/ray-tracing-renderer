@@ -3,6 +3,7 @@ export default `
 uniform sampler2D positionBuffer;
 uniform sampler2D normalBuffer;
 uniform sampler2D uvBuffer;
+uniform sampler2D vertexColorBuffer;
 uniform sampler2D bvhBuffer;
 
 struct Triangle {
@@ -33,8 +34,13 @@ void surfaceInteractionFromBVH(inout SurfaceInteraction si, Triangle tri, vec3 b
     vec2 uv = vec2(0.0);
   #endif
 
+  vec3 c0 = texelFetch(vertexColorBuffer, i0, 0).rgb;
+  vec3 c1 = texelFetch(vertexColorBuffer, i1, 0).rgb;
+  vec3 c2 = texelFetch(vertexColorBuffer, i2, 0).rgb;
+  vec3 vertexColor = barycentric.x * c0 + barycentric.y * c1 + barycentric.z * c2;
+
   si.materialType = int(getMatType(materialIndex));
-  si.color = getMatColor(materialIndex, uv);
+  si.color = getMatColor(materialIndex, uv, vertexColor);
   si.roughness = getMatRoughness(materialIndex, uv);
   si.metalness = getMatMetalness(materialIndex, uv);
 

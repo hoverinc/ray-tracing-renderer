@@ -15,6 +15,9 @@ uniform Materials {
   #if defined(NUM_PBR_MAPS)
     vec2 pbrMapSize[NUM_PBR_MAPS];
   #endif
+
+  int useVertexColors[NUM_MATERIALS];
+
 } materials;
 
 #ifdef NUM_DIFFUSE_MAPS
@@ -33,7 +36,13 @@ float getMatType(int materialIndex) {
   return materials.colorAndMaterialType[materialIndex].w;
 }
 
-vec3 getMatColor(int materialIndex, vec2 uv) {
+vec3 getMatColor(int materialIndex, vec2 uv, vec3 vertexColor) {
+
+  if (materials.useVertexColors[materialIndex] != 0) {
+    // return vec3(0.,1.,0.);
+    return vertexColor;
+  }
+
   vec3 color = materials.colorAndMaterialType[materialIndex].rgb;
 
   #ifdef NUM_DIFFUSE_MAPS

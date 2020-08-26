@@ -158,6 +158,8 @@ function makeRenderPassFromScene({
 
   renderPass.setTexture('uvBuffer', makeDataTexture(gl, geometry.getAttribute('uv').array, 2));
 
+  renderPass.setTexture('vertexColorBuffer', makeDataTexture(gl, geometry.getAttribute('color').array, 3));
+
   renderPass.setTexture('bvhBuffer', makeDataTexture(gl, flattenedBvh.buffer, 4));
 
   const envImage = generateEnvMapFromSceneComponents(directionalLights, ambientLights, environmentLights);
