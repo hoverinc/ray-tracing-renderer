@@ -1,7 +1,7 @@
 (function (global, factory) {
   typeof exports === 'object' && typeof module !== 'undefined' ? factory(exports, require('three')) :
   typeof define === 'function' && define.amd ? define(['exports', 'three'], factory) :
-  (global = global || self, factory(global.RayTracingRenderer = {}, global.THREE));
+  (global = typeof globalThis !== 'undefined' ? globalThis : global || self, factory(global.RayTracingRenderer = {}, global.THREE));
 }(this, (function (exports, THREE$1) { 'use strict';
 
   var ThinMaterial = 1;
