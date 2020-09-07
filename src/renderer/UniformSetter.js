@@ -30,10 +30,10 @@ export function makeUniformSetter(gl, program) {
     const uni = uniforms[name];
 
     if (!uni) {
-      // if (!failedUnis.has(name)) {
-      //   console.warn(`Uniform "${name}" does not exist in shader`);
-      //   failedUnis.add(name);
-      // }
+      if (!failedUnis.has(name)) {
+        console.warn(`Uniform "${name}" does not exist in shader`);
+        failedUnis.add(name);
+      }
 
       return;
     }

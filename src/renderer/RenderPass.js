@@ -3,7 +3,6 @@ import { makeUniformSetter } from './UniformSetter';
 
 export function makeRenderPass(gl, params) {
   const {
-    defines,
     fragment,
     vertex,
   } = params;

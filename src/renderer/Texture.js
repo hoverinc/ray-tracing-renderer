@@ -172,12 +172,7 @@ function getTextureFormat(gl, channels, storage, data, gammaCorrection) {
     type = gl.UNSIGNED_BYTE;
   }
 
-  const format = {
-    1: gl.RED,
-    2: gl.RG,
-    3: gl.RGB,
-    4: gl.RGBA
-  }[channels];
+  const format = getFormat(gl, channels);
 
   return {
     format,

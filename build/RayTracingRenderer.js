@@ -275,16 +275,18 @@
       uniforms[name] = uniform;
     }
 
+    const failedUnis = new Set();
+
     function setUniform(name, v0, v1, v2, v3) {
       // v0 - v4 are the values to be passed to the uniform
       // v0 can either be a number or an array, and v1-v3 are optional
       const uni = uniforms[name];
 
       if (!uni) {
-        // if (!failedUnis.has(name)) {
-        //   console.warn(`Uniform "${name}" does not exist in shader`);
-        //   failedUnis.add(name);
-        // }
+        if (!failedUnis.has(name)) {
+          console.warn(`Uniform "${name}" does not exist in shader`);
+          failedUnis.add(name);
+        }
 
         return;
       }
@@ -359,7 +361,6 @@
 
   function makeRenderPass(gl, params) {
     const {
-      defines,
       fragment,
       vertex,
     } = params;
@@ -1057,6 +1058,16 @@ vec3 getMatNormal(int materialIndex, vec2 uv, vec3 normal, vec3 dp1, vec3 dp2, v
     };
   }
 
+  function getFormat(gl, channels) {
+    const map = {
+      1: gl.RED,
+      2: gl.RG,
+      3: gl.RGB,
+      4: gl.RGBA
+    };
+    return map[channels];
+  }
+
   function getTextureFormat(gl, channels, storage, data, gammaCorrection) {
     let type;
     let internalFormat;
@@ -1107,12 +1118,7 @@ vec3 getMatNormal(int materialIndex, vec2 uv, vec3 normal, vec3 dp1, vec3 dp2, v
       type = gl.UNSIGNED_BYTE;
     }
 
-    const format = {
-      1: gl.RED,
-      2: gl.RG,
-      3: gl.RGB,
-      4: gl.RGBA
-    }[channels];
+    const format = getFormat(gl, channels);
 
     return {
       format,
