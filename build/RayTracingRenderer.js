@@ -2,13 +2,14 @@
   typeof exports === 'object' && typeof module !== 'undefined' ? factory(exports, require('three')) :
   typeof define === 'function' && define.amd ? define(['exports', 'three'], factory) :
   (global = global || self, factory(global.RayTracingRenderer = {}, global.THREE));
-}(this, function (exports, THREE$1) { 'use strict';
+}(this, (function (exports, THREE$1) { 'use strict';
 
   const ThinMaterial = 1;
   const ThickMaterial = 2;
   const ShadowCatcherMaterial = 3;
 
   var constants = /*#__PURE__*/Object.freeze({
+    __proto__: null,
     ThinMaterial: ThinMaterial,
     ThickMaterial: ThickMaterial,
     ShadowCatcherMaterial: ShadowCatcherMaterial
@@ -151,8 +152,8 @@
 
     scene.traverse(child => {
       if (child.isMesh) {
-        if (!child.geometry || !child.geometry.getAttribute('position')) {
-          console.warn(child, 'must have a geometry property with a position attribute');
+        if (!child.geometry) {
+          console.warn(child, 'must have a geometry property');
         }
         else if (!(child.material.isMeshStandardMaterial)) {
           console.warn(child, 'must use MeshStandardMaterial in order to be rendered.');
@@ -160,13 +161,13 @@
           meshes.push(child);
         }
       }
-      if (child.isDirectionalLight) {
+      else if (child.isDirectionalLight) {
         directionalLights.push(child);
       }
-      if (child.isAmbientLight) {
+      else if (child.isAmbientLight) {
         ambientLights.push(child);
       }
-      if (child.isEnvironmentLight) {
+      else if (child.isEnvironmentLight) {
         if (environmentLights.length > 1) {
           console.warn(environmentLights, 'only one environment light can be used per scene');
         }
@@ -1153,7 +1154,9 @@ vec3 getMatNormal(int materialIndex, vec2 uv, vec3 normal, vec3 dp1, vec3 dp2, v
     const indices = [];
 
     for (const material of materials) {
-      if (!material[textureName]) {
+      const isTextureLoaded = material[textureName] && material[textureName].image;
+
+      if (!isTextureLoaded) {
         indices.push(-1);
       } else {
         let index = textures.length;
@@ -1353,7 +1356,13 @@ vec3 getMatNormal(int materialIndex, vec2 uv, vec3 normal, vec3 dp1, vec3 dp2, v
     const materialIndexMap = new Map();
 
     for (const mesh of meshes) {
-      const geometry = cloneBufferGeometry(mesh.geometry, ['position', 'normal', 'uv']);
+      if (!mesh.visible) {
+        continue;
+      }
+
+      const geometry = mesh.geometry.isBufferGeometry ?
+        cloneBufferGeometry(mesh.geometry, ['position', 'normal', 'uv']) : // BufferGeometry object
+        new THREE$1.BufferGeometry().fromGeometry(mesh.geometry); // Geometry object
 
       const index = geometry.getIndex();
       if (!index) {
@@ -1664,6 +1673,7 @@ vec3 getMatNormal(int materialIndex, vec2 uv, vec3 normal, vec3 dp1, vec3 dp2, v
       }
       const dim = maximumExtent(centroidBounds);
 
+
       let mid = Math.floor((start + end) / 2);
 
       // middle split method
@@ -1678,7 +1688,11 @@ vec3 getMatNormal(int materialIndex, vec2 uv, vec3 normal, vec3 dp1, vec3 dp2, v
       // surface area heuristic method
       if (nPrimitives <= 4) {
         nthElement(primitiveInfo, (a, b) => a.center[dim] < b.center[dim], start, end, mid);
+      } else if (centroidBounds.max[dim] === centroidBounds.min[dim]) {
+        // can't split primitives based on centroid bounds. terminate.
+        return makeLeafNode(primitiveInfo.slice(start, end), bounds);
       } else {
+
         const buckets = [];
         for (let i = 0; i < 12; i++) {
           buckets.push({
@@ -4729,4 +4743,4 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
 
   Object.defineProperty(exports, '__esModule', { value: true });
 
-}));
+})));

@@ -9,7 +9,13 @@ export function mergeMeshesToGeometry(meshes) {
   const materialIndexMap = new Map();
 
   for (const mesh of meshes) {
-    const geometry = cloneBufferGeometry(mesh.geometry, ['position', 'normal', 'uv']);
+    if (!mesh.visible) {
+      continue;
+    }
+
+    const geometry = mesh.geometry.isBufferGeometry ?
+      cloneBufferGeometry(mesh.geometry, ['position', 'normal', 'uv']) : // BufferGeometry object
+      new BufferGeometry().fromGeometry(mesh.geometry); // Geometry object
 
     const index = geometry.getIndex();
     if (!index) {
