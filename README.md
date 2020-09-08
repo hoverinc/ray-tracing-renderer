@@ -68,8 +68,8 @@ For a more detailed guide on how to use the renderer, please read the [User Guid
 
 ## Contributing
 We want to increase test coverage and maintanability of the repo to ease contributions. If you would like to contribute, take a look at the following and submit Pull Requests:
-* CodeClimate issues to improve maintainability, and
-* Unit tests to improve our coverage
+* [CodeClimate issues](https://codeclimate.com/github/hoverinc/ray-tracing-renderer/issues) to improve maintainability, and
+* Unit tests to [improve our coverage](https://codeclimate.com/github/hoverinc/ray-tracing-renderer/code)
 
 Take a look to [this page](https://github.com/hoverinc/ray-tracing-renderer/wiki/Submitting-Changes) with more details about submitting changes to the project.
 
