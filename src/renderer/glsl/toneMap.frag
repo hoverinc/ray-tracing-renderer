@@ -11,16 +11,15 @@ source: `
 
   uniform mediump sampler2DArray diffuseSpecularTex;
   uniform mediump sampler2DArray diffuseSpecularAlbedoTex;
+
   uniform sampler2D positionTex;
+  uniform sampler2D normalTex;
+  uniform sampler2D matPropsTex;
 
   uniform vec2 lightScale;
   uniform bool edgeAwareUpscale;
 
   uniform sampler2D backgroundMap;
-
-  float getMeshId(sampler2D meshIdTex, vec2 vCoord) {
-    return floor(texture(meshIdTex, vCoord).w);
-  }
 
   struct Light {
     vec4 diffuse;
@@ -28,9 +27,13 @@ source: `
   };
 
   Light getUpscaledLight() {
-    float meshId = getMeshId(positionTex, vCoord);
+    vec2 bufferSize = vec2(textureSize(diffuseSpecularTex, 0));
 
-    vec2 sizef = lightScale * vec2(textureSize(positionTex, 0));
+    float centerDepth = texture(positionTex, vCoord).w;
+
+    float depthWidth = texture(matPropsTex, vCoord).w;
+
+    vec2 sizef = lightScale * bufferSize;
     vec2 texelf = vCoord * sizef - 0.5;
     ivec2 texel = ivec2(texelf);
     vec2 f = fract(texelf);
@@ -52,15 +55,21 @@ source: `
     Light light;
     float sum;
     for (int i = 0; i < 4; i++) {
-      vec2 pCoord = (vec2(texels[i]) + 0.5) / sizef;
-      float isValid = getMeshId(positionTex, pCoord) == meshId ? 1.0 : 0.0;
+      vec2 neighborCoord = (vec2(texels[i]) + 0.5) / sizef;
+
+      float neighborDepth = texture(positionTex, neighborCoord).w;
+
+      float depthDiff = (centerDepth - neighborDepth) / (depthWidth + 0.001);
+
+      float isValid = exp(-1.0 * depthDiff * depthDiff);
+
       float weight = isValid * weights[i];
       light.diffuse += weight * texelFetch(diffuseSpecularTex, ivec3(texels[i], 0), 0);
       light.specular += weight * texelFetch(diffuseSpecularTex, ivec3(texels[i], 1), 0);
       sum += weight;
     }
 
-    if (sum > 0.0) {
+    if (sum > 0.001) {
       light.diffuse /= sum;
       light.specular /= sum;
     } else {
@@ -89,6 +98,9 @@ source: `
     // alpha channel stores the number of samples progressively rendered
     // divide the sum of light by alpha to obtain average contribution of light
     vec3 color = diffuseAlbedo.rgb * light.diffuse.rgb / light.diffuse.a + specularAlbedo.rgb * light.specular.rgb / light.specular.a;
+
+    // debug render without albedo
+    // vec3 color = light.diffuse.rgb / light.diffuse.a + light.specular.rgb / light.specular.a;
 
     // add background map to areas where geometry is not rendered
     vec3 direction = getCameraDirection(camera, vCoord);

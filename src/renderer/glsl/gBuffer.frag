@@ -12,6 +12,7 @@ source: `
   in vec3 vPosition;
   in vec3 vNormal;
   in vec2 vUv;
+  in vec4 vClipPos;
   flat in ivec2 vMaterialMeshIndex;
 
   vec3 faceNormals(vec3 pos) {
@@ -47,11 +48,15 @@ source: `
       normal = getMatNormal(materialIndex, uv, normal, dp1, dp2, duv1, duv2);
     #endif
 
-    out_position = vec4(vPosition, float(meshIndex) + EPS);
-    out_normal = vec4(normal, materialType);
-    out_faceNormal = vec4(faceNormal, 0);
+    float linearDepth = vClipPos.z;
+    float linearWidth = length(fwidth(linearDepth));
+    float normalWidth = length(fwidth(normal));
+
+    out_position = vec4(vPosition, linearDepth);
+    out_normal = vec4(normal, normalWidth);
+    out_faceNormal = vec4(faceNormal, materialType);
     out_albedo = vec4(albedo, 1.0);
-    out_matProps = vec4(roughness, metalness, 0, 0);
+    out_matProps = vec4(roughness, metalness, materialType, linearWidth);
   }
 `
 

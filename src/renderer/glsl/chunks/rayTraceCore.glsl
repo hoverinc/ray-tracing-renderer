@@ -1,8 +1,8 @@
 export default `
-  #define STANDARD 0
-  #define THIN_GLASS 1
-  #define THICK_GLASS 2
-  #define SHADOW_CATCHER 3
+  #define STANDARD 1
+  #define THIN_GLASS 2
+  #define THICK_GLASS 3
+  #define SHADOW_CATCHER 4
 
   const float IOR = 1.5;
   const float INV_IOR = 1.0 / IOR;

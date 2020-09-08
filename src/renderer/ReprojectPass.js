@@ -43,10 +43,12 @@ export function makeReprojectPass(gl, params) {
       light,
       lightScale,
       position,
+      normal,
       matProps,
       previousLight,
       previousLightScale,
       previousPosition,
+      previousNormal,
       reprojectPosition,
     } = params;
 
@@ -60,9 +62,12 @@ export function makeReprojectPass(gl, params) {
 
     renderPass.setTexture('diffuseSpecularTex', light);
     renderPass.setTexture('positionTex', position);
+    renderPass.setTexture('normalTex', normal);
     renderPass.setTexture('matPropsTex', matProps);
+
     renderPass.setTexture('previousDiffuseSpecularTex', previousLight);
     renderPass.setTexture('previousPositionTex', previousPosition);
+    renderPass.setTexture('previousNormalTex', previousNormal);
 
     renderPass.useProgram();
     fullscreenQuad.draw();

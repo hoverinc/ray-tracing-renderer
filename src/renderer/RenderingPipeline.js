@@ -25,7 +25,7 @@ export function makeRenderingPipeline({
   }) {
 
   const maxSmoothSurfaceSamples = 5;
-  const maxRoughSurfaceSamples = 100;
+  const maxRoughSurfaceSamples = 80;
   const maxSamples = Math.max(maxRoughSurfaceSamples, maxSmoothSurfaceSamples);
 
   // how many samples to render with uniform noise before switching to stratified noise
@@ -37,7 +37,7 @@ export function makeRenderingPipeline({
 
   // tile rendering can cause the GPU to stutter, throwing off future benchmarks for the preview frames
   // wait to measure performance until this number of frames have been rendered
-  const previewFramesBeforeBenchmark = 2;
+  const previewFramesBeforeBenchmark = 3;
 
   // used to sample only a portion of the scene to the HDR Buffer to prevent the GPU from locking up from excessive computation
   const tileRender = makeTileRender(gl);
@@ -126,15 +126,15 @@ export function makeRenderingPipeline({
     reprojectBuffer = makeHdrBuffer(reprojectPass.outputLocs);
     reprojectBackBuffer = makeHdrBuffer(reprojectPass.outputLocs);
 
-    const normalBuffer = makeTexture(gl, { width, height, storage: 'halfFloat' });
-    const faceNormalBuffer = makeTexture(gl, { width, height, storage: 'halfFloat' });
-    const albedoBuffer = makeTexture(gl, { width, height, storage: 'byte', channels: 4});
-    const matProps = makeTexture(gl, { width, height, storage: 'byte', channels: 2 });
+    const faceNormalBuffer = makeTexture(gl, { width, height, storage: 'halfFloat', magFilter: gl.LINEAR, minFilter: gl.LINEAR });
+    const albedoBuffer = makeTexture(gl, { width, height, storage: 'byte', channels: 4, magFilter: gl.LINEAR, minFilter: gl.LINEAR});
+    const matProps = makeTexture(gl, { width, height, storage: 'halfFloat', channels: 4, magFilter: gl.LINEAR, minFilter: gl.LINEAR});
 
     const depthTarget = makeDepthTarget(gl, width, height);
 
     function makeGBuffer() {
-      const positionBuffer = makeTexture(gl, { width, height, storage: 'float' });
+      const positionBuffer = makeTexture(gl, { width, height, storage: 'float', magFilter: gl.LINEAR, minFilter: gl.LINEAR });
+      const normalBuffer = makeTexture(gl, { width, height, storage: 'halfFloat', magFilter: gl.LINEAR, minFilter: gl.LINEAR });
 
       return makeFramebuffer(gl, {
         colorAttachments: [
@@ -307,10 +307,12 @@ export function makeRenderingPipeline({
       light: hdrBuffer.color[0],
       lightScale,
       position: gBuffer.color[gBufferPass.outputLocs.position],
+      normal: gBuffer.color[gBufferPass.outputLocs.normal],
       matProps: gBuffer.color[gBufferPass.outputLocs.matProps],
       previousLight,
       previousLightScale,
       previousPosition: gBufferBack.color[gBufferPass.outputLocs.position],
+      previousNormal: gBufferBack.color[gBufferPass.outputLocs.normal],
       reprojectPosition
     });
     reprojectBuffer.unbind();
@@ -329,6 +331,7 @@ export function makeRenderingPipeline({
       light: lightTexture,
       lightScale,
       position: gBuffer.color[gBufferPass.outputLocs.position],
+      normal: gBuffer.color[gBufferPass.outputLocs.normal],
       diffuseSpecularAlbedo: diffuseSpecularAlbedoBuffer.color[0],
     });
 
@@ -347,7 +350,7 @@ export function makeRenderingPipeline({
 
     updateSeed(previewSize, false);
 
-    renderGBuffer(sampleCount);
+    renderGBuffer(0);
 
     rayTracePass.bindTextures();
     newSampleToBuffer(hdrBuffer, previewSize);
@@ -393,13 +396,17 @@ export function makeRenderingPipeline({
       blendAmount *= blendAmount;
 
       if (blendAmount > 0.0) {
+        if (sampleCount === 2) {
+          swapReprojectBuffer();
+        }
+
         reproject({
           size: screenSize,
           blendAmount,
           lightScale: fullscreenScale,
           previousLight: reprojectBackBuffer.color[0],
-          previousLightScale: previewSize.scale,
-          reprojectPosition: sampleCount === 0 // Only blend frames and don't reproject positions after camera stays still
+          previousLightScale: lastToneMappedScale,
+          reprojectPosition: sampleCount === 1 ? true : false
         });
 
         toneMapToScreen(reprojectBuffer.color[0], fullscreenScale);
@@ -441,17 +448,20 @@ export function makeRenderingPipeline({
 
     swapGBuffer();
     swapReprojectBuffer();
+    let useJitter;
 
     if (!areCamerasEqual(camera, lastCamera)) {
       sampleCount = 0;
       clearBuffer(hdrBuffer);
+      useJitter = false;
     } else {
       sampleCount++;
+      useJitter = true;
     }
 
     setCameras(camera, lastCamera);
 
-    updateSeed(screenSize, true);
+    updateSeed(screenSize, useJitter);
 
     renderGBuffer(sampleCount);
 
@@ -460,7 +470,6 @@ export function makeRenderingPipeline({
 
     reproject({
       size: screenSize,
-      // blendAmount: 1.0,
       blendAmount: 1,
       lightScale: fullscreenScale,
       previousLight: reprojectBackBuffer.color[0],
@@ -469,7 +478,6 @@ export function makeRenderingPipeline({
     });
 
     toneMapToScreen(reprojectBuffer.color[0], fullscreenScale);
-    // toneMapToScreen(hdrBuffer.color[0], fullscreenScale);
   }
 
   return {
