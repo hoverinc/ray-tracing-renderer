@@ -67,7 +67,7 @@ Ray Tracing Renderer runs on WebGL2, and does so by implementing a [path tracing
 For a more detailed guide on how to use the renderer, please read the [User Guide](https://github.com/hoverinc/ray-tracing-renderer/wiki/User-Guide) .
 
 ## Contributing
-We want to increase test coverage and maintanability of the repo to ease contributions. If you would like to contribute, take a look at the following and submit Pull Requests:
+We want to increase test coverage and maintanability of the repo. If you would like to contribute, take a look at the following and submit Pull Requests:
 * [CodeClimate issues](https://codeclimate.com/github/hoverinc/ray-tracing-renderer/issues) to improve maintainability, and
 * Unit tests to [improve our coverage](https://codeclimate.com/github/hoverinc/ray-tracing-renderer/code)
 
