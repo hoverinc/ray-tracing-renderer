@@ -1,5 +1,6 @@
 import { unrollLoop } from '../glslUtil';
 import constants from './chunks/constants.glsl';
+import camera from './chunks/camera.glsl';
 import rayTraceCore from './chunks/rayTraceCore.glsl';
 import textureLinear from './chunks/textureLinear.glsl';
 import materialBuffer from './chunks/materialBuffer.glsl';
@@ -16,8 +17,9 @@ import sampleGlass from './chunks/sampleGlassSpecular.glsl';
 export default {
 includes: [
   constants,
-  rayTraceCore,
   textureLinear,
+  camera,
+  rayTraceCore,
   materialBuffer,
   intersect,
   surfaceInteractionDirect,
@@ -29,7 +31,7 @@ includes: [
   sampleGlass,
   sampleShadowCatcher,
 ],
-outputs: ['light'],
+outputs: ['diffuse', 'specular'],
 source: (defines) => `
   void bounce(inout Path path, int i, inout SurfaceInteraction si) {
 
@@ -39,7 +41,8 @@ source: (defines) => `
       // hit a light source (the hdr map)
       // add contribution from light source
       // path.misWeight is the multiple importance sampled weight of this light source
-      path.li += path.misWeight * path.beta * irr;
+      path.diffuse += path.beta * path.diffuseBeta * path.misWeight * irr;
+      path.specular += path.beta * path.specularBeta * path.misWeight * irr;
       path.abort = true;
       return;
     }
@@ -71,15 +74,16 @@ source: (defines) => `
 
   // Path tracing integrator as described in
   // http://www.pbr-book.org/3ed-2018/Light_Transport_I_Surface_Reflection/Path_Tracing.html#
-  vec4 integrator(inout Ray ray) {
+  Path integrator(inout Ray ray) {
     Path path;
     path.ray = ray;
-    path.li = vec3(0);
     path.alpha = 1.0;
     path.beta = vec3(1.0);
-    path.specularBounce = true;
+    path.diffuseBeta = vec3(1.0);
+    path.specularBeta = vec3(1.0);
+    path.specularBounce = false;
+    path.misWeight = 0.0;
     path.abort = false;
-    path.misWeight = 1.0;
 
     SurfaceInteraction si;
 
@@ -93,17 +97,16 @@ source: (defines) => `
 
     // Manually unroll for loop.
     // Some hardware fails to iterate over a GLSL loop, so we provide this workaround
-    // for (int i = 1; i < defines.bounces + 1, i += 1)
-    // equivelant to
+    // for (int i = 2; i < defines.bounces + 1, i += 1)
     ${unrollLoop('i', 2, defines.BOUNCES + 1, 1, `
       if (path.abort) {
-        return vec4(path.li, path.alpha);
+        return path;
       }
       intersectScene(path.ray, si);
       bounce(path, i, si);
     `)}
 
-    return vec4(path.li, path.alpha);
+    return path;
   }
 
   void main() {
@@ -111,32 +114,23 @@ source: (defines) => `
 
     vec2 vCoordAntiAlias = vCoord + jitter;
 
-    vec3 direction = normalize(vec3(vCoordAntiAlias - 0.5, -1.0) * vec3(camera.aspect, 1.0, camera.fov));
-
-    // Thin lens model with depth-of-field
-    // http://www.pbr-book.org/3ed-2018/Camera_Models/Projective_Camera_Models.html#TheThinLensModelandDepthofField
-    // vec2 lensPoint = camera.aperture * sampleCircle(randomSampleVec2());
-    // vec3 focusPoint = -direction * camera.focus / direction.z; // intersect ray direction with focus plane
-
-    // vec3 origin = vec3(lensPoint, 0.0);
-    // direction = normalize(focusPoint - origin);
-
-    // origin = vec3(camera.transform * vec4(origin, 1.0));
-    // direction = mat3(camera.transform) * direction;
-
     vec3 origin = camera.transform[3].xyz;
-    direction = mat3(camera.transform) * direction;
+    vec3 direction = getCameraDirection(camera, vCoordAntiAlias);
 
     Ray cam;
     initRay(cam, origin, direction);
 
-    vec4 liAndAlpha = integrator(cam);
+    Path path = integrator(cam);
 
-    if (!(liAndAlpha.x < INF && liAndAlpha.x > -EPS)) {
-      liAndAlpha = vec4(0, 0, 0, 1);
+    float validLi = dot(path.diffuse, path.specular);
+
+    if (!(validLi < INF && validLi > -EPS)) {
+      path.diffuse = vec3(0);
+      path.specular = vec3(0);
     }
 
-    out_light = liAndAlpha;
+    out_diffuse = vec4(path.diffuse, path.alpha);
+    out_specular = vec4(path.specular, path.alpha);
 
     // Stratified Sampling Sample Count Test
     // ---------------

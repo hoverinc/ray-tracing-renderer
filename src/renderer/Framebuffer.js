@@ -1,4 +1,4 @@
-export function makeFramebuffer(gl, { color, depth }) {
+export function makeFramebuffer(gl, { colorAttachments, depthAttachment }) {
 
   const framebuffer = gl.createFramebuffer();
 
@@ -13,34 +13,52 @@ export function makeFramebuffer(gl, { color, depth }) {
   function init() {
     bind();
 
+    const locationToTex = {};
+
     const drawBuffers = [];
 
-    for (let location in color) {
-      location = Number(location);
-
-      if (location === undefined) {
-        console.error('invalid location');
-      }
-
-      const tex = color[location];
-      gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0 + location, tex.target, tex.texture, 0);
-      drawBuffers.push(gl.COLOR_ATTACHMENT0 + location);
+    if (!Array.isArray(colorAttachments)) {
+      colorAttachments = [colorAttachments];
     }
+
+    for (let attachment of colorAttachments) {
+      const glLocation = attachTexture(gl, attachment);
+      drawBuffers.push(glLocation);
+      locationToTex[attachment.location || 0] = attachment.texture;
+    }
+
+    drawBuffers.sort(); // glDrawBuffers requires the color attachments to be specified in order
 
     gl.drawBuffers(drawBuffers);
 
-    if (depth) {
-      gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, depth.target, depth.texture);
+    if (depthAttachment) {
+      gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, depthAttachment.target, depthAttachment.texture);
     }
 
     unbind();
+
+    return locationToTex;
   }
 
-  init();
+  const locationToTex = init();
 
   return {
-    color,
+    color: locationToTex,
     bind,
     unbind
   };
+}
+
+function attachTexture(gl, attachment){
+  const { texture, location = 0, layer} = attachment;
+
+  const glLocation = gl.COLOR_ATTACHMENT0 + location;
+
+  if (layer !== undefined) {
+    gl.framebufferTextureLayer(gl.FRAMEBUFFER, glLocation, texture.texture, 0, layer);
+  } else {
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, glLocation, texture.target, texture.texture, 0);
+  }
+
+  return glLocation;
 }

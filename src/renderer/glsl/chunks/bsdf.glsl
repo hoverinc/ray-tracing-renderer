@@ -59,9 +59,18 @@ float trowbridgeReitzLambda(float cosTheta, float alpha2) {
   return 0.5 * (-1.0 + sqrt(1.0 + alpha2 * tan2Theta));
 }
 
+struct MaterialBrdf {
+  float diffuse;
+  float specular;
+  float diffusePdf;
+  float specularPdf;
+};
+
 // An implementation of Disney's principled BRDF
 // https://disney-animation.s3.amazonaws.com/library/s2012_pbs_disney_brdf_notes_v2.pdf
-vec3 materialBrdf(SurfaceInteraction si, vec3 viewDir, vec3 lightDir, float cosThetaL, float diffuseWeight, out float pdf) {
+MaterialBrdf getMaterialBrdf(SurfaceInteraction si, vec3 viewDir, vec3 lightDir, float cosThetaL, float diffuseWeight) {
+  MaterialBrdf brdf;
+
   vec3 halfVector = normalize(viewDir + lightDir);
 
   cosThetaL = abs(cosThetaL);
@@ -79,16 +88,15 @@ vec3 materialBrdf(SurfaceInteraction si, vec3 viewDir, vec3 lightDir, float cosT
 
   float G = 1.0 / (1.0 + trowbridgeReitzLambda(cosThetaV, alpha2Remapped) + trowbridgeReitzLambda(cosThetaL, alpha2Remapped));
 
-  float specular = F * D * G / (4.0 * cosThetaV * cosThetaL);
-  float specularPdf = D * cosThetaH / (4.0 * cosThetaD);
+  brdf.specular = F * D * G / (4.0 * cosThetaV * cosThetaL);
+  brdf.specularPdf = D * cosThetaH / (4.0 * cosThetaD);
 
   float f = -0.5 + 2.0 * cosThetaD * cosThetaD * si.roughness;
-  float diffuse = diffuseWeight * INVPI * (1.0 + f * fresnelSchlickWeight(cosThetaL)) * (1.0 + f * fresnelSchlickWeight(cosThetaV));
-  float diffusePdf = cosThetaL * INVPI;
+  brdf.diffuse = diffuseWeight * INVPI * (1.0 + f * fresnelSchlickWeight(cosThetaL)) * (1.0 + f * fresnelSchlickWeight(cosThetaV));
+  brdf.diffusePdf = cosThetaL * INVPI;
 
-  pdf = mix(0.5 * (specularPdf + diffusePdf), specularPdf, si.metalness);
+  brdf.diffuse *= (1.0 - si.metalness);
 
-  return mix(si.color * diffuse + specular, si.color * specular, si.metalness);
+  return brdf;
 }
-
 `;

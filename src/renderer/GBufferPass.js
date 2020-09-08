@@ -36,7 +36,7 @@ export function makeGBufferPass(gl, { materialBuffer, mergedMesh }) {
     currentCamera = camera;
   }
 
-  function calcCamera() {
+  function calcProjView() {
     projView.copy(currentCamera.projectionMatrix);
 
     projView.elements[8] += 2 * jitterX;
@@ -49,7 +49,7 @@ export function makeGBufferPass(gl, { materialBuffer, mergedMesh }) {
   let projView = new Matrix4();
 
   function draw() {
-    calcCamera();
+    calcProjView();
     gl.bindVertexArray(vao);
     renderPass.useProgram();
     gl.enable(gl.DEPTH_TEST);

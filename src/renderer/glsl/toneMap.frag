@@ -1,54 +1,37 @@
+import camera from './chunks/camera.glsl';
+import constants from './chunks/constants.glsl';
 import textureLinear from './chunks/textureLinear.glsl';
+import toneMapOperators from './chunks/toneMapOperators.glsl';
 
 export default {
-includes: [textureLinear],
+includes: [constants, camera, textureLinear, toneMapOperators],
 outputs: ['color'],
 source: `
   in vec2 vCoord;
 
-  uniform sampler2D lightTex;
+  uniform mediump sampler2DArray diffuseSpecularTex;
+  uniform mediump sampler2DArray diffuseSpecularAlbedoTex;
   uniform sampler2D positionTex;
 
   uniform vec2 lightScale;
+  uniform bool edgeAwareUpscale;
 
-  // Tonemapping functions from THREE.js
-
-  vec3 linear(vec3 color) {
-    return color;
-  }
-  // https://www.cs.utah.edu/~reinhard/cdrom/
-  vec3 reinhard(vec3 color) {
-    return clamp(color / (vec3(1.0) + color), vec3(0.0), vec3(1.0));
-  }
-  // http://filmicworlds.com/blog/filmic-tonemapping-operators/
-  #define uncharted2Helper(x) max(((x * (0.15 * x + 0.10 * 0.50) + 0.20 * 0.02) / (x * (0.15 * x + 0.50) + 0.20 * 0.30)) - 0.02 / 0.30, vec3(0.0))
-  const vec3 uncharted2WhitePoint = 1.0 / uncharted2Helper(vec3(WHITE_POINT));
-  vec3 uncharted2( vec3 color ) {
-    // John Hable's filmic operator from Uncharted 2 video game
-    return clamp(uncharted2Helper(color) * uncharted2WhitePoint, vec3(0.0), vec3(1.0));
-  }
-  // http://filmicworlds.com/blog/filmic-tonemapping-operators/
-  vec3 cineon( vec3 color ) {
-    // optimized filmic operator by Jim Hejl and Richard Burgess-Dawson
-    color = max(vec3( 0.0 ), color - 0.004);
-    return pow((color * (6.2 * color + 0.5)) / (color * (6.2 * color + 1.7) + 0.06), vec3(2.2));
-  }
-  // https://knarkowicz.wordpress.com/2016/01/06/aces-filmic-tone-mapping-curve/
-  vec3 acesFilmic( vec3 color ) {
-    return clamp((color * (2.51 * color + 0.03)) / (color * (2.43 * color + 0.59) + 0.14), vec3(0.0), vec3(1.0));
-  }
-
-  #ifdef EDGE_PRESERVING_UPSCALE
+  uniform sampler2D backgroundMap;
 
   float getMeshId(sampler2D meshIdTex, vec2 vCoord) {
     return floor(texture(meshIdTex, vCoord).w);
   }
 
-  vec4 getUpscaledLight(vec2 coord) {
-    float meshId = getMeshId(positionTex, coord);
+  struct Light {
+    vec4 diffuse;
+    vec4 specular;
+  };
+
+  Light getUpscaledLight() {
+    float meshId = getMeshId(positionTex, vCoord);
 
     vec2 sizef = lightScale * vec2(textureSize(positionTex, 0));
-    vec2 texelf = coord * sizef - 0.5;
+    vec2 texelf = vCoord * sizef - 0.5;
     ivec2 texel = ivec2(texelf);
     vec2 f = fract(texelf);
 
@@ -66,47 +49,60 @@ source: `
       f.x * f.y
     );
 
-    vec4 upscaledLight;
+    Light light;
     float sum;
     for (int i = 0; i < 4; i++) {
       vec2 pCoord = (vec2(texels[i]) + 0.5) / sizef;
       float isValid = getMeshId(positionTex, pCoord) == meshId ? 1.0 : 0.0;
       float weight = isValid * weights[i];
-      upscaledLight += weight * texelFetch(lightTex, texels[i], 0);
+      light.diffuse += weight * texelFetch(diffuseSpecularTex, ivec3(texels[i], 0), 0);
+      light.specular += weight * texelFetch(diffuseSpecularTex, ivec3(texels[i], 1), 0);
       sum += weight;
     }
 
     if (sum > 0.0) {
-      upscaledLight /= sum;
+      light.diffuse /= sum;
+      light.specular /= sum;
     } else {
-      upscaledLight = texture(lightTex, lightScale * coord);
+      light.diffuse = texture(diffuseSpecularTex, vec3(lightScale * vCoord, 0));
+      light.specular = texture(diffuseSpecularTex, vec3(lightScale * vCoord, 1));
     }
 
-    return upscaledLight;
+    return light;
   }
-  #endif
+
+  uniform Camera camera;
 
   void main() {
-    #ifdef EDGE_PRESERVING_UPSCALE
-      vec4 upscaledLight = getUpscaledLight(vCoord);
-    #else
-      vec4 upscaledLight = texture(lightTex, lightScale * vCoord);
-    #endif
+    Light light;
+
+    if (edgeAwareUpscale) {
+      light = getUpscaledLight();
+    } else {
+      light.diffuse = texture(diffuseSpecularTex, vec3(lightScale * vCoord, 0));
+      light.specular = texture(diffuseSpecularTex, vec3(lightScale * vCoord, 1));
+    }
+
+    vec4 diffuseAlbedo = texture(diffuseSpecularAlbedoTex, vec3(vCoord, 0));
+    vec4 specularAlbedo = texture(diffuseSpecularAlbedoTex, vec3(vCoord, 1));
 
     // alpha channel stores the number of samples progressively rendered
     // divide the sum of light by alpha to obtain average contribution of light
+    vec3 color = diffuseAlbedo.rgb * light.diffuse.rgb / light.diffuse.a + specularAlbedo.rgb * light.specular.rgb / light.specular.a;
 
-    // in addition, alpha contains a scale factor for the shadow catcher material
-    // dividing by alpha normalizes the brightness of the shadow catcher to match the background env map.
-    vec3 light = upscaledLight.rgb / upscaledLight.a;
+    // add background map to areas where geometry is not rendered
+    vec3 direction = getCameraDirection(camera, vCoord);
+    vec2 backgroundUv = cartesianToEquirect(direction);
+    vec3 background = texture(backgroundMap, backgroundUv).rgb;
+    color += (1.0 - diffuseAlbedo.a) * background;
 
-    light *= EXPOSURE;
+    color *= EXPOSURE;
 
-    light = TONE_MAPPING(light);
+    color = TONE_MAPPING(color);
 
-    light = pow(light, vec3(1.0 / 2.2)); // gamma correction
+    color = pow(color, vec3(1.0 / 2.2)); // gamma correction
 
-    out_color = vec4(light, 1.0);
+    out_color = vec4(color, 1.0);
   }
 `
 }

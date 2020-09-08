@@ -1,5 +1,8 @@
 import { clamp } from './util';
 
+const TEXTURE_MAX_ANISOTROPY_EXT = 0x84FE;
+const MAX_TEXTURE_MAX_ANISOTROPY_EXT = 0x84FF;
+
 export function makeTexture(gl, params) {
   let {
     width = null,
@@ -30,12 +33,8 @@ export function makeTexture(gl, params) {
     magFilter = gl.NEAREST,
   } = params;
 
-  width = width || data.width || 0;
-  height = height || data.height || 0;
-
   const texture = gl.createTexture();
 
-  let target;
   let dataArray;
 
   // if data is a JS array but not a TypedArray, assume data is an array of images and create a GL Array Texture
@@ -44,15 +43,30 @@ export function makeTexture(gl, params) {
     data = dataArray[0];
   }
 
-  target = dataArray || length > 1 ? gl.TEXTURE_2D_ARRAY : gl.TEXTURE_2D;
+  const target = dataArray || length > 1 ? gl.TEXTURE_2D_ARRAY : gl.TEXTURE_2D;
 
   gl.activeTexture(gl.TEXTURE0);
   gl.bindTexture(target, texture);
+
+  const useMipmaps =
+    minFilter === gl.NEAREST_MIPMAP_NEAREST ||
+    minFilter === gl.NEAREST_MIPMAP_LINEAR ||
+    minFilter === gl.LINEAR_MIPMAP_NEAREST ||
+    minFilter === gl.LINEAR_MIPMAP_LINEAR;
 
   gl.texParameteri(target, gl.TEXTURE_WRAP_S, wrapS);
   gl.texParameteri(target, gl.TEXTURE_WRAP_T, wrapT);
   gl.texParameteri(target, gl.TEXTURE_MIN_FILTER, minFilter);
   gl.texParameteri(target, gl.TEXTURE_MAG_FILTER, magFilter);
+
+  // disable anisotropic filtering until there's more testing
+  // if (minFilter === gl.LINEAR_MIPMAP_LINEAR) {
+  //   const anisotropy = gl.getParameter(MAX_TEXTURE_MAX_ANISOTROPY_EXT);
+  //   gl.texParameteri(target, TEXTURE_MAX_ANISOTROPY_EXT, anisotropy);
+  // }
+
+  width = width || data.width || 0;
+  height = height || data.height || 0;
 
   if (!channels) {
     if (data && data.length) {
@@ -66,8 +80,12 @@ export function makeTexture(gl, params) {
 
   const { type, format, internalFormat } = getTextureFormat(gl, channels, storage, data, gammaCorrection);
 
+  const levels = useMipmaps ?
+    Math.floor(Math.log2(Math.max(width, height))) :
+    1;
+
   if (dataArray) {
-    gl.texStorage3D(target, 1, internalFormat, width, height, dataArray.length);
+    gl.texStorage3D(target, levels, internalFormat, width, height, dataArray.length);
     for (let i = 0; i < dataArray.length; i++) {
       // if layer is an HTMLImageElement, use the .width and .height properties of each layer
       // otherwise use the max size of the array texture
@@ -80,13 +98,17 @@ export function makeTexture(gl, params) {
     }
   } else if (length > 1) {
     // create empty array texture
-    gl.texStorage3D(target, 1, internalFormat, width, height, length);
+    gl.texStorage3D(target, levels, internalFormat, width, height, length);
   } else {
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, flipY);
-    gl.texStorage2D(target, 1, internalFormat, width, height);
+    gl.texStorage2D(target, levels, internalFormat, width, height);
     if (data) {
       gl.texSubImage2D(target, 0, 0, 0, width, height, format, type, data);
     }
+  }
+
+  if (useMipmaps) {
+    gl.generateMipmap(target);
   }
 
   // return state to default
@@ -112,17 +134,7 @@ export function makeDepthTarget(gl, width, height) {
   };
 }
 
-function getFormat(gl, channels) {
-  const map = {
-    1: gl.RED,
-    2: gl.RG,
-    3: gl.RGB,
-    4: gl.RGBA
-  };
-  return map[channels];
-}
-
-function getTextureFormat(gl, channels, storage, data, gammaCorrection) {
+function getTextureFormat(gl, channels, storageStr, data, gammaCorrection) {
   let type;
   let internalFormat;
 
@@ -134,7 +146,7 @@ function getTextureFormat(gl, channels, storage, data, gammaCorrection) {
 
   const isFloatArray = data instanceof Float32Array;
 
-  if (storage === 'byte' || (!storage && isByteArray)) {
+  if (storageStr === 'byte' || (!storageStr && isByteArray)) {
     internalFormat = {
       1: gl.R8,
       2: gl.RG8,
@@ -143,7 +155,7 @@ function getTextureFormat(gl, channels, storage, data, gammaCorrection) {
     }[channels];
 
     type = gl.UNSIGNED_BYTE;
-  } else if (storage === 'float' || (!storage && isFloatArray)) {
+  } else if (storageStr === 'float' || (!storageStr && isFloatArray)) {
     internalFormat = {
       1: gl.R32F,
       2: gl.RG32F,
@@ -152,7 +164,7 @@ function getTextureFormat(gl, channels, storage, data, gammaCorrection) {
     }[channels];
 
     type = gl.FLOAT;
-  } else if (storage === 'halfFloat') {
+  } else if (storageStr === 'halfFloat') {
     internalFormat = {
       1: gl.R16F,
       2: gl.RG16F,
@@ -161,7 +173,7 @@ function getTextureFormat(gl, channels, storage, data, gammaCorrection) {
     }[channels];
 
     type = gl.FLOAT;
-  } else if (storage === 'snorm') {
+  } else if (storageStr === 'snorm') {
     internalFormat = {
       1: gl.R8_SNORM,
       2: gl.RG8_SNORM,

@@ -108,7 +108,7 @@ function createGroundMesh() {
   mat.color.set(0xffffff);
   mat.roughness = 0.5;
   mat.metalness = 0.0;
-  mat.shadowCatcher = true;
+  // mat.shadowCatcher = true;
   const mesh = new THREE.Mesh(geo, mat);
   mesh.rotateX(Math.PI / 2);
 

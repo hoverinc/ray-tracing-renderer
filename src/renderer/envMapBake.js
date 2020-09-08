@@ -1,6 +1,3 @@
-// Convert image data from the RGBE format to a 32-bit floating point format
-// See https://www.cg.tuwien.ac.at/research/theses/matkovic/node84.html for a description of the RGBE format
-
 import { rgbeToFloat } from './rgbeToFloat';
 import { clamp } from './util';
 import * as THREE from 'three';
@@ -23,7 +20,7 @@ export function generateBackgroundMapFromSceneBackground(background) {
         height: background.image.height,
         data: background.image.data,
       };
-      backgroundImage.data = rgbeToFloat(backgroundImage.data)
+      backgroundImage.data = rgbeToFloat(backgroundImage.data);
   }
   return backgroundImage;
 }

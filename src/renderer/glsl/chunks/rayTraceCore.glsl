@@ -29,18 +29,10 @@ export default `
     vec3 position;
     vec3 normal; // smoothed normal from the three triangle vertices
     vec3 faceNormal; // normal of the triangle
-    vec3 color;
+    vec3 albedo;
     float roughness;
     float metalness;
     int materialType;
-  };
-
-  struct Camera {
-    mat4 transform;
-    float aspect;
-    float fov;
-    float focus;
-    float aperture;
   };
 
   void initRay(inout Ray ray, vec3 origin, vec3 direction) {
@@ -68,9 +60,12 @@ export default `
 
   struct Path {
     Ray ray;
-    vec3 li;
+    vec3 diffuse;
+    vec3 specular;
     float alpha;
     vec3 beta;
+    vec3 diffuseBeta;
+    vec3 specularBeta;
     bool specularBounce;
     bool abort;
     float misWeight;

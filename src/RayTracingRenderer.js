@@ -9,6 +9,7 @@ const glRequiredExtensions = [
 
 const glOptionalExtensions = [
   'OES_texture_float_linear', // enables gl.LINEAR texture filtering for float textures,
+  'EXT_texture_filter_anisotropic',
 ];
 
 export function RayTracingRenderer(params = {}) {
@@ -145,7 +146,7 @@ export function RayTracingRenderer(params = {}) {
       currentTime = performance.now(); // less accurate than requestAnimationFrame's time parameter
     }
 
-    pipeline.time(isValidTime * currentTime);
+    pipeline.sync(isValidTime * currentTime);
 
     isValidTime = 1;
     currentTime = NaN;

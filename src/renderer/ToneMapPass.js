@@ -12,11 +12,12 @@ const toneMapFunctions = {
 
 export function makeToneMapPass(gl, params) {
   const {
+    envMapTextures,
     fullscreenQuad,
     toneMappingParams
   } = params;
 
-  const renderPassConfig = {
+  const renderPass = makeRenderPass(gl, {
     gl,
     defines: {
       TONE_MAPPING: toneMapFunctions[toneMappingParams.toneMapping] || 'linear',
@@ -25,35 +26,36 @@ export function makeToneMapPass(gl, params) {
     },
     vertex: fullscreenQuad.vertexShader,
     fragment,
-  };
+  });
 
-  renderPassConfig.defines.EDGE_PRESERVING_UPSCALE = true;
-  const renderPassUpscale = makeRenderPass(gl, renderPassConfig);
-
-  renderPassConfig.defines.EDGE_PRESERVING_UPSCALE = false;
-  const renderPassNative = makeRenderPass(gl, renderPassConfig);
+  renderPass.setTexture('backgroundMap', envMapTextures.backgroundMap);
 
   function draw(params) {
     const {
       light,
       lightScale,
-      position
+      diffuseSpecularAlbedo,
+      position,
     } = params;
 
-    const renderPass =
-      lightScale.x !== 1 && lightScale.y !== 1 ?
-      renderPassUpscale :
-      renderPassNative;
-
+    renderPass.setUniform('edgeAwareUpscale', lightScale.x < 1 || lightScale.y < 1);
     renderPass.setUniform('lightScale', lightScale.x, lightScale.y);
-    renderPass.setTexture('lightTex', light);
+    renderPass.setTexture('diffuseSpecularTex', light);
     renderPass.setTexture('positionTex', position);
+    renderPass.setTexture('diffuseSpecularAlbedoTex', diffuseSpecularAlbedo);
 
     renderPass.useProgram();
     fullscreenQuad.draw();
   }
 
+  function setCamera(camera) {
+    renderPass.setUniform('camera.transform', camera.matrixWorld.elements);
+    renderPass.setUniform('camera.aspect', camera.aspect);
+    renderPass.setUniform('camera.focalLength', 0.5 / Math.tan(0.5 * Math.PI * camera.fov / 180));
+  }
+
   return {
-    draw
+    draw,
+    setCamera
   };
 }

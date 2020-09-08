@@ -34,7 +34,7 @@ void surfaceInteractionFromBVH(inout SurfaceInteraction si, Triangle tri, vec3 b
   #endif
 
   si.materialType = int(getMatType(materialIndex));
-  si.color = getMatColor(materialIndex, uv);
+  si.albedo = getMatAlbedo(materialIndex, uv);
   si.roughness = getMatRoughness(materialIndex, uv);
   si.metalness = getMatMetalness(materialIndex, uv);
 

@@ -7,12 +7,6 @@ uniform sampler2D envMap;
 uniform sampler2D envMapDistribution;
 uniform sampler2D backgroundMap;
 
-vec2 cartesianToEquirect(vec3 pointOnSphere) {
-  float phi = mod(atan(-pointOnSphere.z, -pointOnSphere.x), TWOPI);
-  float theta = acos(pointOnSphere.y);
-  return vec2(phi * 0.5 * INVPI, theta * INVPI);
-}
-
 float getEnvmapV(float u, out int vOffset, out float pdf) {
   ivec2 size = textureSize(envMap, 0);
 

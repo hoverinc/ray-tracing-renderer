@@ -3,7 +3,7 @@ import materialBuffer from './chunks/materialBuffer.glsl';
 
 export default {
 
-outputs: ['position', 'normal', 'faceNormal', 'color', 'matProps'],
+outputs: ['position', 'normal', 'faceNormal', 'albedo', 'matProps'],
 includes: [
   constants,
   materialBuffer,
@@ -26,7 +26,8 @@ source: `
 
     vec2 uv = fract(vUv);
 
-    vec3 color = getMatColor(materialIndex, uv);
+    vec3 albedo = getMatAlbedo(materialIndex, uv);
+
     float roughness = getMatRoughness(materialIndex, uv);
     float metalness = getMatMetalness(materialIndex, uv);
     float materialType = getMatType(materialIndex);
@@ -49,7 +50,7 @@ source: `
     out_position = vec4(vPosition, float(meshIndex) + EPS);
     out_normal = vec4(normal, materialType);
     out_faceNormal = vec4(faceNormal, 0);
-    out_color = vec4(color, 0);
+    out_albedo = vec4(albedo, 1.0);
     out_matProps = vec4(roughness, metalness, 0, 0);
   }
 `

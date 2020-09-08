@@ -226,7 +226,8 @@ function init() {
   {
     const geo = new THREE.PlaneBufferGeometry(1000, 1000);
     const mat = new THREE.MeshStandardMaterial();
-    mat.shadowCatcher = true;
+    // mat.shadowCatcher = true;
+    mat.color.set(0x555555);
     mat.roughness = 0.5;
     mat.metalness = 0.0;
     const mesh = new THREE.Mesh(geo, mat);

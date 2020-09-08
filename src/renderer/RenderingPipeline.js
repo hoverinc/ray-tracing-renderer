@@ -1,4 +1,5 @@
 import { decomposeScene } from './decomposeScene';
+import { makeEnvMap } from './envMap';
 import { makeFramebuffer } from './Framebuffer';
 import { makeFullscreenQuad } from './FullscreenQuad';
 import { makeGBufferPass } from './GBufferPass';
@@ -7,6 +8,7 @@ import { mergeMeshesToGeometry } from './mergeMeshesToGeometry';
 import { makeRayTracePass } from './RayTracePass';
 import { makeRenderSize } from './RenderSize';
 import { makeReprojectPass } from './ReprojectPass';
+import { makeAlbedoSeparationPass } from './AlbedoSeparationPass';
 import { makeToneMapPass } from './ToneMapPass';
 import { clamp, numberArraysEqual } from './util';
 import { makeTileRender } from './TileRender';
@@ -22,10 +24,12 @@ export function makeRenderingPipeline({
     bounces, // number of global illumination bounces
   }) {
 
-  const maxReprojectedSamples = 20;
+  const maxSmoothSurfaceSamples = 5;
+  const maxRoughSurfaceSamples = 100;
+  const maxSamples = Math.max(maxRoughSurfaceSamples, maxSmoothSurfaceSamples);
 
   // how many samples to render with uniform noise before switching to stratified noise
-  const numUniformSamples = 4;
+  const numUniformSamples = 5;
 
   // how many partitions of stratified noise should be created
   // higher number results in faster convergence over time, but with lower quality initial samples
@@ -46,15 +50,19 @@ export function makeRenderingPipeline({
 
   const materialBuffer = makeMaterialBuffer(gl, mergedMesh.materials);
 
+  const envMapTextures = makeEnvMap(gl, { decomposedScene, optionalExtensions });
+
   const fullscreenQuad = makeFullscreenQuad(gl);
 
-  const rayTracePass = makeRayTracePass(gl, { bounces, decomposedScene, fullscreenQuad, materialBuffer, mergedMesh, optionalExtensions, scene });
+  const rayTracePass = makeRayTracePass(gl, { bounces, envMapTextures, fullscreenQuad, materialBuffer, mergedMesh, optionalExtensions });
 
-  const reprojectPass = makeReprojectPass(gl, { fullscreenQuad, maxReprojectedSamples });
+  const reprojectPass = makeReprojectPass(gl, { fullscreenQuad, maxRoughSurfaceSamples, maxSmoothSurfaceSamples });
 
-  const toneMapPass = makeToneMapPass(gl, { fullscreenQuad, toneMappingParams });
+  const toneMapPass = makeToneMapPass(gl, { envMapTextures, fullscreenQuad, toneMappingParams });
 
   const gBufferPass = makeGBufferPass(gl, { materialBuffer, mergedMesh });
+
+  const albedoSeparationPass = makeAlbedoSeparationPass(gl, { fullscreenQuad });
 
   let ready = false;
 
@@ -80,12 +88,13 @@ export function makeRenderingPipeline({
   lastCamera.position.set(1, 1, 1);
   lastCamera.updateMatrixWorld();
 
-  let screenWidth = 0;
-  let screenHeight = 0;
+  const screenSize = new Vector2();
 
   const fullscreenScale = new Vector2(1, 1);
 
   let lastToneMappedScale = fullscreenScale;
+
+  // TODO refactor: Move frame buffer creation to respective shader pass
 
   let hdrBuffer;
   let hdrBackBuffer;
@@ -95,42 +104,62 @@ export function makeRenderingPipeline({
   let gBuffer;
   let gBufferBack;
 
+  let diffuseSpecularAlbedoBuffer;
+
   let lastToneMappedTexture;
 
   function initFrameBuffers(width, height) {
-    const makeHdrBuffer = () => makeFramebuffer(gl, {
-      color: { 0: makeTexture(gl, { width, height, storage: 'float', magFilter: gl.LINEAR, minFilter: gl.LINEAR }) }
-    });
 
-    const makeReprojectBuffer = () => makeFramebuffer(gl, {
-        color: { 0: makeTexture(gl, { width, height, storage: 'float', magFilter: gl.LINEAR, minFilter: gl.LINEAR }) }
+    function makeHdrBuffer(outputLocs) {
+      const texture = makeTexture(gl, { width, height, length: 2, storage: 'halfFloat', magFilter: gl.LINEAR, minFilter: gl.LINEAR });
+      return makeFramebuffer(gl, {
+        colorAttachments: [
+          { location: outputLocs.diffuse, layer: 0, texture },
+          { location: outputLocs.specular, layer: 1, texture },
+        ]
       });
+    }
 
-    hdrBuffer = makeHdrBuffer();
-    hdrBackBuffer = makeHdrBuffer();
+    hdrBuffer = makeHdrBuffer(rayTracePass.outputLocs);
+    hdrBackBuffer = makeHdrBuffer(rayTracePass.outputLocs);
 
-    reprojectBuffer = makeReprojectBuffer();
-    reprojectBackBuffer = makeReprojectBuffer();
+    reprojectBuffer = makeHdrBuffer(reprojectPass.outputLocs);
+    reprojectBackBuffer = makeHdrBuffer(reprojectPass.outputLocs);
 
     const normalBuffer = makeTexture(gl, { width, height, storage: 'halfFloat' });
     const faceNormalBuffer = makeTexture(gl, { width, height, storage: 'halfFloat' });
-    const colorBuffer = makeTexture(gl, { width, height, storage: 'byte', channels: 3 });
+    const albedoBuffer = makeTexture(gl, { width, height, storage: 'byte', channels: 4});
     const matProps = makeTexture(gl, { width, height, storage: 'byte', channels: 2 });
+
     const depthTarget = makeDepthTarget(gl, width, height);
 
-    const makeGBuffer = () => makeFramebuffer(gl, {
-      color: {
-        [gBufferPass.outputLocs.position]: makeTexture(gl, { width, height, storage: 'float' }),
-        [gBufferPass.outputLocs.normal]: normalBuffer,
-        [gBufferPass.outputLocs.faceNormal]: faceNormalBuffer,
-        [gBufferPass.outputLocs.color]: colorBuffer,
-        [gBufferPass.outputLocs.matProps]: matProps,
-      },
-      depth: depthTarget
-    });
+    function makeGBuffer() {
+      const positionBuffer = makeTexture(gl, { width, height, storage: 'float' });
+
+      return makeFramebuffer(gl, {
+        colorAttachments: [
+          { location: gBufferPass.outputLocs.position, texture: positionBuffer},
+          { location: gBufferPass.outputLocs.normal, texture: normalBuffer },
+          { location: gBufferPass.outputLocs.faceNormal, texture: faceNormalBuffer },
+          { location: gBufferPass.outputLocs.albedo, texture: albedoBuffer },
+          { location: gBufferPass.outputLocs.matProps, texture: matProps },
+        ],
+        depthAttachment: depthTarget
+      });
+    }
 
     gBuffer = makeGBuffer();
     gBufferBack = makeGBuffer();
+
+    // halfFloat enables more precise antialiasing over byte
+    const diffuseSpecularAlbedo = makeTexture(gl, { width, height, length: 2, storage: 'halfFloat' });
+
+    diffuseSpecularAlbedoBuffer = makeFramebuffer(gl, {
+      colorAttachments: [
+        { location: albedoSeparationPass.outputLocs.diffuseAlbedo, texture: diffuseSpecularAlbedo, layer: 0 },
+        { location: albedoSeparationPass.outputLocs.specularAlbedo, texture: diffuseSpecularAlbedo, layer: 1 },
+      ]
+    });
 
     lastToneMappedTexture = hdrBuffer.color[rayTracePass.outputLocs.light];
   }
@@ -162,8 +191,8 @@ export function makeRenderingPipeline({
   }
 
   function setSize(w, h) {
-    screenWidth = w;
-    screenHeight = h;
+    screenSize.width = w;
+    screenSize.height = h;
 
     tileRender.setSize(w, h);
     previewSize.setSize(w, h);
@@ -172,7 +201,7 @@ export function makeRenderingPipeline({
   }
 
   // called every frame to update clock
-  function time(newTime) {
+  function sync(newTime) {
     elapsedFrameTime = newTime - frameTime;
     frameTime = newTime;
   }
@@ -183,11 +212,19 @@ export function makeRenderingPipeline({
       cam1.fov === cam2.fov;
   }
 
-  function updateSeed(width, height, useJitter = true) {
-    rayTracePass.setSize(width, height);
+  function setCameras(camera, lastCamera) {
+    rayTracePass.setCamera(camera);
+    gBufferPass.setCamera(camera);
+    toneMapPass.setCamera(camera);
+    reprojectPass.setPreviousCamera(lastCamera);
+    lastCamera.copy(camera);
+  }
 
-    const jitterX = useJitter ? (Math.random() - 0.5) / width : 0;
-    const jitterY = useJitter ? (Math.random() - 0.5) / height : 0;
+  function updateSeed(size, useJitter = true) {
+    rayTracePass.setSize(size.width, size.height);
+
+    const jitterX = useJitter ? (Math.random() - 0.5) / size.width : 0;
+    const jitterY = useJitter ? (Math.random() - 0.5) / size.height : 0;
     gBufferPass.setJitter(jitterX, jitterY);
     rayTracePass.setJitter(jitterX, jitterY);
     reprojectPass.setJitter(jitterX, jitterY);
@@ -207,25 +244,83 @@ export function makeRenderingPipeline({
     buffer.unbind();
   }
 
-  function addSampleToBuffer(buffer, width, height) {
+  function addSampleToBuffer(buffer, size) {
     buffer.bind();
 
     gl.blendEquation(gl.FUNC_ADD);
     gl.blendFunc(gl.ONE, gl.ONE);
     gl.enable(gl.BLEND);
 
-    gl.viewport(0, 0, width, height);
+    gl.viewport(0, 0, size.width, size.height);
     rayTracePass.draw();
 
     gl.disable(gl.BLEND);
     buffer.unbind();
   }
 
-  function newSampleToBuffer(buffer, width, height) {
+  function newSampleToBuffer(buffer, size) {
     buffer.bind();
-    gl.viewport(0, 0, width, height);
+    gl.viewport(0, 0, size.width, size.height);
     rayTracePass.draw();
     buffer.unbind();
+  }
+
+  function renderGBuffer(sampleCount) {
+    gBuffer.bind();
+
+    gl.clear(gl.DEPTH_BUFFER_BIT | gl.COLOR_BUFFER_BIT);
+
+    gl.viewport(0, 0, screenSize.width, screenSize.height);
+    gBufferPass.draw();
+    gBuffer.unbind();
+
+    // separate albedo into diffuse and specular component
+    // antialias results by blending
+    diffuseSpecularAlbedoBuffer.bind();
+    const cumulativeAvg = 1.0 / (sampleCount + 1);
+    gl.blendFunc(gl.CONSTANT_COLOR, gl.ONE_MINUS_CONSTANT_COLOR);
+    gl.blendColor(cumulativeAvg, cumulativeAvg, cumulativeAvg, cumulativeAvg);
+    gl.enable(gl.BLEND);
+
+    albedoSeparationPass.draw({
+      albedo: gBuffer.color[gBufferPass.outputLocs.albedo],
+      matProps: gBuffer.color[gBufferPass.outputLocs.matProps]
+    });
+
+    gl.disable(gl.BLEND);
+    diffuseSpecularAlbedoBuffer.unbind();
+
+    rayTracePass.setGBuffers({
+      position: gBuffer.color[gBufferPass.outputLocs.position],
+      normal: gBuffer.color[gBufferPass.outputLocs.normal],
+      faceNormal: gBuffer.color[gBufferPass.outputLocs.faceNormal],
+      albedo: gBuffer.color[gBufferPass.outputLocs.albedo],
+      matProps: gBuffer.color[gBufferPass.outputLocs.matProps]
+    });
+  }
+
+  function reproject({ size, blendAmount, lightScale, previousLight, previousLightScale, reprojectPosition = true }) {
+    reprojectBuffer.bind();
+    gl.viewport(0, 0, size.width, size.height);
+    reprojectPass.draw({
+      blendAmount,
+      light: hdrBuffer.color[0],
+      lightScale,
+      position: gBuffer.color[gBufferPass.outputLocs.position],
+      matProps: gBuffer.color[gBufferPass.outputLocs.matProps],
+      previousLight,
+      previousLightScale,
+      previousPosition: gBufferBack.color[gBufferPass.outputLocs.position],
+      reprojectPosition
+    });
+    reprojectBuffer.unbind();
+  }
+
+  function renderTile(buffer, x, y, width, height) {
+    gl.scissor(x, y, width, height);
+    gl.enable(gl.SCISSOR_TEST);
+    addSampleToBuffer(buffer, screenSize);
+    gl.disable(gl.SCISSOR_TEST);
   }
 
   function toneMapToScreen(lightTexture, lightScale) {
@@ -234,40 +329,11 @@ export function makeRenderingPipeline({
       light: lightTexture,
       lightScale,
       position: gBuffer.color[gBufferPass.outputLocs.position],
+      diffuseSpecularAlbedo: diffuseSpecularAlbedoBuffer.color[0],
     });
 
     lastToneMappedTexture = lightTexture;
     lastToneMappedScale = lightScale.clone();
-  }
-
-  function renderGBuffer() {
-    gBuffer.bind();
-    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-    gl.viewport(0, 0, screenWidth, screenHeight);
-    gBufferPass.draw();
-    gBuffer.unbind();
-
-    rayTracePass.setGBuffers({
-      position: gBuffer.color[gBufferPass.outputLocs.position],
-      normal: gBuffer.color[gBufferPass.outputLocs.normal],
-      faceNormal: gBuffer.color[gBufferPass.outputLocs.faceNormal],
-      color: gBuffer.color[gBufferPass.outputLocs.color],
-      matProps: gBuffer.color[gBufferPass.outputLocs.matProps]
-    });
-  }
-
-  function renderTile(buffer, x, y, width, height) {
-    gl.scissor(x, y, width, height);
-    gl.enable(gl.SCISSOR_TEST);
-    addSampleToBuffer(buffer, screenWidth, screenHeight);
-    gl.disable(gl.SCISSOR_TEST);
-  }
-
-  function setCameras(camera, lastCamera) {
-    rayTracePass.setCamera(camera);
-    gBufferPass.setCamera(camera);
-    reprojectPass.setPreviousCamera(lastCamera);
-    lastCamera.copy(camera);
   }
 
   function drawPreview() {
@@ -279,25 +345,21 @@ export function makeRenderingPipeline({
       previewSize.adjustSize(elapsedFrameTime);
     }
 
-    updateSeed(previewSize.width, previewSize.height, false);
+    updateSeed(previewSize, false);
 
-    renderGBuffer();
+    renderGBuffer(sampleCount);
 
     rayTracePass.bindTextures();
-    newSampleToBuffer(hdrBuffer, previewSize.width, previewSize.height);
+    newSampleToBuffer(hdrBuffer, previewSize);
 
-    reprojectBuffer.bind();
-    gl.viewport(0, 0, previewSize.width, previewSize.height);
-    reprojectPass.draw({
+    reproject({
+      size: previewSize,
       blendAmount: 1.0,
-      light: hdrBuffer.color[0],
       lightScale: previewSize.scale,
-      position: gBuffer.color[gBufferPass.outputLocs.position],
       previousLight: lastToneMappedTexture,
       previousLightScale: lastToneMappedScale,
-      previousPosition: gBufferBack.color[gBufferPass.outputLocs.position],
+      reprojectPosition: true
     });
-    reprojectBuffer.unbind();
 
     toneMapToScreen(reprojectBuffer.color[0], previewSize.scale);
 
@@ -317,8 +379,8 @@ export function makeRenderingPipeline({
         sampleTime = frameTime;
       }
 
-      updateSeed(screenWidth, screenHeight, true);
-      renderGBuffer();
+      updateSeed(screenSize, true);
+      renderGBuffer(sampleCount);
       rayTracePass.bindTextures();
     }
 
@@ -327,22 +389,18 @@ export function makeRenderingPipeline({
     if (isLastTile) {
       sampleCount++;
 
-      let blendAmount = clamp(1.0 - sampleCount / maxReprojectedSamples, 0, 1);
+      let blendAmount = clamp(1.0 - sampleCount / maxSamples, 0, 1);
       blendAmount *= blendAmount;
 
       if (blendAmount > 0.0) {
-        reprojectBuffer.bind();
-        gl.viewport(0, 0, screenWidth, screenHeight);
-        reprojectPass.draw({
+        reproject({
+          size: screenSize,
           blendAmount,
-          light: hdrBuffer.color[0],
           lightScale: fullscreenScale,
-          position: gBuffer.color[gBufferPass.outputLocs.position],
           previousLight: reprojectBackBuffer.color[0],
           previousLightScale: previewSize.scale,
-          previousPosition: gBufferBack.color[gBufferPass.outputLocs.position],
+          reprojectPosition: sampleCount === 0 // Only blend frames and don't reproject positions after camera stays still
         });
-        reprojectBuffer.unbind();
 
         toneMapToScreen(reprojectBuffer.color[0], fullscreenScale);
       } else {
@@ -393,34 +451,32 @@ export function makeRenderingPipeline({
 
     setCameras(camera, lastCamera);
 
-    updateSeed(screenWidth, screenHeight, true);
+    updateSeed(screenSize, true);
 
-    renderGBuffer(camera);
+    renderGBuffer(sampleCount);
 
     rayTracePass.bindTextures();
-    addSampleToBuffer(hdrBuffer, screenWidth, screenHeight);
+    addSampleToBuffer(hdrBuffer, screenSize);
 
-    reprojectBuffer.bind();
-    gl.viewport(0, 0, screenWidth, screenHeight);
-    reprojectPass.draw({
-      blendAmount: 1.0,
-      light: hdrBuffer.color[0],
+    reproject({
+      size: screenSize,
+      // blendAmount: 1.0,
+      blendAmount: 1,
       lightScale: fullscreenScale,
-      position: gBuffer.color[gBufferPass.outputLocs.position],
-      previousLight: lastToneMappedTexture,
-      previousLightScale: lastToneMappedScale,
-      previousPosition: gBufferBack.color[gBufferPass.outputLocs.position],
+      previousLight: reprojectBackBuffer.color[0],
+      previousLightScale: fullscreenScale,
+      reprojectPosition: sampleCount === 0
     });
-    reprojectBuffer.unbind();
 
     toneMapToScreen(reprojectBuffer.color[0], fullscreenScale);
+    // toneMapToScreen(hdrBuffer.color[0], fullscreenScale);
   }
 
   return {
     draw,
     drawFull,
     setSize,
-    time,
+    sync,
     getTotalSamplesRendered() {
       return sampleCount;
     },

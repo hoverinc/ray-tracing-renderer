@@ -1,15 +1,15 @@
 export default `
 
 uniform Materials {
-  vec4 colorAndMaterialType[NUM_MATERIALS];
-  vec4 roughnessMetalnessNormalScale[NUM_MATERIALS];
+  vec4 albedo_materialType[NUM_MATERIALS];
+  vec4 roughness_metalness_normalScale[NUM_MATERIALS];
 
   #if defined(NUM_DIFFUSE_MAPS) || defined(NUM_NORMAL_MAPS) || defined(NUM_PBR_MAPS)
-    ivec4 diffuseNormalRoughnessMetalnessMapIndex[NUM_MATERIALS];
+    ivec4 diffuse_normal_roughness_metalness_mapIndex[NUM_MATERIALS];
   #endif
 
   #if defined(NUM_DIFFUSE_MAPS) || defined(NUM_NORMAL_MAPS)
-    vec4 diffuseNormalMapSize[NUM_DIFFUSE_NORMAL_MAPS];
+    vec4 diffuse_normal_mapSize[NUM_DIFFUSE_NORMAL_MAPS];
   #endif
 
   #if defined(NUM_PBR_MAPS)
@@ -30,27 +30,32 @@ uniform Materials {
 #endif
 
 float getMatType(int materialIndex) {
-  return materials.colorAndMaterialType[materialIndex].w;
+  return materials.albedo_materialType[materialIndex].w;
 }
 
-vec3 getMatColor(int materialIndex, vec2 uv) {
-  vec3 color = materials.colorAndMaterialType[materialIndex].rgb;
+vec3 getMatAlbedo(int materialIndex, vec2 uv) {
+  vec3 albedo = materials.albedo_materialType[materialIndex].rgb;
 
   #ifdef NUM_DIFFUSE_MAPS
-    int diffuseMapIndex = materials.diffuseNormalRoughnessMetalnessMapIndex[materialIndex].x;
+    int diffuseMapIndex = materials.diffuse_normal_roughness_metalness_mapIndex[materialIndex].x;
     if (diffuseMapIndex >= 0) {
-      color *= texture(diffuseMap, vec3(uv * materials.diffuseNormalMapSize[diffuseMapIndex].xy, diffuseMapIndex)).rgb;
+      vec3 texAlbedo = texture(diffuseMap, vec3(uv * materials.diffuse_normal_mapSize[diffuseMapIndex].xy, diffuseMapIndex)).rgb;
+
+      // gamma correction done automatically by sRGB texture
+      // texAlbedo = pow(texAlbedo, vec3(2.2));
+
+      albedo *= texAlbedo;
     }
   #endif
 
-  return color;
+  return albedo;
 }
 
 float getMatRoughness(int materialIndex, vec2 uv) {
-  float roughness = materials.roughnessMetalnessNormalScale[materialIndex].x;
+  float roughness = materials.roughness_metalness_normalScale[materialIndex].x;
 
   #ifdef NUM_PBR_MAPS
-    int roughnessMapIndex = materials.diffuseNormalRoughnessMetalnessMapIndex[materialIndex].z;
+    int roughnessMapIndex = materials.diffuse_normal_roughness_metalness_mapIndex[materialIndex].z;
     if (roughnessMapIndex >= 0) {
       roughness *= texture(pbrMap, vec3(uv * materials.pbrMapSize[roughnessMapIndex].xy, roughnessMapIndex)).g;
     }
@@ -60,10 +65,10 @@ float getMatRoughness(int materialIndex, vec2 uv) {
 }
 
 float getMatMetalness(int materialIndex, vec2 uv) {
-  float metalness = materials.roughnessMetalnessNormalScale[materialIndex].y;
+  float metalness = materials.roughness_metalness_normalScale[materialIndex].y;
 
   #ifdef NUM_PBR_MAPS
-    int metalnessMapIndex = materials.diffuseNormalRoughnessMetalnessMapIndex[materialIndex].w;
+    int metalnessMapIndex = materials.diffuse_normal_roughness_metalness_mapIndex[materialIndex].w;
     if (metalnessMapIndex >= 0) {
       metalness *= texture(pbrMap, vec3(uv * materials.pbrMapSize[metalnessMapIndex].xy, metalnessMapIndex)).b;
     }
@@ -74,7 +79,7 @@ float getMatMetalness(int materialIndex, vec2 uv) {
 
 #ifdef NUM_NORMAL_MAPS
 vec3 getMatNormal(int materialIndex, vec2 uv, vec3 normal, vec3 dp1, vec3 dp2, vec2 duv1, vec2 duv2) {
-  int normalMapIndex = materials.diffuseNormalRoughnessMetalnessMapIndex[materialIndex].y;
+  int normalMapIndex = materials.diffuse_normal_roughness_metalness_mapIndex[materialIndex].y;
   if (normalMapIndex >= 0) {
     // http://www.thetenthplanet.de/archives/1180
     // Compute co-tangent and co-bitangent vectors
@@ -86,8 +91,8 @@ vec3 getMatNormal(int materialIndex, vec2 uv, vec3 normal, vec3 dp1, vec3 dp2, v
     dpdu *= invmax;
     dpdv *= invmax;
 
-    vec3 n = 2.0 * texture(normalMap, vec3(uv * materials.diffuseNormalMapSize[normalMapIndex].zw, normalMapIndex)).rgb - 1.0;
-    n.xy *= materials.roughnessMetalnessNormalScale[materialIndex].zw;
+    vec3 n = 2.0 * texture(normalMap, vec3(uv * materials.diffuse_normal_mapSize[normalMapIndex].zw, normalMapIndex)).rgb - 1.0;
+    n.xy *= materials.roughness_metalness_normalScale[materialIndex].zw;
 
     mat3 tbn = mat3(dpdu, dpdv, normal);
 
