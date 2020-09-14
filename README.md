@@ -75,4 +75,4 @@ Take a look to [this page](https://github.com/hoverinc/ray-tracing-renderer/wiki
 
 ### Expectations
 
-This repository started as a side-project and the time we invest on it is limited. It make take us a few days to get back to you but please bring your ideas forward. We'll do our best to respond promptly.
+This repository started as a side-project and the time we invest on it is limited. It may take us a few days to get back to you but please bring your ideas forward. We'll do our best to respond promptly.
