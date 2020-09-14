@@ -9,7 +9,6 @@
     "ecmaVersion": 9,
     "sourceType": "module"
   },
-  "ignorePatterns": ["build/**/*.js", "scenes/**/*.js", "jest.config.js", "rollup.config.js"],
   "rules": {
     "no-console": 0,
     "semi": 1
