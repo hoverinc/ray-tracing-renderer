@@ -15,7 +15,6 @@ export function makeGBufferPass(gl, { materialBuffer, mergedMesh }) {
   renderPass.setTexture('pbrMap', materialBuffer.textures.pbrMap);
 
   const geometry = mergedMesh.geometry;
-
   const elementCount = geometry.getIndex().count;
 
   const vao = gl.createVertexArray();
@@ -69,6 +68,7 @@ function uploadAttributes(gl, renderPass, geometry) {
   setAttribute(gl, renderPass.attribLocs.aPosition, geometry.getAttribute('position'));
   setAttribute(gl, renderPass.attribLocs.aNormal, geometry.getAttribute('normal'));
   setAttribute(gl, renderPass.attribLocs.aUv, geometry.getAttribute('uv'));
+  setAttribute(gl, renderPass.attribLocs.aVertexColor, geometry.getAttribute('color'));
   setAttribute(gl, renderPass.attribLocs.aMaterialMeshIndex, geometry.getAttribute('materialMeshIndex'));
 
   gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, gl.createBuffer());

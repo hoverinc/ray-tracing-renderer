@@ -14,7 +14,7 @@ export function mergeMeshesToGeometry(meshes) {
     }
 
     const geometry = mesh.geometry.isBufferGeometry ?
-      cloneBufferGeometry(mesh.geometry, ['position', 'normal', 'uv']) : // BufferGeometry object
+      cloneBufferGeometry(mesh.geometry, ['position', 'normal', 'uv', 'color']) : // BufferGeometry object
       new BufferGeometry().fromGeometry(mesh.geometry); // Geometry object
 
     const index = geometry.getIndex();
@@ -58,6 +58,7 @@ function mergeGeometry(geometryAndMaterialIndex, vertexCount, indexCount) {
   const positionAttrib = new BufferAttribute(new Float32Array(3 * vertexCount), 3, false);
   const normalAttrib = new BufferAttribute(new Float32Array(3 * vertexCount), 3, false);
   const uvAttrib = new BufferAttribute(new Float32Array(2 * vertexCount), 2, false);
+  const vertexColorAttrib = new BufferAttribute(new Float32Array(4 * vertexCount), 4, false);
   const materialMeshIndexAttrib = new BufferAttribute(new Int32Array(2 * vertexCount), 2, false);
   const indexAttrib = new BufferAttribute(new Uint32Array(indexCount), 1, false);
 
@@ -65,6 +66,7 @@ function mergeGeometry(geometryAndMaterialIndex, vertexCount, indexCount) {
   mergedGeometry.addAttribute('position', positionAttrib);
   mergedGeometry.addAttribute('normal', normalAttrib);
   mergedGeometry.addAttribute('uv', uvAttrib);
+  mergedGeometry.addAttribute('color', vertexColorAttrib);
   mergedGeometry.addAttribute('materialMeshIndex', materialMeshIndexAttrib);
   mergedGeometry.setIndex(indexAttrib);
 

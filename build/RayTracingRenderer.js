@@ -551,6 +551,7 @@
   in vec3 aPosition;
   in vec3 aNormal;
   in vec2 aUv;
+  in vec4 aVertexColor;
   in ivec2 aMaterialMeshIndex;
 
   uniform mat4 projView;
@@ -558,12 +559,14 @@
   out vec3 vPosition;
   out vec3 vNormal;
   out vec2 vUv;
+  out vec4 vVertexColor;
   flat out ivec2 vMaterialMeshIndex;
 
   void main() {
     vPosition = aPosition;
     vNormal = aNormal;
     vUv = aUv;
+    vVertexColor = aVertexColor;
     vMaterialMeshIndex = aMaterialMeshIndex;
     gl_Position = projView * vec4(aPosition, 1);
   }
@@ -598,6 +601,9 @@ uniform Materials {
   #if defined(NUM_PBR_MAPS)
     vec2 pbrMapSize[NUM_PBR_MAPS];
   #endif
+
+  int useVertexColors[NUM_MATERIALS];
+
 } materials;
 
 #ifdef NUM_DIFFUSE_MAPS
@@ -616,7 +622,12 @@ float getMatType(int materialIndex) {
   return materials.colorAndMaterialType[materialIndex].w;
 }
 
-vec3 getMatColor(int materialIndex, vec2 uv) {
+vec3 getMatColor(int materialIndex, vec2 uv, vec3 vertexColor) {
+
+  if (materials.useVertexColors[materialIndex] != 0) {
+    return vertexColor;
+  }
+
   vec3 color = materials.colorAndMaterialType[materialIndex].rgb;
 
   #ifdef NUM_DIFFUSE_MAPS
@@ -693,6 +704,7 @@ vec3 getMatNormal(int materialIndex, vec2 uv, vec3 normal, vec3 dp1, vec3 dp2, v
   in vec3 vPosition;
   in vec3 vNormal;
   in vec2 vUv;
+  in vec4 vVertexColor;
   flat in ivec2 vMaterialMeshIndex;
 
   vec3 faceNormals(vec3 pos) {
@@ -707,7 +719,7 @@ vec3 getMatNormal(int materialIndex, vec2 uv, vec3 normal, vec3 dp1, vec3 dp2, v
 
     vec2 uv = fract(vUv);
 
-    vec3 color = getMatColor(materialIndex, uv);
+    vec3 color = getMatColor(materialIndex, uv, vVertexColor.rgb);
     float roughness = getMatRoughness(materialIndex, uv);
     float metalness = getMatMetalness(materialIndex, uv);
     float materialType = getMatType(materialIndex);
@@ -749,7 +761,6 @@ vec3 getMatNormal(int materialIndex, vec2 uv, vec3 normal, vec3 dp1, vec3 dp2, v
     renderPass.setTexture('pbrMap', materialBuffer.textures.pbrMap);
 
     const geometry = mergedMesh.geometry;
-
     const elementCount = geometry.getIndex().count;
 
     const vao = gl.createVertexArray();
@@ -803,6 +814,7 @@ vec3 getMatNormal(int materialIndex, vec2 uv, vec3 normal, vec3 dp1, vec3 dp2, v
     setAttribute(gl, renderPass.attribLocs.aPosition, geometry.getAttribute('position'));
     setAttribute(gl, renderPass.attribLocs.aNormal, geometry.getAttribute('normal'));
     setAttribute(gl, renderPass.attribLocs.aUv, geometry.getAttribute('uv'));
+    setAttribute(gl, renderPass.attribLocs.aVertexColor, geometry.getAttribute('color'));
     setAttribute(gl, renderPass.attribLocs.aMaterialMeshIndex, geometry.getAttribute('materialMeshIndex'));
 
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, gl.createBuffer());
@@ -1196,6 +1208,7 @@ vec3 getMatNormal(int materialIndex, vec2 uv, vec3 normal, vec3 dp1, vec3 dp2, v
     bufferData.roughness = materials.map(m => m.roughness);
     bufferData.metalness = materials.map(m => m.metalness);
     bufferData.normalScale = materials.map(m => m.normalScale);
+    bufferData.useVertexColors = materials.map(m => m.vertexColors);
 
     bufferData.type = materials.map(m => {
       if (m.shadowCatcher) {
@@ -1329,6 +1342,8 @@ vec3 getMatNormal(int materialIndex, vec2 uv, vec3 normal, vec3 dp1, vec3 dp2, v
 
     materialBuffer.set('Materials.pbrMapSize[0]', bufferData.pbrMapSize);
 
+    materialBuffer.set('Materials.useVertexColors[0]', bufferData.useVertexColors);
+
     materialBuffer.bind(0);
   }
 
@@ -1367,7 +1382,7 @@ vec3 getMatNormal(int materialIndex, vec2 uv, vec3 normal, vec3 dp1, vec3 dp2, v
       }
 
       const geometry = mesh.geometry.isBufferGeometry ?
-        cloneBufferGeometry(mesh.geometry, ['position', 'normal', 'uv']) : // BufferGeometry object
+        cloneBufferGeometry(mesh.geometry, ['position', 'normal', 'uv', 'color']) : // BufferGeometry object
         new THREE$1.BufferGeometry().fromGeometry(mesh.geometry); // Geometry object
 
       const index = geometry.getIndex();
@@ -1411,6 +1426,7 @@ vec3 getMatNormal(int materialIndex, vec2 uv, vec3 normal, vec3 dp1, vec3 dp2, v
     const positionAttrib = new THREE$1.BufferAttribute(new Float32Array(3 * vertexCount), 3, false);
     const normalAttrib = new THREE$1.BufferAttribute(new Float32Array(3 * vertexCount), 3, false);
     const uvAttrib = new THREE$1.BufferAttribute(new Float32Array(2 * vertexCount), 2, false);
+    const vertexColorAttrib = new THREE$1.BufferAttribute(new Float32Array(4 * vertexCount), 4, false);
     const materialMeshIndexAttrib = new THREE$1.BufferAttribute(new Int32Array(2 * vertexCount), 2, false);
     const indexAttrib = new THREE$1.BufferAttribute(new Uint32Array(indexCount), 1, false);
 
@@ -1418,6 +1434,7 @@ vec3 getMatNormal(int materialIndex, vec2 uv, vec3 normal, vec3 dp1, vec3 dp2, v
     mergedGeometry.addAttribute('position', positionAttrib);
     mergedGeometry.addAttribute('normal', normalAttrib);
     mergedGeometry.addAttribute('uv', uvAttrib);
+    mergedGeometry.addAttribute('color', vertexColorAttrib);
     mergedGeometry.addAttribute('materialMeshIndex', materialMeshIndexAttrib);
     mergedGeometry.setIndex(indexAttrib);
 
@@ -2251,6 +2268,7 @@ vec4 textureLinear(sampler2D map, vec2 uv) {
 uniform sampler2D positionBuffer;
 uniform sampler2D normalBuffer;
 uniform sampler2D uvBuffer;
+uniform sampler2D vertexColorBuffer;
 uniform sampler2D bvhBuffer;
 
 struct Triangle {
@@ -2281,8 +2299,13 @@ void surfaceInteractionFromBVH(inout SurfaceInteraction si, Triangle tri, vec3 b
     vec2 uv = vec2(0.0);
   #endif
 
+  vec3 c0 = texelFetch(vertexColorBuffer, i0, 0).rgb;
+  vec3 c1 = texelFetch(vertexColorBuffer, i1, 0).rgb;
+  vec3 c2 = texelFetch(vertexColorBuffer, i2, 0).rgb;
+  vec3 vertexColor = barycentric.x * c0 + barycentric.y * c1 + barycentric.z * c2;
+
   si.materialType = int(getMatType(materialIndex));
-  si.color = getMatColor(materialIndex, uv);
+  si.color = getMatColor(materialIndex, uv, vertexColor);
   si.roughness = getMatRoughness(materialIndex, uv);
   si.metalness = getMatMetalness(materialIndex, uv);
 
@@ -3525,6 +3548,8 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
 
     renderPass.setTexture('uvBuffer', makeDataTexture(gl, geometry.getAttribute('uv').array, 2));
 
+    renderPass.setTexture('vertexColorBuffer', makeDataTexture(gl, geometry.getAttribute('color').array, 4));
+
     renderPass.setTexture('bvhBuffer', makeDataTexture(gl, flattenedBvh.buffer, 4));
 
     const envImage = generateEnvMapFromSceneComponents(directionalLights, ambientLights, environmentLights);
@@ -4669,6 +4694,7 @@ void sampleGlassSpecular(SurfaceInteraction si, int bounce, inout Path path) {
       if (module.needsUpdate) {
         initScene(scene);
       }
+      if (!pipeline) return;
 
       if (isNaN(currentTime)) {
         if (!syncWarning) {

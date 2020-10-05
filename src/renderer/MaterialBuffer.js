@@ -17,6 +17,7 @@ export function makeMaterialBuffer(gl, materials) {
   bufferData.roughness = materials.map(m => m.roughness);
   bufferData.metalness = materials.map(m => m.metalness);
   bufferData.normalScale = materials.map(m => m.normalScale);
+  bufferData.useVertexColors = materials.map(m => m.vertexColors);
 
   bufferData.type = materials.map(m => {
     if (m.shadowCatcher) {
@@ -149,6 +150,8 @@ function uploadToUniformBuffer(gl, program, bufferData) {
   ));
 
   materialBuffer.set('Materials.pbrMapSize[0]', bufferData.pbrMapSize);
+
+  materialBuffer.set('Materials.useVertexColors[0]', bufferData.useVertexColors);
 
   materialBuffer.bind(0);
 }

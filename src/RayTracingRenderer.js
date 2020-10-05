@@ -135,6 +135,7 @@ export function RayTracingRenderer(params = {}) {
     if (module.needsUpdate) {
       initScene(scene);
     }
+    if (!pipeline) return;
 
     if (isNaN(currentTime)) {
       if (!syncWarning) {

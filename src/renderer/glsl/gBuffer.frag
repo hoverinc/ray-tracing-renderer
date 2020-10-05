@@ -12,6 +12,7 @@ source: `
   in vec3 vPosition;
   in vec3 vNormal;
   in vec2 vUv;
+  in vec4 vVertexColor;
   flat in ivec2 vMaterialMeshIndex;
 
   vec3 faceNormals(vec3 pos) {
@@ -26,7 +27,7 @@ source: `
 
     vec2 uv = fract(vUv);
 
-    vec3 color = getMatColor(materialIndex, uv);
+    vec3 color = getMatColor(materialIndex, uv, vVertexColor.rgb);
     float roughness = getMatRoughness(materialIndex, uv);
     float metalness = getMatMetalness(materialIndex, uv);
     float materialType = getMatType(materialIndex);
