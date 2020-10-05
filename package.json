@@ -7,6 +7,7 @@
     "build": "./node_modules/.bin/rollup -c",
     "dev": "./node_modules/.bin/rollup -cw --environment DEV & ./node_modules/.bin/http-server",
     "test": "./node_modules/jest/bin/jest.js",
+    "lint": "./node_modules/.bin/eslint src/ test/",
     "release": "./scripts/release.sh"
   },
   "author": "HOVER Inc",
@@ -16,6 +17,7 @@
     "@babel/preset-env": "^7.11.5",
     "babel-jest": "^26.0.1",
     "dat.gui": "^0.7.6",
+    "eslint": "^7.8.1",
     "http-server": "^0.12.3",
     "jest": "^26.0.1",
     "release-it": "^14.0.2",

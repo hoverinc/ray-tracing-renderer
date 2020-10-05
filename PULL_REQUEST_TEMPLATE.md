@@ -10,6 +10,5 @@ TODO or DELETE
 - [ ] All existing tests passed.
     - [ ] I have added tests to cover my changes, of which pass.
 - [ ] I have [compared](https://github.com/hoverinc/ray-tracing-renderer/wiki/Contributing#comparing-changes) the render output of my branch to `master`.
-- [ ] My code has passed the ESLint configuration for this project.
 - [ ] My change requires modifications to the documentation.
     - [ ] I have updated the documentation accordingly.

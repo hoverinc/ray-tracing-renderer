@@ -23,7 +23,7 @@ export function generateBackgroundMapFromSceneBackground(background) {
         height: background.image.height,
         data: background.image.data,
       };
-      backgroundImage.data = rgbeToFloat(backgroundImage.data)
+      backgroundImage.data = rgbeToFloat(backgroundImage.data);
   }
   return backgroundImage;
 }
