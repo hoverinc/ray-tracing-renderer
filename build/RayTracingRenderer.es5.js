@@ -618,16 +618,19 @@
       uniforms[name] = uniform;
     }
 
+    var failedUnis = new Set();
+
     function setUniform(name, v0, v1, v2, v3) {
       // v0 - v4 are the values to be passed to the uniform
       // v0 can either be a number or an array, and v1-v3 are optional
       var uni = uniforms[name];
 
       if (!uni) {
-        // if (!failedUnis.has(name)) {
-        //   console.warn(`Uniform "${name}" does not exist in shader`);
-        //   failedUnis.add(name);
-        // }
+        if (!failedUnis.has(name)) {
+          console.warn("Uniform \"".concat(name, "\" does not exist in shader"));
+          failedUnis.add(name);
+        }
+
         return;
       }
 
@@ -692,8 +695,7 @@
   }
 
   function makeRenderPass(gl, params) {
-    var defines = params.defines,
-        fragment = params.fragment,
+    var fragment = params.fragment,
         vertex = params.vertex;
     var vertexCompiled = vertex instanceof WebGLShader ? vertex : makeVertexShader(gl, params);
     var fragmentCompiled = fragment instanceof WebGLShader ? fragment : makeFragmentShader(gl, params);
@@ -1212,6 +1214,16 @@
     };
   }
 
+  function getFormat(gl, channels) {
+    var map = {
+      1: gl.RED,
+      2: gl.RG,
+      3: gl.RGB,
+      4: gl.RGBA
+    };
+    return map[channels];
+  }
+
   function getTextureFormat(gl, channels, storage, data, gammaCorrection) {
     var type;
     var internalFormat;
@@ -1252,12 +1264,7 @@
       type = gl.UNSIGNED_BYTE;
     }
 
-    var format = {
-      1: gl.RED,
-      2: gl.RG,
-      3: gl.RGB,
-      4: gl.RGBA
-    }[channels];
+    var format = getFormat(gl, channels);
     return {
       format: format,
       internalFormat: internalFormat,
