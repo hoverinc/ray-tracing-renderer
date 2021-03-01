@@ -21,7 +21,7 @@
     "http-server": "^0.12.3",
     "jest": "^26.0.1",
     "release-it": "^14.0.2",
-    "rollup": "^2.26.10",
+    "rollup": "^2.40.0",
     "rollup-plugin-babel": "^4.3.3",
     "rollup-plugin-node-resolve": "^5.2.0",
     "stats.js": "^0.17.0",
